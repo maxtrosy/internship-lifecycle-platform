@@ -157,13 +157,3 @@ Si en el futuro la universidad requiere coordinadores por facultad, esta decisi�
 
 ---
 
-## 6. Qué le toca a Codex (Fase 2, solo código)
-
-Codex NO debe redefinir entidades, estados ni eventos — debe **traducir este documento literalmente** a:
-- Modelos SQLAlchemy por context
-- Máquina de estados como código (no un string `status` libre)
-- Tabla `domain_events` + event bus in-process
-- Routers FastAPI + dependencias de autorización basadas en la matriz de la sección 5
-- Migraciones Alembic
-
-Cualquier decisión de modelado que Codex "necesite tomar" durante la Fase 2 debe volver a este documento para actualizarlo primero — el código nunca debe ser la fuente de verdad del dominio.
