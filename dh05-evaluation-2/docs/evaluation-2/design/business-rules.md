@@ -1,0 +1,28 @@
+# Reglas de negocio e invariantes
+
+Cada regla se verificó contra el RFP y la Evaluación 1 antes de afirmarla. **Procedencia:** `RFP` = lo exige el RFP · `E1` = acordado en la Evaluación 1 · `DISEÑO` = propuesta del equipo · `OPEN` = parte sin definir.
+
+| ID | Regla | Procedencia | Requisito fuente | Punto de aplicación | Entidades afectadas | Validación |
+|---|---|---|---|---|---|---|
+| BR-01 | Una colocación **no puede activarse** mientras exista una condición o documento de activación obligatorio incompleto | RFP sec. 7 + E1 (RF-09, ASM-007). *La lista de condiciones: OPEN-01* | RF-09, US-013 | Comando `Activate` bajo bloqueo + trigger de BD (ADR-003) | Placement, ChecklistItem | T-01, T-02, T-02b |
+| BR-02 | Un estudiante **no puede comenzar** antes de la activación. El sistema lo aplica **no aceptando horas ni progreso** de una colocación no activa. *No puede impedir que alguien trabaje fuera del sistema* | RFP sec. 7 (interpretación operativa: DISEÑO) | RF-09, RF-11 | Trigger sobre `progress_entry` + guarda del comando | Placement, ProgressEntry | T-08 |
+| BR-03 | Un usuario solo accede a una colocación si lo permiten **su rol y su relación** con ella | RFP sec. 7 + E1 | RF-20, RNF-04 | C-02 en cada comando y consulta (ADR-004) | Todas | T-03 |
+| BR-04 | Un cambio relevante (supervisor del lugar de trabajo, horario, ubicación, responsabilidades) crea **una nueva versión**; la vigente solo cambia al aprobarse. *Qué cambios exigen aprobación y de quién: OPEN-03* | Registro: RFP sec. 2. Re-aprobación: E1 (RF-13) | RF-13 | `ProposeChange` / `ApproveVersion` (ADR-005) | Placement, PlacementVersion | T-05 |
+| BR-05 | Una colocación **no puede completarse ni cerrarse** con evidencia obligatoria faltante. *Lista de evidencia por programa: OPEN-02, OPEN-11* | RFP sec. 2 y 7 + E1 | RF-17, US-022, US-023 | `ConfirmCompletion`/`Close` bajo bloqueo + trigger (ADR-003); horas recalculadas del origen | Placement, CompletionRequirement, ProgressEntry | T-04 |
+| BR-06 | Los eventos de auditoría **no pueden modificarse ni borrarse** | RFP (trazable) + E1 (RNF-05; la inmutabilidad es propuesta) | RF-19, RNF-05 | Permisos de BD + trigger (ADR-005) | AuditEvent | T-07 |
+| BR-07 | Toda mutación aceptada **escribe su evento de auditoría en la misma transacción**; una mutación sin evento no se confirma | DISEÑO | RF-19 | Servicio de comandos (ADR-005) | Todas las mutables | T-02b (denegado = 0 filas), T-05 |
+| BR-08 | La elegibilidad se evalúa con la **versión de política vigente**; una postulación no elegible **no avanza**. *Revisión humana: OPEN-04* | E1 (RF-05, US-006); revisión humana: OPEN | RF-05 | C-04 + C-05 (ADR-001) | Application, PolicyVersion | T-06 |
+| BR-09 | Una oportunidad solo es visible para estudiantes tras **revisión y publicación**. *Quién revisa: OPEN-05* | RFP paso 2 + E1 (RF-02) | RF-02, US-003 | Transición `InReview → Published` | Opportunity | **NOT EXECUTED** |
+| BR-10 | La selección exige postulación elegible y oportunidad publicada. *Tope de cupos: OPEN-13* | E1 (RF-06); cupos: DISEÑO | RF-06, RF-01 | T1 | Application, Opportunity, Placement | **NOT EXECUTED** |
+| BR-11 | La aprobación académica solo la emite el coordinador **del programa del estudiante** | RFP sec. 4 + E1 (RF-07) | RF-07, US-009 | C-02 + T2 | Placement | T-05 (análogo en versiones), T-03 |
+| BR-12 | Un resultado ya decidido **conserva la versión de política** con la que se evaluó; las versiones nuevas no lo alteran sin migración explícita | DISEÑO (ASM-006B) | RNF-03 | C-04, C-05 (ADR-001) | Application, PolicyVersion | T-06 |
+| BR-13 | Los usuarios externos solo ven una **proyección mínima** del estudiante y solo de sus propias oportunidades/colocaciones. *Campos exactos: OPEN-06* | RFP sec. 2 y 7 | RF-20 | C-02 (proyecciones) | UserAccount, Application | T-03 (2 campos) |
+| BR-14 | Los requisitos obligatorios se **materializan** al vincular la política; cada ítem pasa por `REQUIRED → SUBMITTED → APPROVED/REJECTED`; solo el revisor designado los aprueba | E1 (RF-08, US-012); estados: DISEÑO | RF-08 | C-07 | ChecklistItem, DocumentSubmission | T-02 (rechazo), **NOT EXECUTED** (entrega) |
+| BR-15 | El sistema **no procesa nóminas ni transacciones financieras** | RFP sec. 7 y 10 | RNF-10 | Alcance: no existen esos campos ni módulos | — | Revisión de modelo |
+| BR-16 | Solo se usan **datos sintéticos** | RFP sec. 7 | RNF-06 | Fixtures y simuladores | — | PoC (todos sintéticos) |
+| BR-17 | Los estados terminales (`Rejected`, `Closed`, `Cancelled`) no cambian | DISEÑO | RF-17 | C-06 + trigger de origen válido | Placement | T-04 (cierre antes de completar → inválido) |
+
+## Reglas que se consideraron y **no** se afirman
+- *"El supervisor del lugar de trabajo debe estar asignado para activar"*: solo se **propone** (OPEN-01).
+- *"Un documento rechazado tras la activación suspende la colocación"*: **no definido** (OPEN-14).
+- *"Una colocación en conflicto con otra se bloquea"*: sin respaldo del RFP (OPEN-19).
