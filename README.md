@@ -12,19 +12,21 @@
 > **Nota importante sobre integraciones simuladas.** Identidad, registros estudiantiles, documentos y notificaciones son **simulados** (RFP sec. 7 y 10). Nada en este paquete se integra con un sistema real, y todos los datos son sintéticos. El calendario institucional no está en el RFP y es solo opcional.
 
 ## Por dónde empezar
-1. **[Documento principal](docs/evaluation-2/architecture-and-design.md)**: alcance, requisitos significativos, escenarios, drivers, decisiones, estado y registro `OPEN`.
-2. [Auditoría de la Evaluación 1](docs/evaluation-2/evaluation-1-audit.md): 33 inconsistencias y cómo se reconciliaron.
-3. [Trazabilidad](docs/evaluation-2/traceability.md): requisito → escenario → driver → ADR → componente → vista → regla → prueba.
+
+1. **[Documento principal](dh05-evaluation-2/docs/evaluation-2/architecture-and-design.md)**: alcance, requisitos significativos, escenarios, drivers, decisiones, estado y registro `OPEN`.
+2. **[Auditoría de la Evaluación 1](dh05-evaluation-2/docs/evaluation-2/evaluation-1-audit.md)**: 33 inconsistencias y cómo se reconciliaron.
+3. **[Trazabilidad](dh05-evaluation-2/docs/evaluation-2/traceability.md)**: requisito → escenario → driver → ADR → componente → vista → regla → prueba.
 
 ## Contenido
+
 | Área | Archivos |
 |---|---|
-| **ADRs** | [001 políticas](docs/evaluation-2/adr/ADR-001-configurable-policies.md) · [002 monolito modular](docs/evaluation-2/adr/ADR-002-modular-monolith.md) · [003 compuertas](docs/evaluation-2/adr/ADR-003-activation-closure-gates.md) · [004 autorización](docs/evaluation-2/adr/ADR-004-relationship-authorization.md) · [005 versionado y auditoría](docs/evaluation-2/adr/ADR-005-versioning-audit.md) · [006 adaptadores](docs/evaluation-2/adr/ADR-006-integration-adapters.md) |
-| **Vistas** | [Contexto](docs/evaluation-2/views/V-CTX-context.md) · [Contenedores](docs/evaluation-2/views/V-CONT-container.md) · [Componentes](docs/evaluation-2/views/V-COMP-components.md) · [Despliegue](docs/evaluation-2/views/V-DEP-deployment.md) · [Dominio y datos](docs/evaluation-2/views/domain-model.md) · [Estados de la colocación](docs/evaluation-2/views/placement-state-machine.md) · [Secuencias](docs/evaluation-2/views/sequences.md) |
-| **Diseño** | [Reglas de negocio](docs/evaluation-2/design/business-rules.md) · [Interfaces](docs/evaluation-2/design/interfaces.md) · [Seguridad](docs/evaluation-2/design/security.md) |
-| **Validación** | [Plan](docs/evaluation-2/validation/validation-plan.md) · [Resultados](docs/evaluation-2/validation/validation-results.md) · [PoC](docs/evaluation-2/validation/poc.md) |
-| **Estado** | [Estado del proyecto](docs/evaluation-2/project-status.md) |
-| **PoC** | [`prototype/`](prototype/) |
+| **ADRs** | [001 políticas](dh05-evaluation-2/docs/evaluation-2/adr/ADR-001-configurable-policies.md) · [002 monolito modular](dh05-evaluation-2/docs/evaluation-2/adr/ADR-002-modular-monolith.md) · [003 compuertas](dh05-evaluation-2/docs/evaluation-2/adr/ADR-003-activation-closure-gates.md) · [004 autorización](dh05-evaluation-2/docs/evaluation-2/adr/ADR-004-relationship-authorization.md) · [005 versionado y auditoría](dh05-evaluation-2/docs/evaluation-2/adr/ADR-005-versioning-audit.md) · [006 adaptadores](dh05-evaluation-2/docs/evaluation-2/adr/ADR-006-integration-adapters.md) |
+| **Vistas** | [Contexto](dh05-evaluation-2/docs/evaluation-2/views/V-CTX-context.md) · [Contenedores](dh05-evaluation-2/docs/evaluation-2/views/V-CONT-container.md) · [Componentes](dh05-evaluation-2/docs/evaluation-2/views/V-COMP-components.md) · [Despliegue](dh05-evaluation-2/docs/evaluation-2/views/V-DEP-deployment.md) · [Dominio y datos](dh05-evaluation-2/docs/evaluation-2/views/domain-model.md) · [Estados de la colocación](dh05-evaluation-2/docs/evaluation-2/views/placement-state-machine.md) · [Secuencias](dh05-evaluation-2/docs/evaluation-2/views/sequences.md) |
+| **Diseño** | [Reglas de negocio](dh05-evaluation-2/docs/evaluation-2/design/business-rules.md) · [Interfaces](dh05-evaluation-2/docs/evaluation-2/design/interfaces.md) · [Seguridad](dh05-evaluation-2/docs/evaluation-2/design/security.md) |
+| **Validación** | [Plan](dh05-evaluation-2/docs/evaluation-2/validation/validation-plan.md) · [Resultados](dh05-evaluation-2/docs/evaluation-2/validation/validation-results.md) · [PoC](dh05-evaluation-2/docs/evaluation-2/validation/poc.md) |
+| **Estado** | [Estado del proyecto](dh05-evaluation-2/docs/evaluation-2/project-status.md) |
+| **PoC** | [`prototype/`](dh05-evaluation-2/prototype/) |
 
 > La estructura de archivos es una **propuesta de organización**; la guía de la Evaluación 2 no exige estos nombres.
 
