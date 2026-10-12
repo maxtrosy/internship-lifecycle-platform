@@ -26,7 +26,6 @@
 | **Estado** | [Estado del proyecto](docs/evaluation-2/project-status.md) |
 | **PoC** | [`prototype/`](prototype/) |
 
-> La estructura de archivos es una **propuesta de organización**; la guía de la Evaluación 2 no exige estos nombres.
 
 ## Estado en una tabla
 | Estado | Qué incluye |
