@@ -9,7 +9,6 @@
 | **Estado del repositorio** | Paquete de documentación + PoC independiente. **No contiene el producto.** El equipo no tenía modelo de dominio ni código previo: solo los artefactos de la Evaluación 1 |
 | **Pregunta central** | ¿Puede el equipo justificar cómo debe estructurarse el sistema propuesto? |
 
-> **Nota importante sobre integraciones simuladas.** Identidad, registros estudiantiles, documentos y notificaciones son **simulados** (RFP sec. 7 y 10). Nada en este paquete se integra con un sistema real, y todos los datos son sintéticos. El calendario institucional no está en el RFP y es solo opcional.
 
 ## Por dónde empezar
 1. **[Documento principal](docs/evaluation-2/architecture-and-design.md)**: alcance, requisitos significativos, escenarios, drivers, decisiones, estado y registro `OPEN`.
