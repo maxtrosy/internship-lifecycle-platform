@@ -1,18 +1,18 @@
 {
   "meta": {
-    "executed_at_utc": "2026-10-08T07:32:13+00:00",
+    "executed_at_utc": "2026-10-22T23:18:42+00:00",
     "executor": "assistant-run in an isolated sandbox on behalf of the team (NOT yet re-run by the team)",
     "source_commit": null,
     "environment": {
-      "os": "Linux-6.18.44-fc-v80-x86_64-with-glibc2.39",
-      "python": "3.12.3",
+      "os": "Windows-10-10.0.19045-SP0",
+      "python": "3.12.14",
       "postgres": "16.2",
       "psycopg": "3.3.6",
       "trials_per_race": 100
     }
   },
   "summary": {
-    "PASS": 9,
+    "PASS": 14,
     "FAIL": 0
   },
   "results": [
@@ -34,12 +34,11 @@
         "trials": 100,
         "forbidden": 0,
         "orders": {
-          "rejection_first_activation_denied": 41,
-          "activation_first": 59
+          "rejection_first_activation_denied": 100
         },
         "activation_outcomes": {
-          "OK": 59,
-          "ACTIVATION_CONDITIONS_UNMET": 41
+          "GATE_VIOLATION": 50,
+          "ACTIVATION_CONDITIONS_UNMET": 50
         }
       },
       "B_control_naive_no_lock_no_trigger": {
@@ -61,8 +60,8 @@
           "rejection_first_activation_denied": 40
         },
         "activation_outcomes": {
-          "GATE_VIOLATION": 21,
-          "ACTIVATION_CONDITIONS_UNMET": 19
+          "GATE_VIOLATION": 19,
+          "ACTIVATION_CONDITIONS_UNMET": 21
         }
       }
     },
@@ -169,6 +168,60 @@
       "status": "PASS",
       "outcome": "PLACEMENT_NOT_ACTIVE",
       "rows_inserted": 0
+    },
+    {
+      "test_id": "T-16a",
+      "title": "Document rejected after activation: derived indicator and audit event",
+      "status": "PASS",
+      "indicator_before": false,
+      "indicator_after_delivery": true,
+      "indicator_after": true,
+      "sql_view_indicator": true,
+      "placement_state": "ACTIVE",
+      "audit_actions": [
+        "checklist_item.rejected_after_activation"
+      ],
+      "note": "negative control: before rejection the ACTIVE placement with all items APPROVED is compliant"
+    },
+    {
+      "test_id": "T-16b",
+      "title": "confirm_completion with activation noncompliance and complete evidence",
+      "status": "PASS",
+      "negative_control_all_approved": "OK",
+      "closure_evidence_unmet": [],
+      "indicator": true,
+      "outcome": "ACTIVATION_NONCOMPLIANT",
+      "placement_state": "ACTIVE"
+    },
+    {
+      "test_id": "T-16c",
+      "title": "Direct UPDATE to COMPLETED with activation noncompliance",
+      "status": "PASS",
+      "indicator": true,
+      "db_gate_message": "GATE: 1 mandatory activation requirement(s) not approved",
+      "placement_state": "ACTIVE",
+      "negative_control": "OK"
+    },
+    {
+      "test_id": "T-16d",
+      "title": "After re-delivery and approval, completion and closure proceed",
+      "status": "PASS",
+      "indicator_after_rejection": true,
+      "completion_denied": "ACTIVATION_NONCOMPLIANT",
+      "indicator_after_approval": false,
+      "completion": "OK",
+      "closure": "OK",
+      "placement_state": "CLOSED"
+    },
+    {
+      "test_id": "T-16e",
+      "title": "Review of an item that is still REQUIRED",
+      "status": "PASS",
+      "outcome": "INVALID_TRANSITION",
+      "item_status_after_denial": "REQUIRED",
+      "audit_rows_from_denied_review": 0,
+      "positive_control_from_submitted": "OK",
+      "item_status_after_control": "APPROVED"
     }
   ]
 }

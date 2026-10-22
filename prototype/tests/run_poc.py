@@ -1,4 +1,4 @@
-"""DH-05 Evaluation 2 PoC runner. Executes T-01..T-08 against a REAL PostgreSQL instance (pgserver).
+"""DH-05 Evaluation 2 PoC runner. Executes T-01..T-08 and T-16a..T-16e against a REAL PostgreSQL instance (pgserver).
 Run:  python tests/run_poc.py        (from the prototype/ directory)
 Writes raw outcomes to evidence/results.json. Nothing here is mocked at the database layer."""
 import json, os, platform, random, sys, threading, time, datetime as dt
@@ -46,7 +46,8 @@ def audit_actions(env, pid):
 
 def invariant_active_with_unapproved(env):
     """Final-state invariant: ACTIVE placement with an unapproved mandatory item that was never approved-then-rejected-after.
-    (Rejection AFTER activation is a legal, separately handled case - OPEN policy.)  Used only as a sanity query."""
+    (Rejection AFTER activation is now covered by BR-18: the placement stays ACTIVE and is flagged noncompliant.)
+    Used only as a sanity query."""
     return env.admin.execute(
         """SELECT count(*) AS n FROM placement p WHERE p.state='ACTIVE' AND NOT p.activation_requirements_instantiated""").fetchone()["n"]
 
@@ -80,9 +81,15 @@ def t02(env, U, opp):
         p = seed.make_doc_pending(env, U, "s1", opp)
         item = env.admin.execute("SELECT id FROM checklist_item WHERE placement_id=%s AND kind='DOC_INSURANCE'", (p,)).fetchone()["id"]
         c1, c2 = env.conn(), env.conn()
+
+        def reject_after_delivery():
+            # This PoC has no document-submission command: the item is marked SUBMITTED first (BR-14),
+            # so the rejection is a legal review instead of APPROVED -> REJECTED (now INVALID_TRANSITION).
+            c2.execute("UPDATE checklist_item SET status='SUBMITTED' WHERE id=%s", (item,))
+            return lc.review_document(c2, U["legal1"], item, "REJECTED", naive=naive)
         act_first = random.random() < 0.5
         out = race(lambda: lc.activate(c1, U["ec1"], p, naive=naive, pause=0.05),
-                   lambda: lc.review_document(c2, U["legal1"], item, "REJECTED", naive=naive),
+                   reject_after_delivery,
                    delay_a=0.0 if act_first else 0.02, delay_b=0.02 if act_first else 0.0)
         c1.close(); c2.close()
         rows = env.admin.execute("SELECT id,action FROM audit_event WHERE correlation_id IS NOT NULL ORDER BY id").fetchall()
@@ -91,7 +98,8 @@ def t02(env, U, opp):
         a_ids = [r["id"] for r in env.admin.execute(
             "SELECT id FROM audit_event WHERE action='placement.activated' AND subject_id=%s", (p,)).fetchall()]
         r_ids = [r["id"] for r in env.admin.execute(
-            "SELECT id FROM audit_event WHERE action='checklist_item.rejected' AND subject_id=%s", (item,)).fetchall()]
+            """SELECT id FROM audit_event WHERE subject_id=%s
+               AND action IN ('checklist_item.rejected','checklist_item.rejected_after_activation')""", (item,)).fetchall()]
         forbidden = bool(a_ids and r_ids and r_ids[0] < a_ids[0])
         order = ("activation_first" if a_ids and r_ids and a_ids[0] < r_ids[0]
                  else "rejection_first_activation_denied" if r_ids and not a_ids else "other")
@@ -376,6 +384,168 @@ def t07(env, U, opp):
            limitation="a database superuser can DISABLE the trigger; not tested, documented as residual risk")
 
 
+def _item_id(env, pid, kind="DOC_INSURANCE"):
+    return env.admin.execute("SELECT id FROM checklist_item WHERE placement_id=%s AND kind=%s",
+                             (pid, kind)).fetchone()["id"]
+
+
+def _deliver(env, item_id):
+    """Fixture-level delivery: this PoC has no document-submission command (BR-14 delivery is NOT EXECUTED)."""
+    env.admin.execute("UPDATE checklist_item SET status='SUBMITTED' WHERE id=%s", (item_id,))
+
+
+def _satisfy_closure(conn, U, student, pid, hours=100):
+    lc.submit_evidence(conn, U[student], pid, "FINAL_REPORT")
+    lc.submit_evidence(conn, U[student], pid, "FINAL_EVALUATION")
+    lc.record_hours(conn, U[student], pid, hours)
+
+
+# ------------------------------------------------------------------ T-16a..T-16e (BR-18 / OPEN-14 proposal)
+def t16a(env, U, opp):
+    p = seed.make_active(env, U, "s1", opp)
+    item = _item_id(env, p)
+    c = env.conn()
+    before = lc.activation_noncompliant(c, p)          # negative control: ACTIVE with all items APPROVED -> False
+    _deliver(env, item)
+    after_delivery = lc.activation_noncompliant(c, p)  # BR-18 counts SUBMITTED as noncompliant too
+    lc.review_document(c, U["legal1"], item, "REJECTED")
+    indicator = lc.activation_noncompliant(c, p)
+    view_row = c.execute("SELECT activation_noncompliant FROM v_placement_activation_compliance WHERE placement_id=%s",
+                         (p,)).fetchone()
+    state = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
+    events = env.admin.execute("""SELECT action,after_state FROM audit_event
+                                  WHERE subject_type='checklist_item' AND subject_id=%s ORDER BY id""", (item,)).fetchall()
+    c.close()
+    actions = [e["action"] for e in events]
+    ok = (before is False and indicator is True and bool(view_row["activation_noncompliant"]) and state == "ACTIVE"
+          and actions.count("checklist_item.rejected_after_activation") == 1
+          and events[-1]["after_state"]["status"] == "REJECTED")
+    record("T-16a", "Document rejected after activation: derived indicator and audit event", "PASS" if ok else "FAIL",
+           indicator_before=before, indicator_after_delivery=after_delivery, indicator_after=indicator,
+           sql_view_indicator=view_row["activation_noncompliant"],
+           placement_state=state, audit_actions=actions,
+           note="negative control: before rejection the ACTIVE placement with all items APPROVED is compliant")
+
+
+def t16b(env, U, opp):
+    c = env.conn()
+    # negative control: compliant activation + all closure evidence -> completion allowed
+    p_ok = seed.make_active(env, U, "s2", opp)
+    _satisfy_closure(c, U, "s2", p_ok)
+    try:
+        lc.confirm_completion(c, U["pc_sys"], p_ok); control = "OK"
+    except BusinessError as e:
+        control = e.code
+    # noncompliant: rejection after activation, closure evidence complete
+    p = seed.make_active(env, U, "s1", opp)
+    item = _item_id(env, p)
+    _satisfy_closure(c, U, "s1", p)
+    closure_unmet = lc.completion_unmet(c, p)           # recomputed from source rows: [] means evidence is complete
+    _deliver(env, item)
+    lc.review_document(c, U["legal1"], item, "REJECTED")
+    indicator = lc.activation_noncompliant(c, p)
+    try:
+        lc.confirm_completion(c, U["pc_sys"], p); got = "OK"
+    except BusinessError as e:
+        got = e.code
+    state = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
+    c.close()
+    ok = (control == "OK" and closure_unmet == [] and indicator is True
+          and got == "ACTIVATION_NONCOMPLIANT" and state == "ACTIVE")
+    record("T-16b", "confirm_completion with activation noncompliance and complete evidence", "PASS" if ok else "FAIL",
+           negative_control_all_approved=control, closure_evidence_unmet=closure_unmet,
+           indicator=indicator, outcome=got, placement_state=state)
+
+
+def t16c(env, U, opp):
+    p = seed.make_active(env, U, "s1", opp)
+    item = _item_id(env, p)
+    _deliver(env, item)
+    c = env.conn()
+    lc.review_document(c, U["legal1"], item, "REJECTED")
+    indicator = lc.activation_noncompliant(c, p)
+    c.close()
+    raw = env.conn()
+    try:
+        raw.execute("UPDATE placement SET state='COMPLETED' WHERE id=%s", (p,)); msg = "NOT_BLOCKED"
+    except psycopg.errors.RaiseException as e:
+        msg = str(e).split("\n")[0]
+    raw.close()
+    state = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
+    # negative control: same raw UPDATE on a compliant placement with closure flags satisfied is allowed
+    p_ok = seed.make_active(env, U, "s2", opp)
+    cc = env.conn()
+    _satisfy_closure(cc, U, "s2", p_ok)
+    cc.close()
+    env.admin.execute("UPDATE completion_requirement SET satisfied=true WHERE placement_id=%s", (p_ok,))
+    ctrl = env.conn()
+    try:
+        ctrl.execute("UPDATE placement SET state='COMPLETED' WHERE id=%s", (p_ok,)); control = "OK"
+    except psycopg.errors.RaiseException as e:
+        control = str(e).split("\n")[0]
+    ctrl.close()
+    ok = (indicator is True and msg.startswith("GATE") and state == "ACTIVE" and control == "OK")
+    record("T-16c", "Direct UPDATE to COMPLETED with activation noncompliance", "PASS" if ok else "FAIL",
+           indicator=indicator, db_gate_message=msg, placement_state=state, negative_control=control)
+
+
+def t16d(env, U, opp):
+    p = seed.make_active(env, U, "s1", opp)
+    item = _item_id(env, p)
+    c = env.conn()
+    _satisfy_closure(c, U, "s1", p)
+    _deliver(env, item)
+    lc.review_document(c, U["legal1"], item, "REJECTED")
+    before = lc.activation_noncompliant(c, p)
+    try:
+        lc.confirm_completion(c, U["pc_sys"], p); blocked = "OK"
+    except BusinessError as e:
+        blocked = e.code
+    _deliver(env, item)                                # re-delivery (fixture, no submission command)
+    lc.review_document(c, U["legal1"], item, "APPROVED")
+    after = lc.activation_noncompliant(c, p)
+    try:
+        lc.confirm_completion(c, U["pc_sys"], p); completed = "OK"
+    except BusinessError as e:
+        completed = e.code
+    try:
+        lc.close_placement(c, U["ec1"], p); closed = "OK"
+    except BusinessError as e:
+        closed = e.code
+    state = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
+    c.close()
+    ok = (before is True and blocked == "ACTIVATION_NONCOMPLIANT" and after is False
+          and completed == "OK" and closed == "OK" and state == "CLOSED")
+    record("T-16d", "After re-delivery and approval, completion and closure proceed", "PASS" if ok else "FAIL",
+           indicator_after_rejection=before, completion_denied=blocked, indicator_after_approval=after,
+           completion=completed, closure=closed, placement_state=state)
+
+
+def t16e(env, U, opp):
+    p = seed.make_doc_pending(env, U, "s1", opp, docs_approved=False)
+    item = _item_id(env, p)                             # DOC_INSURANCE = REQUIRED (no delivery)
+    c = env.conn()
+    try:
+        lc.review_document(c, U["legal1"], item, "APPROVED"); got = "OK"
+    except BusinessError as e:
+        got = e.code
+    status_denied = env.admin.execute("SELECT status FROM checklist_item WHERE id=%s", (item,)).fetchone()["status"]
+    audit_n = env.admin.execute("SELECT count(*) AS n FROM audit_event WHERE subject_type='checklist_item' AND subject_id=%s",
+                                (item,)).fetchone()["n"]
+    _deliver(env, item)                                 # positive control: from SUBMITTED the review is legal
+    try:
+        lc.review_document(c, U["legal1"], item, "APPROVED"); control = "OK"
+    except BusinessError as e:
+        control = e.code
+    status_control = env.admin.execute("SELECT status FROM checklist_item WHERE id=%s", (item,)).fetchone()["status"]
+    c.close()
+    ok = (got == "INVALID_TRANSITION" and status_denied == "REQUIRED" and audit_n == 0
+          and control == "OK" and status_control == "APPROVED")
+    record("T-16e", "Review of an item that is still REQUIRED", "PASS" if ok else "FAIL",
+           outcome=got, item_status_after_denial=status_denied, audit_rows_from_denied_review=audit_n,
+           positive_control_from_submitted=control, item_status_after_control=status_control)
+
+
 def main():
     env = Env()
     try:
@@ -399,6 +569,11 @@ def main():
         t06(env, U, opp_alfa)
         t07(env, U, opp_alfa)
         t08(env, U, opp_alfa)
+        t16a(env, U, opp_alfa)
+        t16b(env, U, opp_alfa)
+        t16c(env, U, opp_alfa)
+        t16d(env, U, opp_alfa)
+        t16e(env, U, opp_alfa)
         meta = {
             "executed_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
             "executor": "assistant-run in an isolated sandbox on behalf of the team (NOT yet re-run by the team)",

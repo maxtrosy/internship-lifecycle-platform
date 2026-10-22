@@ -93,7 +93,7 @@ def visible_placement_ids(cur, subj):
 
 
 def external_student_view(cur, student_id):
-    """Minimal projection for external roles (BR-14): no credits, level, courses, other applications."""
+    """Minimal projection for external roles (BR-13): no credits, level, courses, other applications."""
     return cur.execute(
         """SELECT u.display_name, p.code AS program_code FROM user_account u
            JOIN academic_program p ON p.id = u.program_id WHERE u.id = %s""", (student_id,)).fetchone()

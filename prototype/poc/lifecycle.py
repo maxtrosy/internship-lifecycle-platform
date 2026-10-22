@@ -31,6 +31,14 @@ def activation_unmet(cur, pid):
     return [f"{r['kind']}={r['status']}" for r in rows]
 
 
+def activation_noncompliant(cur, pid):
+    """BR-18 / OPEN-14 (proposal): DERIVED indicator, read from the SQL view (never stored).
+    True only for an ACTIVE placement with a mandatory activation item not APPROVED."""
+    row = cur.execute("SELECT activation_noncompliant FROM v_placement_activation_compliance WHERE placement_id=%s",
+                      (pid,)).fetchone()
+    return bool(row["activation_noncompliant"]) if row else False
+
+
 def completion_unmet(cur, pid):
     # Recompute hours requirement from SOURCE rows, never from a cached flag (T-04)
     for r in cur.execute("SELECT * FROM completion_requirement WHERE placement_id=%s AND kind='MIN_HOURS'", (pid,)).fetchall():
@@ -73,14 +81,20 @@ def review_document(conn, actor_id, item_id, decision, naive=False, pause=0.0):
     corr = str(uuid.uuid4())
     with conn.transaction():
         cur = conn.cursor()
-        it = cur.execute("SELECT * FROM checklist_item WHERE id=%s", (item_id,)).fetchone()
-        pid = it["placement_id"]
+        pid = cur.execute("SELECT placement_id FROM checklist_item WHERE id=%s", (item_id,)).fetchone()["placement_id"]
         authz.authorize(cur, authz.subject(cur, actor_id), "document:review", pid)
         p = _placement(cur, pid, lock=not naive)   # lock order: placement first, then item
+        it = cur.execute("SELECT * FROM checklist_item WHERE id=%s" + (" FOR UPDATE" if not naive else ""),
+                         (item_id,)).fetchone()
+        if it["status"] != "SUBMITTED":             # BR-14: review only from SUBMITTED
+            raise BusinessError("INVALID_TRANSITION", it["status"])
         if pause:
             time.sleep(pause)
         cur.execute("UPDATE checklist_item SET status=%s WHERE id=%s", (decision, item_id))
-        _audit(cur, actor_id, f"checklist_item.{decision.lower()}", "checklist_item", item_id,
+        action = f"checklist_item.{decision.lower()}"
+        if decision == "REJECTED" and p["state"] == "ACTIVE":   # BR-18: record the post-activation case
+            action = "checklist_item.rejected_after_activation"
+        _audit(cur, actor_id, action, "checklist_item", item_id,
                {"status": it["status"]}, {"status": decision, "placement_state": p["state"]}, corr)
 
 
@@ -143,6 +157,8 @@ def confirm_completion(conn, actor_id, pid):
             p = _placement(cur, pid)
             if p["state"] != "ACTIVE":
                 raise BusinessError("INVALID_TRANSITION", p["state"])
+            if activation_noncompliant(cur, pid):     # BR-18: activation noncompliance also blocks completion
+                raise BusinessError("ACTIVATION_NONCOMPLIANT", activation_unmet(cur, pid))
             unmet = completion_unmet(cur, pid)
             if unmet:
                 raise BusinessError("COMPLETION_EVIDENCE_MISSING", unmet)
@@ -161,6 +177,9 @@ def close_placement(conn, actor_id, pid):
             p = _placement(cur, pid)
             if p["state"] != "COMPLETED":
                 raise BusinessError("INVALID_TRANSITION", p["state"])
+            unmet_activation = activation_unmet(cur, pid)   # BR-18: closure also requires compliant activation
+            if unmet_activation:
+                raise BusinessError("ACTIVATION_NONCOMPLIANT", unmet_activation)
             unmet = completion_unmet(cur, pid)
             if unmet:
                 raise BusinessError("COMPLETION_EVIDENCE_MISSING", unmet)

@@ -12,7 +12,7 @@ Un paquete independiente en `prototype/` (**no** es el repositorio del equipo y 
 | `poc/lifecycle.py` | Comandos: aprobación académica, revisión de documento, activación, evidencia, horas, finalización, cierre, propuesta y aprobación de versión; cada uno = 1 transacción + bloqueo + auditoría |
 | `poc/authz.py` | Autorización por rol **y** relación; listados filtrados; proyección mínima |
 | `poc/policy.py` | Vocabulario cerrado de 4 condiciones; versionado; evaluación |
-| `tests/run_poc.py` | T-01..T-08 contra **PostgreSQL real**, con **controles negativos** |
+| `tests/run_poc.py` | T-01..T-08 + T-16a..e contra **PostgreSQL real**, con **controles negativos** |
 
 ## Cómo ejecutarlo
 ```bash
@@ -29,8 +29,10 @@ python tests/run_poc.py          # escribe evidence/results.json
 5. Versiones e historial inmutables incluso frente al dueño de la tabla.
 6. Cambio de política sin cambiar código, con vocabulario cerrado.
 
+> Las cifras de esta sección son de la corrida **2026-10-08**. La revisión OPEN-14 (T-16a..e) y el ajuste de fixture de T-02 no se ejecutaron: **NOT EXECUTED**.
+
 ## Lo que reveló del diseño (hallazgos)
-- **OPEN-14:** se puede rechazar un documento **después** de activar; el diseño no dice qué hacer.
+- **OPEN-14:** se puede rechazar un documento **después** de activar. La decisión propuesta (BR-18) es que la colocación siga `ACTIVE`, con un indicador derivado y compuerta de cierre; está pendiente de validar con el cliente. Las pruebas T-16a..e de esta revisión están **NOT EXECUTED** por una limitación del entorno.
 - Para que el trigger sea simple se **materializaron los requisitos**; las condiciones que dependen de cálculo (horas) se **recalculan desde el origen** (T-04 lo prueba con una bandera forzada).
 - La primera corrida de T-03 falló por un fixture compartido: la **prueba de autorización exige aislamiento de datos**.
 
@@ -45,4 +47,4 @@ python tests/run_poc.py          # escribe evidence/results.json
 - **Los conteos de orden varían entre corridas** (p. ej. 59/41 activación-primero/rechazo-primero, 22/40, 21 `GATE_VIOLATION`). Lo que debe mantenerse en cualquier corrida: **0 prohibidos en las variantes A y C, y >0 en el control B**, y 100/100 en T-01.
 
 ## Estado
-`PoC: parcialmente ejecutado (sandbox del asistente)`; reproducible; **pendiente de reejecución y de portar al repositorio del producto cuando se elija el stack**.
+`PoC: parcialmente ejecutado (sandbox del asistente)`; la corrida de 2026-10-08 cubrió T-01..T-08. La revisión OPEN-14 (T-16a..e) está **NOT EXECUTED**; reproducible; **pendiente de reejecución y de portar al repositorio del producto cuando se elija el stack**.

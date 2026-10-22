@@ -69,6 +69,15 @@ CREATE TABLE completion_requirement (  -- closure evidence
   satisfied boolean NOT NULL DEFAULT false, threshold numeric,
   UNIQUE (placement_id, kind));
 
+-- BR-18 / OPEN-14 (proposal): DERIVED indicator, never stored.
+-- True only for an ACTIVE placement with a mandatory activation item not APPROVED.
+CREATE VIEW v_placement_activation_compliance AS
+SELECT p.id AS placement_id,
+       (p.state = 'ACTIVE' AND EXISTS (
+          SELECT 1 FROM checklist_item ci
+          WHERE ci.placement_id = p.id AND ci.mandatory AND ci.status <> 'APPROVED')) AS activation_noncompliant
+FROM placement p;
+
 CREATE TABLE progress_entry (
   id serial PRIMARY KEY, placement_id int NOT NULL REFERENCES placement(id),
   student_id int NOT NULL REFERENCES user_account(id), hours numeric NOT NULL CHECK (hours > 0),
@@ -94,6 +103,10 @@ BEGIN
       IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory activation requirement(s) not approved', n; END IF;
     ELSIF NEW.state = 'COMPLETED' THEN
       IF OLD.state <> 'ACTIVE' THEN RAISE EXCEPTION 'GATE: illegal transition % -> COMPLETED', OLD.state; END IF;
+      -- BR-18: a noncompliant activation also blocks completion (and therefore closure)
+      SELECT count(*) INTO n FROM checklist_item
+        WHERE placement_id = NEW.id AND mandatory AND status <> 'APPROVED';
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory activation requirement(s) not approved', n; END IF;
       IF NOT NEW.completion_requirements_instantiated THEN
         RAISE EXCEPTION 'GATE: completion requirements not instantiated'; END IF;
       SELECT count(*) INTO n FROM completion_requirement
@@ -101,6 +114,10 @@ BEGIN
       IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory completion requirement(s) unsatisfied', n; END IF;
     ELSIF NEW.state = 'CLOSED' THEN
       IF OLD.state <> 'COMPLETED' THEN RAISE EXCEPTION 'GATE: illegal transition % -> CLOSED', OLD.state; END IF;
+      -- BR-18: closure also requires a compliant activation
+      SELECT count(*) INTO n FROM checklist_item
+        WHERE placement_id = NEW.id AND mandatory AND status <> 'APPROVED';
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory activation requirement(s) not approved', n; END IF;
       SELECT count(*) INTO n FROM completion_requirement
         WHERE placement_id = NEW.id AND mandatory AND NOT satisfied;
       IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory completion requirement(s) unsatisfied', n; END IF;

@@ -101,7 +101,7 @@ Todos los valores son **objetivos propuestos (*proposed targets*)**. Donde no ha
 | Artifact | Ciclo de vida de colocación (C-06), checklist (C-07), compuerta en BD |
 | Response | Rechazo con error de negocio que lista lo pendiente; estado sin cambios; sin evento de activación; con dos activaciones válidas, una sola prevalece y la otra recibe conflicto; el bypass directo lo rechaza la BD |
 | Measure *(propuesto)* | 0 colocaciones activadas con requisitos pendientes en ≥100 ensayos por variante; 100/100 carreras con exactamente 1 éxito, 1 conflicto y 1 evento de auditoría; 100 % de intentos de bypass rechazados |
-| Evidencia | **EJECUTADO (PoC, sandbox):** T-01, T-02, T-02b. T-08 para BR-02. Ver [resultados](validation/validation-results.md) |
+| Evidencia | **EJECUTADO (PoC, sandbox, 2026-10-08):** T-01, T-02, T-02b. T-08 para BR-02. T-16a/e (BR-18): **NOT EXECUTED**. Ver [resultados](validation/validation-results.md) |
 
 ### QS-02 — Aislamiento de autorización
 
@@ -238,8 +238,9 @@ flowchart LR
 
 | Aspecto | Diseño | Implementación | Validación |
 |---|---|---|---|
-| Compuerta de activación | Documentado (ADR-003, SEQ-02) | **Rebanada de BD + comandos en el PoC**; no está en el producto | **Ejecutado en sandbox:** T-01, T-02, T-02b (100/100 y control negativo) |
+| Compuerta de activación | Documentado (ADR-003, SEQ-02) | **Rebanada de BD + comandos en el PoC**; no está en el producto | **Ejecutado en sandbox (2026-10-08):** T-01, T-02, T-02b (100/100 y control negativo). T-16a/e: **NOT EXECUTED** |
 | Compuerta de cierre | Documentado | Rebanada de BD + comandos en el PoC | **Ejecutado en sandbox:** T-04. Variante concurrente: NOT EXECUTED |
+| No conformidad posterior a la activación (BR-18) | Documentado (ADR-003, BR-18) | Vista derivada + comandos + trigger en el PoC | T-16a..T-16e: **NOT EXECUTED** (entorno) |
 | Autorización por relación | Documentado (ADR-004) | Módulo `authz` del PoC (sin HTTP) | **Ejecutado en sandbox:** T-03 (66 aserciones) |
 | Versionado y auditoría | Documentado (ADR-005) | Tablas y triggers del PoC | **Ejecutado en sandbox:** T-05, T-07 |
 | Políticas configurables | Documentado (ADR-001) | Evaluador con 4 condiciones en el PoC | **Ejecutado en sandbox:** T-06 (sin medir latencia) |
@@ -275,7 +276,7 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | OPEN-11 | Horas por programa | CL-011 | Requisito `MIN_HOURS` por política |
 | OPEN-12 | Visibilidad de evaluaciones (¿las ve el estudiante? ¿cuándo?) | RFP sec. 4 | Matriz de seguridad |
 | OPEN-13 | Tope de cupos al seleccionar | RF-01 | Regla BR-10 |
-| OPEN-14 | Documento rechazado **después** de activar: ¿bandera de cumplimiento o suspensión? (el PoC lo permitió en 59/100 ensayos) | hallazgo de T-02 | Nueva transición o bandera |
+| OPEN-14 | Documento rechazado **después** de activar: **propuesta, pendiente de cliente** (la colocación sigue `Active`, indicador derivado `activation_noncompliant` y compuerta de cierre; el PoC anterior lo permitió en aproximadamente la mitad de los ensayos) | hallazgo de T-02 | Indicador derivado y compuerta de cierre, sin estado nuevo |
 | OPEN-15 | Canal y cadencia de notificaciones | RF-15 | Adaptador de notificación |
 | OPEN-16 | Umbrales de disponibilidad y capacidad | RNF-12, ASM-009 | QS-05, despliegue |
 | OPEN-17 | Tecnología concreta (lenguaje, framework, BD) aún no elegida; **no existe** modelo de dominio ni código previo, así que este paquete contiene la primera versión del modelo | ASM-003B (cita un documento inexistente) | Todo el modelo; el equipo debe revisarlo y adoptarlo |
@@ -330,4 +331,4 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | 19 | ¿Es razonable para un semestre? | Sí: un monolito modular, un worker, una BD, simuladores |
 | 20 | ¿Responde a "¿puede justificar cómo estructurarse?" | Sí, mediante la cadena F-01 y los hallazgos reales del PoC |
 
-**Brechas que esta revisión no puede cerrar:** aún no existe código ni stack elegido (`OPEN-17`), por lo que el modelo de este paquete es una primera versión que el equipo debe revisar y adoptar; ninguna decisión está validada con el cliente; la evidencia ejecutada proviene del sandbox del asistente y no de la máquina del equipo; el hallazgo `OPEN-14` expone una laguna real del diseño (documento rechazado después de activar).
+**Brechas que esta revisión no puede cerrar:** aún no existe código ni stack elegido (`OPEN-17`), por lo que el modelo de este paquete es una primera versión que el equipo debe revisar y adoptar; ninguna decisión está validada con el cliente; la evidencia ejecutada proviene del sandbox del asistente y no de la máquina del equipo; `OPEN-14` queda cubierto por una **propuesta** (BR-18) **pendiente de validar con el cliente**, cuyas pruebas T-16a..e están **NOT EXECUTED** por una limitación del entorno.

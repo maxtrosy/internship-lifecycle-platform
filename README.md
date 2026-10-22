@@ -30,8 +30,8 @@
 | Estado | Qué incluye |
 |---|---|
 | **Diseñado** | Contexto, contenedores, componentes, dominio, estados, secuencias, reglas, interfaces, seguridad, despliegue |
-| **Ejecutado (sandbox del asistente)** | T-01..T-08 contra PostgreSQL 16.2: **9 PASS, 0 FAIL** en la corrida final (la primera tuvo 1 FAIL por un defecto del harness, conservado como evidencia) |
-| **NOT EXECUTED** | Pico (QS-05), adaptadores (QS-07), usabilidad (QS-08), T-09..T-15, variante concurrente de T-04, despliegue, API, UI |
+| **Ejecutado (sandbox del asistente)** | T-01..T-08 contra PostgreSQL 16.2: **9 PASS, 0 FAIL** en la corrida previa (2026-10-08; la primera tuvo 1 FAIL por un defecto del harness, conservado como evidencia) |
+| **NOT EXECUTED** | T-16a..T-16e (BR-18/OPEN-14, revisión 2026-10-22: el entorno no pudo levantar PostgreSQL); pico (QS-05), adaptadores (QS-07), usabilidad (QS-08), T-09..T-15, variante concurrente de T-04, despliegue, API, UI |
 | **Abierto** | 21 elementos `OPEN` (ver el documento principal §11) |
 
 ## Limitaciones conocidas

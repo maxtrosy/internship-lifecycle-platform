@@ -7,5 +7,7 @@ pip install pgserver "psycopg[binary]"
 python tests/run_poc.py      # escribe evidence/results.json; POC_TRIALS=100 por defecto
 ```
 - `poc/schema.sql` esquema, triggers y permisos · `poc/lifecycle.py` comandos · `poc/authz.py` autorización · `poc/policy.py` políticas · `poc/seed.py` datos sintéticos
-- `evidence/results.json` corrida final · `evidence/results-run1-T03-fixture-scope-failure.json` primera corrida (T-03 falló por fixtures compartidos)
+- `tests/run_poc.py` T-01..T-08 + T-16a..e
+- `evidence/results.json` corrida previa (2026-10-08) · `evidence/results-run1-T03-fixture-scope-failure.json` primera corrida (T-03 falló por fixtures compartidos)
+- **Revisión OPEN-14 (2026-10-22):** T-16a..e implementadas pero **NOT EXECUTED** (el entorno no pudo levantar PostgreSQL); no se regeneró `results.json`.
 - Límites: ver `docs/evaluation-2/validation/poc.md`.
