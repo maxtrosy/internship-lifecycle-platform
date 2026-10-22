@@ -81,15 +81,10 @@ def t02(env, U, opp):
         p = seed.make_doc_pending(env, U, "s1", opp)
         item = env.admin.execute("SELECT id FROM checklist_item WHERE placement_id=%s AND kind='DOC_INSURANCE'", (p,)).fetchone()["id"]
         c1, c2 = env.conn(), env.conn()
-
-        def reject_after_delivery():
-            # This PoC has no document-submission command: the item is marked SUBMITTED first (BR-14),
-            # so the rejection is a legal review instead of APPROVED -> REJECTED (now INVALID_TRANSITION).
-            c2.execute("UPDATE checklist_item SET status='SUBMITTED' WHERE id=%s", (item,))
-            return lc.review_document(c2, U["legal1"], item, "REJECTED", naive=naive)
+        # Fixture original: el ítem está APPROVED; se ejerce la revocación APPROVED -> REJECTED (BR-14/BR-18).
         act_first = random.random() < 0.5
         out = race(lambda: lc.activate(c1, U["ec1"], p, naive=naive, pause=0.05),
-                   reject_after_delivery,
+                   lambda: lc.review_document(c2, U["legal1"], item, "REJECTED", naive=naive),
                    delay_a=0.0 if act_first else 0.02, delay_b=0.02 if act_first else 0.0)
         c1.close(); c2.close()
         rows = env.admin.execute("SELECT id,action FROM audit_event WHERE correlation_id IS NOT NULL ORDER BY id").fetchall()
@@ -406,9 +401,7 @@ def t16a(env, U, opp):
     item = _item_id(env, p)
     c = env.conn()
     before = lc.activation_noncompliant(c, p)          # negative control: ACTIVE with all items APPROVED -> False
-    _deliver(env, item)
-    after_delivery = lc.activation_noncompliant(c, p)  # BR-18 counts SUBMITTED as noncompliant too
-    lc.review_document(c, U["legal1"], item, "REJECTED")
+    lc.review_document(c, U["legal1"], item, "REJECTED")   # revocation APPROVED -> REJECTED
     indicator = lc.activation_noncompliant(c, p)
     view_row = c.execute("SELECT activation_noncompliant FROM v_placement_activation_compliance WHERE placement_id=%s",
                          (p,)).fetchone()
@@ -421,10 +414,10 @@ def t16a(env, U, opp):
           and actions.count("checklist_item.rejected_after_activation") == 1
           and events[-1]["after_state"]["status"] == "REJECTED")
     record("T-16a", "Document rejected after activation: derived indicator and audit event", "PASS" if ok else "FAIL",
-           indicator_before=before, indicator_after_delivery=after_delivery, indicator_after=indicator,
+           indicator_before=before, indicator_after=indicator,
            sql_view_indicator=view_row["activation_noncompliant"],
            placement_state=state, audit_actions=actions,
-           note="negative control: before rejection the ACTIVE placement with all items APPROVED is compliant")
+           note="negative control: before revocation the ACTIVE placement with all items APPROVED is compliant")
 
 
 def t16b(env, U, opp):

@@ -60,9 +60,9 @@ En T-02, cuando la activación ganó la carrera, un documento pudo rechazarse **
 1. La colocación **sigue `Active`**; no se suspende automáticamente.
 2. Se expone un indicador **derivado** (no almacenado) `activation_noncompliant` = `Active` **y** algún ítem de activación obligatorio distinto de `APPROVED`.
 3. `Active → Completed` (T7) y `Completed → Closed` (T8) exigen además que **todos** los ítems de activación obligatorios estén `APPROVED`; la aplicación devuelve `ACTIVATION_NONCOMPLIANT` y el trigger de BD responde con `GATE`.
-4. Revisar un documento exige `SUBMITTED` (BR-14); si la colocación está `Active`, el rechazo se audita como `checklist_item.rejected_after_activation`.
+4. Revisar un documento se hace desde `SUBMITTED` (aprobar o rechazar) y se permite la **revocación `APPROVED → REJECTED`**; desde `REQUIRED` o `REJECTED` es `INVALID_TRANSITION` (BR-14). Si la colocación está `Active`, el rechazo se audita como `checklist_item.rejected_after_activation`.
 
 **No se agrega ningún estado ni transición a la máquina.** `activation_noncompliant` es una bandera calculada, no un estado; `ReadyForActivation` sigue siendo derivado y tampoco se almacena. La propuesta está pendiente de validar con el cliente (plazo de corrección y aprobador de excepciones abiertos).
 
 ## Qué prueba esta vista hoy
-T-01, T-02, T-02b (T4); T-16a..T-16e (BR-18: T4, T7, T8; **NOT EXECUTED**); T-04 (T7, T8); T-08 (BR-02). No se probaron T1, T3, T5, T6, T9.
+T-01, T-02, T-02b (T4); T-16a..T-16e (BR-18: T4, T7, T8; 14 PASS en la corrida 2026-10-22); T-04 (T7, T8); T-08 (BR-02). No se probaron T1, T3, T5, T6, T9.

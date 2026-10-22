@@ -1,6 +1,6 @@
 # ADR-003 — Compuertas de activación, finalización y cierre
 
-**Status:** propuesta, **parcialmente verificada** en un PoC ejecutado en sandbox · **Fecha:** 2026-10-08 · **Revisión OPEN-14:** 2026-10-22 (implementada; **NOT EXECUTED**)
+**Status:** propuesta, **parcialmente verificada** en un PoC ejecutado en sandbox · **Fecha:** 2026-10-08 · **Corrida 2026-10-22:** 14 PASS (T-02 y T-16a..e incluidos)
 
 ## Context
 RFP: "Students must not begin a placement before mandatory activation conditions are satisfied" y la universidad no puede registrar una finalización con evidencia faltante (sec. 2 y 7). RF-09 y RF-17 los convierten en bloqueos. Riesgos concretos: dos actores activan a la vez; un documento se rechaza mientras se activa; alguien evita la aplicación (migración, consola, defecto). Las listas exactas de condiciones están abiertas (OPEN-01, OPEN-02).
@@ -18,7 +18,7 @@ Una **defensa en capas** con una regla común: *las condiciones obligatorias son
    - La colocación **sigue `ACTIVE`**; no se suspende automáticamente.
    - Se expone un indicador **derivado, no almacenado**, `activation_noncompliant`: verdadero si la colocación está `ACTIVE` y existe un `checklist_item` obligatorio con `status <> 'APPROVED'`. Se implementa como vista SQL (`v_placement_activation_compliance`) y como función Python (`activation_noncompliant`).
    - Las transiciones `ACTIVE → COMPLETED` y `COMPLETED → CLOSED` exigen además que **todos** los ítems de activación obligatorios estén `APPROVED`. Se aplica en la aplicación (`confirm_completion`, `close_placement`; error `ACTIVATION_NONCOMPLIANT`) y en `trg_placement_gate` (BD; error `GATE`), manteniendo la lógica en ambos sitios.
-   - `review_document` exige que el ítem esté en `SUBMITTED` (BR-14; si no, `INVALID_TRANSITION`) y, si la colocación está `ACTIVE`, registra `checklist_item.rejected_after_activation` cuando la decisión es `REJECTED`. El orden de bloqueo sigue siendo colocación y luego ítem.
+   - `review_document` permite `APPROVED`/`REJECTED` desde `SUBMITTED` y la **revocación `APPROVED → REJECTED`**; desde `REQUIRED` o `REJECTED` produce `INVALID_TRANSITION`. Si la colocación está `ACTIVE`, el rechazo se registra como `checklist_item.rejected_after_activation`. El orden de bloqueo sigue siendo colocación y luego ítem.
 
 ## Alternatives considered
 | Alternativa | Evaluación |
@@ -41,13 +41,13 @@ La política se evalúa al vincular y se materializa; la UI puede mostrar "listo
 - La red en BD solo cubre lo materializado; las condiciones que dependen de cálculo (horas) dependen del recálculo de la aplicación.
 - Un superusuario de BD puede deshabilitar el trigger.
 - La laguna **OPEN-14** queda cubierta por una **propuesta** (indicador derivado + compuerta de cierre), **pendiente de validar con el cliente**; no es una decisión validada.
-- El indicador no distingue "en revisión" de "rechazado": un ítem en `SUBMITTED` con la colocación `ACTIVE` ya cuenta como no conforme. El plazo para corregir y quién aprueba excepciones siguen abiertos (BR-18).
+- El indicador no distingue **por qué** el ítem dejó de estar `APPROVED` (en revisión, rechazo o revocación): cualquier estado distinto de `APPROVED` con la colocación `ACTIVE` cuenta como no conforme. El plazo para corregir y quién aprueba excepciones siguen abiertos (BR-18).
 - La compuerta de cierre añade otra condición que mantener sincronizada entre aplicación y BD.
 
-## Verification (ejecutado en sandbox; PostgreSQL 16.2; 2026-10-08)
-- **T-01:** 100/100 carreras de activación doble → exactamente 1 éxito, 1 `INVALID_TRANSITION`, 1 evento. **Control negativo** (sin bloqueo): doble activación en 30/30. *Hallazgo:* el trigger solo **no** impide ACTIVE→ACTIVE; lo evita el bloqueo.
-- **T-02:** rechazo de documento concurrente con activación. Variante A (diseño propuesto): 100 ensayos, **0** resultados prohibidos; ambos órdenes ocurrieron (59 activación primero, 41 rechazo primero). Control B (sin bloqueo ni trigger): **22/40** prohibidos. Variante C (sin bloqueo, con trigger): **0/40**; el trigger respondió con `GATE_VIOLATION` en 21. *(Cifras de la corrida anterior, 2026-10-08. En esta revisión el fixture marca el ítem como `SUBMITTED` antes del rechazo, porque revisar desde `APPROVED` ahora es `INVALID_TRANSITION`; la corrida actual está **NOT EXECUTED**.)*
-- **T-16a..e (BR-18, propuesta):** implementadas en el PoC: indicador derivado, compuerta de cierre en aplicación y trigger, revisión solo desde `SUBMITTED` y evento `checklist_item.rejected_after_activation`. **NOT EXECUTED:** la corrida no se pudo completar en el entorno disponible (`initdb` de PostgreSQL 16 falla con el token restringido del sandbox; la escalada fue rechazada). No se reportan cifras.
+## Verification (sandbox; PostgreSQL 16.2; corridas 2026-10-08 y 2026-10-22)
+- **T-01 (corrida 2026-10-22):** 100/100 carreras de activación doble → exactamente 1 éxito, 1 `INVALID_TRANSITION`, 1 evento. **Control negativo** (sin bloqueo): doble activación en 30/30. *Hallazgo:* el trigger solo **no** impide ACTIVE→ACTIVE; lo evita el bloqueo.
+- **T-02 (corrida 2026-10-22):** rechazo de documento concurrente con activación. Variante A: 100 ensayos, **0** prohibidos, **55 activación primero / 45 rechazo primero**. Control B: **25/40** prohibidos. Variante C: **0/40** (21 `GATE_VIOLATION`). *Los conteos de orden varían entre corridas.*
+- **T-16a..e (corrida 2026-10-22):** **14 PASS**. T-16a rechaza directamente un ítem `APPROVED` con la colocación `ACTIVE` y registra `checklist_item.rejected_after_activation`; T-16b..e verifican la compuerta de cierre y la revisión desde `REQUIRED`.
 - **T-02b:** `UPDATE` directo rechazado por la BD; un comando denegado no agrega filas de auditoría.
 - **T-04, T-08:** ver resultados.
 - **NOT EXECUTED:** concurrencia de cierre; migración de datos que deje instancias inconsistentes; comportamiento con otra BD.

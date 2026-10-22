@@ -86,8 +86,13 @@ def review_document(conn, actor_id, item_id, decision, naive=False, pause=0.0):
         p = _placement(cur, pid, lock=not naive)   # lock order: placement first, then item
         it = cur.execute("SELECT * FROM checklist_item WHERE id=%s" + (" FOR UPDATE" if not naive else ""),
                          (item_id,)).fetchone()
-        if it["status"] != "SUBMITTED":             # BR-14: review only from SUBMITTED
-            raise BusinessError("INVALID_TRANSITION", it["status"])
+        status = it["status"]
+        # BR-14 / BR-18: SUBMITTED -> APPROVED/REJECTED; APPROVED -> REJECTED (revocation).
+        # Any other combination is invalid.
+        allowed = ((status == "SUBMITTED" and decision in ("APPROVED", "REJECTED"))
+                   or (status == "APPROVED" and decision == "REJECTED"))
+        if not allowed:
+            raise BusinessError("INVALID_TRANSITION", status)
         if pause:
             time.sleep(pause)
         cur.execute("UPDATE checklist_item SET status=%s WHERE id=%s", (decision, item_id))

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "executed_at_utc": "2026-10-22T23:18:42+00:00",
+    "executed_at_utc": "2026-10-22T23:27:13+00:00",
     "executor": "assistant-run in an isolated sandbox on behalf of the team (NOT yet re-run by the team)",
     "source_commit": null,
     "environment": {
@@ -34,23 +34,24 @@
         "trials": 100,
         "forbidden": 0,
         "orders": {
-          "rejection_first_activation_denied": 100
+          "activation_first": 55,
+          "rejection_first_activation_denied": 45
         },
         "activation_outcomes": {
-          "GATE_VIOLATION": 50,
-          "ACTIVATION_CONDITIONS_UNMET": 50
+          "ACTIVATION_CONDITIONS_UNMET": 45,
+          "OK": 55
         }
       },
       "B_control_naive_no_lock_no_trigger": {
         "trials": 40,
-        "forbidden": 22,
+        "forbidden": 25,
         "orders": {
-          "rejection_first_activation_denied": 18,
-          "other": 22
+          "rejection_first_activation_denied": 15,
+          "other": 25
         },
         "activation_outcomes": {
-          "OK": 22,
-          "ACTIVATION_CONDITIONS_UNMET": 18
+          "ACTIVATION_CONDITIONS_UNMET": 15,
+          "OK": 25
         }
       },
       "C_naive_no_lock_with_db_trigger": {
@@ -60,8 +61,8 @@
           "rejection_first_activation_denied": 40
         },
         "activation_outcomes": {
-          "GATE_VIOLATION": 19,
-          "ACTIVATION_CONDITIONS_UNMET": 21
+          "GATE_VIOLATION": 21,
+          "ACTIVATION_CONDITIONS_UNMET": 19
         }
       }
     },
@@ -174,14 +175,13 @@
       "title": "Document rejected after activation: derived indicator and audit event",
       "status": "PASS",
       "indicator_before": false,
-      "indicator_after_delivery": true,
       "indicator_after": true,
       "sql_view_indicator": true,
       "placement_state": "ACTIVE",
       "audit_actions": [
         "checklist_item.rejected_after_activation"
       ],
-      "note": "negative control: before rejection the ACTIVE placement with all items APPROVED is compliant"
+      "note": "negative control: before revocation the ACTIVE placement with all items APPROVED is compliant"
     },
     {
       "test_id": "T-16b",

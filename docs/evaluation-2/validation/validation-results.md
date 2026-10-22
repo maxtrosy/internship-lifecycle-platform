@@ -4,15 +4,15 @@
 
 | Campo | Valor |
 |---|---|
-| Fecha de ejecución | 2026-10-08 (07:32 UTC, corrida final) |
-| Ejecutado por | **El asistente, en un sandbox aislado, a pedido del equipo.** *No* lo ha vuelto a ejecutar el equipo |
-| Commit evaluado | **Ninguno** (el equipo aún no tiene código del producto; el PoC es un paquete independiente en `prototype/`) |
-| Entorno | Linux · Python 3.12.3 · PostgreSQL 16.2 (`pgserver` 0.1.4) · psycopg 3.3.6 |
-| Evidencia cruda | `prototype/evidence/results.json` (corrida final) y `prototype/evidence/results-run1-T03-fixture-scope-failure.json` (primera corrida) |
+| Fecha de ejecución | 2026-10-22 (23:27 UTC, corrida registrada en `results.json`) |
+| Ejecutado por | **El equipo**, en Windows 10 (corrida registrada en `results.json`) |
+| Commit evaluado | **Ninguno** (`source_commit: null` en `results.json`; el PoC es un paquete independiente en `prototype/`) |
+| Entorno | Windows 10 · Python 3.12.14 · PostgreSQL 16.2 (`pgserver` 0.1.4) · psycopg 3.3.6 |
+| Evidencia cruda | `prototype/evidence/results.json` (corrida 2026-10-22) y `prototype/evidence/results-run1-T03-fixture-scope-failure.json` (primera corrida) |
 | Comando | `cd prototype && pip install pgserver "psycopg[binary]" && python tests/run_poc.py` |
-| Resumen | **9 PASS, 0 FAIL** en la corrida final (T-01, T-02, T-02b, T-03, T-04, T-05, T-06, T-07, T-08) |
+| Resumen | **14 PASS, 0 FAIL** (T-01, T-02, T-02b, T-03, T-04, T-05, T-06, T-07, T-08, T-16a..T-16e) |
 
-> **Revisión posterior (2026-10-22).** Se implementaron T-16a..e (BR-18/OPEN-14) y se ajustó el fixture de T-02 (ahora el ítem se marca `SUBMITTED` antes de rechazarlo, porque revisar desde `APPROVED` es `INVALID_TRANSITION`). La ejecución **no se pudo completar** en el entorno del asistente: `initdb` de PostgreSQL falla al crear su token restringido dentro del sandbox y la escalada fue rechazada. Por eso el resumen anterior (**9 PASS**) corresponde a la revisión previa; la revisión actual está **NOT EXECUTED**, `evidence/results.json` no se regeneró y **no se reportan cifras nuevas**.
+> **Corrida 2026-10-22.** 14 PASS. T-02 variante A: **55 activación primero / 45 rechazo primero**, 0 prohibidos; control B: **25/40**; variante C: **0/40** con 21 `GATE_VIOLATION`. T-16a..e: PASS. **Los conteos de orden varían entre corridas.**
 
 > **Lectura honesta.** "PASS" significa que *este PoC* se comportó como se diseñó en *esta* base de datos. No demuestra el producto, ni la capa HTTP, ni el rendimiento. No se capturaron pantallas porque no existe interfaz.
 
@@ -21,7 +21,7 @@
 ### Corrida 1 y su fallo (se conserva)
 La primera ejecución dio **8 PASS y 1 FAIL (T-03)**. **Causa:** T-03 compartía base de datos con otras pruebas, que ya habían creado colocaciones de las mismas organizaciones; los conjuntos esperados (solo 3 colocaciones) no podían coincidir. Fue un **defecto del harness**, no del sistema. **Corrección:** T-03 ahora corre en una base aislada. Se conserva la evidencia del fallo y se informa.
 
-### T-01 — Activación simultánea
+### T-01 — Activación simultánea (corrida 2026-10-22)
 | Métrica | Resultado |
 |---|---|
 | Ensayos (diseño propuesto, con bloqueo) | 100 |
@@ -33,14 +33,12 @@ La primera ejecución dio **8 PASS y 1 FAIL (T-03)**. **Causa:** T-03 compartía
 ### T-02 — Documento rechazado mientras se activa
 | Variante | Ensayos | Resultados prohibidos | Detalle |
 |---|---|---|---|
-| **A.** Diseño propuesto (bloqueo + trigger) | 100 | **0** | 59 activación primero · 41 rechazo primero (activación denegada) |
-| **B.** Control: sin bloqueo y **sin** trigger | 40 | **22** | La prueba detecta la violación |
+| **A.** Diseño propuesto (bloqueo + trigger) | 100 | **0** | **55 activación primero · 45 rechazo primero** |
+| **B.** Control: sin bloqueo y **sin** trigger | 40 | **25** | La prueba detecta la violación |
 | **C.** Sin bloqueo, **con** trigger | 40 | **0** | 21 `GATE_VIOLATION` + 19 `ACTIVATION_CONDITIONS_UNMET` |
 
 *Resultado prohibido:* activación confirmada habiendo un rechazo de documento ya registrado antes.
-*Hallazgo de diseño (→ OPEN-14):* en las 59 activaciones que ganaron, el documento se rechazó **después**, dejando una colocación `ACTIVE` con un requisito `REJECTED`. El diseño de esa corrida lo permitía y **no definía qué debía pasar**; la revisión 2026-10-22 propone BR-18 (ver nota siguiente).
-
-> **Revisión 2026-10-22 (NOT EXECUTED).** La decisión propuesta está en BR-18/ADR-003. El fixture de T-02 cambió: el ítem se marca `SUBMITTED` antes de la revisión (no hay comando de entrega en el PoC), porque rechazar desde `APPROVED` ahora produce `INVALID_TRANSITION`. Las cifras de la tabla son de la corrida anterior y **no** deben citarse como resultado de esta revisión.
+*Hallazgo:* con el bloqueo, la variante A observó **ambos órdenes** y no produjo resultados prohibidos. **Los conteos de orden varían entre corridas**; no deben tratarse como un reparto fijo (en esta corrida, 55/45).
 
 ### T-02b — Evitar la aplicación y atomicidad
 Dos `UPDATE` directos a `ACTIVE` (uno con 3 requisitos sin aprobar; otro sin aprobación académica) fueron rechazados por la BD (`GATE: 3 mandatory activation requirement(s) not approved`; `GATE: illegal transition PENDING_ACADEMIC_APPROVAL -> ACTIVE`). Un comando denegado por la aplicación agregó **0 filas** de auditoría.
@@ -77,6 +75,17 @@ Rol de aplicación: `UPDATE` y `DELETE` → *permission denied*. Dueño de la ta
 ### T-08 — Sin horas antes de la activación
 `record_hours` en una colocación no activa → `PLACEMENT_NOT_ACTIVE`; 0 filas insertadas.
 
+### T-16a..T-16e — Activación no conforme y cierre (BR-18)
+Resultados de la corrida 2026-10-22:
+
+| Prueba | Resultado |
+|---|---|
+| **T-16a** | PASS. Revocación directa `APPROVED → REJECTED` con la colocación `ACTIVE`: indicador `false` antes · `true` después; la vista SQL también `true`; estado `ACTIVE`; evento `checklist_item.rejected_after_activation`. |
+| **T-16b** | PASS. Evidencia de cierre completa (`completion_unmet = []`), indicador `true`, `ACTIVATION_NONCOMPLIANT`, estado `ACTIVE`; control negativo conforme → `OK`. |
+| **T-16c** | PASS. `UPDATE` directo a `COMPLETED` rechazado con `GATE: 1 mandatory activation requirement(s) not approved`; control negativo conforme → permitido. |
+| **T-16d** | PASS. Indicador `true` tras el rechazo, finalización denegada con `ACTIVATION_NONCOMPLIANT`; tras reentrega y aprobación, indicador `false`, confirmación y cierre `OK`, estado `CLOSED`. |
+| **T-16e** | PASS. Revisión desde `REQUIRED` → `INVALID_TRANSITION`, estado y auditoría intactos; control positivo desde `SUBMITTED` → `OK`. |
+
 ## C. Not executed
 
 | Ítem | Qué falta |
@@ -89,21 +98,6 @@ Rol de aplicación: `UPDATE` y `DELETE` → *permission denied*. Dueño de la ta
 | T-14 RLS como defensa en profundidad | Esquema con políticas de fila y evaluación con TI |
 | T-15 Fronteras de módulo | Herramienta de reglas de importación en el repositorio del producto, cuando exista |
 | T-04 variante concurrente | Un caso análogo a T-02 para `ConfirmCompletion` |
-| **T-16a..T-16e** (BR-18, revisión 2026-10-22) | Ejecución real del PoC: `initdb`/PostgreSQL no arranca bajo el token restringido del sandbox y la escalada fue rechazada. Las pruebas están implementadas en `run_poc.py` pero **no se ejecutaron**; no hay resultados que reportar |
 | Medición de latencias (QS-03, QS-04) | Instrumentación |
 | Flujo completo SEQ-01 | Implementación de T1, T3, T5, T6, T9 y de las vistas de oportunidad/postulación |
 | Reejecución por el equipo | Correr `run_poc.py` en su entorno y registrar commit |
-
-### T-16a..T-16e — NOT EXECUTED (detalle)
-
-Se implementaron en `prototype/tests/run_poc.py` con el mismo patrón que las pruebas existentes. Qué habría que observar en una corrida real:
-
-| ID | Escenario | Resultado esperado |
-|---|---|---|
-| T-16a | Rechazar un documento con la colocación `ACTIVE` | Indicador derivado `true`; evento `checklist_item.rejected_after_activation`; estado `ACTIVE` |
-| T-16b | `confirm_completion` con indicador `true` y evidencia de cierre completa | `ACTIVATION_NONCOMPLIANT`; control negativo conforme → `OK` |
-| T-16c | `UPDATE` directo a `COMPLETED` con indicador `true` | Rechazo de BD con mensaje `GATE`; control negativo conforme → permitido |
-| T-16d | Reentrega (fixture) + aprobación + cierre | Indicador `false`; finalización y cierre `OK`; estado `CLOSED` |
-| T-16e | Revisar un ítem en `REQUIRED` | `INVALID_TRANSITION`; sin cambios de estado ni auditoría; control positivo desde `SUBMITTED` |
-
-**Motivo exacto del bloqueo:** `initdb` responde `could not create restricted token: error code 87` / `could not re-execute with restricted token` y no inicializa el clúster; la solicitud de ejecución con acceso completo fue rechazada. No se sustituyó PostgreSQL por otra base porque el PoC depende de triggers, `SELECT … FOR UPDATE` y permisos reales.

@@ -8,11 +8,11 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 |---|---|---|---|---|---|---|---|
 | RF-05 | QS-03 | AD-02 | ADR-001 | C-04, C-05 | V-COMP, SEQ-01 | BR-08, BR-12 | **T-06** (EXECUTED, sandbox) |
 | RF-06 / RF-07 | QS-01 (precondición) | AD-01 | ADR-003 | C-06 | V-STATE-PLC T1–T3, SEQ-01 | BR-10, BR-11 | T-03 (parcial); **T1–T3 NOT EXECUTED** |
-| RF-08 | QS-01, QS-03 | AD-01, AD-02 | ADR-001, ADR-003 | C-05, C-07 | V-DOM | BR-14 | T-02 (revisión/rechazo); T-16e NOT EXECUTED; entrega: NOT EXECUTED |
-| RF-09 | QS-01 | AD-01 | ADR-003 | C-06, C-07 | V-STATE-PLC T4, SEQ-02 | BR-01, BR-02, BR-18 | **T-01, T-02, T-02b, T-08** (EXECUTED); T-16a/b/d **NOT EXECUTED** |
+| RF-08 | QS-01, QS-03 | AD-01, AD-02 | ADR-001, ADR-003 | C-05, C-07 | V-DOM | BR-14 | T-02 (revisión/rechazo/revocación); T-16e (EXECUTED 2026-10-22); entrega: NOT EXECUTED |
+| RF-09 | QS-01 | AD-01 | ADR-003 | C-06, C-07 | V-STATE-PLC T4, SEQ-02 | BR-01, BR-02, BR-18 | **T-01, T-02, T-02b, T-08** (EXECUTED); T-16a/b/d (EXECUTED 2026-10-22) |
 | RF-13 | QS-04 | AD-04 | ADR-005 | C-06, C-11 | V-DOM, SEQ-03 | BR-04 | **T-05** (EXECUTED) |
 | RF-15 | QS-07 | AD-05 | ADR-006 | C-10, C-13 | V-CONT | — | T-11 NOT EXECUTED |
-| RF-17 | QS-06 | AD-01 | ADR-003 | C-06, C-08 | V-STATE-PLC T7, T8 | BR-05, BR-17, BR-18 | **T-04** (EXECUTED; variante concurrente NOT EXECUTED); T-16b/c/d **NOT EXECUTED** |
+| RF-17 | QS-06 | AD-01 | ADR-003 | C-06, C-08 | V-STATE-PLC T7, T8 | BR-05, BR-17, BR-18 | **T-04** (EXECUTED; variante concurrente NOT EXECUTED); T-16b/c/d (EXECUTED 2026-10-22) |
 | RF-18 | (QS-05) | AD-07 | ADR-002 | C-12 | V-COMP | BR-03 | NOT EXECUTED |
 | RF-19 | QS-04 | AD-04 | ADR-005 | C-11 | V-DOM | BR-06, BR-07 | **T-05, T-07** (EXECUTED) |
 | RF-20 | QS-02 | AD-03 | ADR-004 | C-02 | SEQ-04, [security](design/security.md) | BR-03, BR-13 | **T-03** (EXECUTED, sin HTTP) |
@@ -72,12 +72,12 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 
 | QS | Pruebas | Estado |
 |---|---|---|
-| QS-01 | T-01, T-02, T-02b, T-08 | EXECUTED (sandbox); T-16a/e NOT EXECUTED |
+| QS-01 | T-01, T-02, T-02b, T-08 | EXECUTED (sandbox); T-16a/e EXECUTED (2026-10-22) |
 | QS-02 | T-03 | EXECUTED (sandbox, sin HTTP); T-14 NOT EXECUTED |
 | QS-03 | T-06 | EXECUTED parcial (sin latencia) |
 | QS-04 | T-05, T-07 | EXECUTED; latencia de historial NOT EXECUTED |
 | QS-05 | T-09 | **NOT EXECUTED** |
-| QS-06 | T-04 | EXECUTED; variante concurrente y T-16b/c/d NOT EXECUTED |
+| QS-06 | T-04 | EXECUTED; variante concurrente NOT EXECUTED; T-16b/c/d EXECUTED (2026-10-22) |
 | QS-07 | T-10 | **NOT EXECUTED** |
 | QS-08 | T-13 | **NOT EXECUTED** |
 
