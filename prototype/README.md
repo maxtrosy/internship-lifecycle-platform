@@ -11,3 +11,14 @@ python tests/run_poc.py      # escribe evidence/results.json; POC_TRIALS=100 por
 - `evidence/results.json` corrida 2026-10-22 (14 PASS) · `evidence/results-run1-T03-fixture-scope-failure.json` primera corrida (T-03 falló por fixtures compartidos)
 - La corrida 2026-10-22 incluye T-02 (A 55 activación primero / 45 rechazo primero, 0 prohibidos; los conteos de orden varían entre corridas) y T-16a..e; `results.json` es la evidencia.
 - Límites: ver `docs/evaluation-2/validation/poc.md`.
+
+## Reproducir en Windows (sin `.pocdeps` versionado)
+
+Usa **Python 3.12**: no hay wheel de `pgserver` para 3.14. Desde `prototype/`:
+
+```powershell
+python -m pip install --target .pocdeps pgserver "psycopg[binary]"
+$env:PYTHONPATH=(Resolve-Path .pocdeps).Path; python tests\run_poc.py
+```
+
+`.pocdeps/` se genera localmente; no hace falta versionarlo.
