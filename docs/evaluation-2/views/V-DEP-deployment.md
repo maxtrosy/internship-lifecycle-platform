@@ -1,6 +1,6 @@
 # V-DEP — Supuestos de despliegue
 
-> **Un supuesto de despliegue no es infraestructura implementada.** En esta entrega **no existe** ninguna infraestructura de despliegue. El único entorno ejecutado fue una instancia local de PostgreSQL 16.2 en un sandbox para el PoC.
+> **Un supuesto de despliegue no es infraestructura implementada.** En esta entrega **no existe** ninguna infraestructura de despliegue. El único entorno ejecutado fue una instancia local de PostgreSQL (pgserver) en la máquina de un integrante del equipo, para el PoC.
 
 | Campo | Valor |
 |---|---|

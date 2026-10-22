@@ -6,7 +6,7 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 
 | Requisito | Escenario de calidad | Driver | ADR | Componente | Vista | Regla | Validación |
 |---|---|---|---|---|---|---|---|
-| RF-05 | QS-03 | AD-02 | ADR-001 | C-04, C-05 | V-COMP, SEQ-01 | BR-08, BR-12 | **T-06** (EXECUTED, sandbox) |
+| RF-05 | QS-03 | AD-02 | ADR-001 | C-04, C-05 | V-COMP, SEQ-01 | BR-08, BR-12 | **T-06** (EXECUTED) |
 | RF-06 / RF-07 | QS-01 (precondición) | AD-01 | ADR-003 | C-06 | V-STATE-PLC T1–T3, SEQ-01 | BR-10, BR-11 | T-03 (parcial); **T1–T3 NOT EXECUTED** |
 | RF-08 | QS-01, QS-03 | AD-01, AD-02 | ADR-001, ADR-003 | C-05, C-07 | V-DOM | BR-14 | T-02 (revisión/rechazo/revocación); T-16e (EXECUTED 2026-10-22); entrega: NOT EXECUTED |
 | RF-09 | QS-01 | AD-01 | ADR-003 | C-06, C-07 | V-STATE-PLC T4, SEQ-02 | BR-01, BR-02, BR-18 | **T-01, T-02, T-02b, T-08** (EXECUTED); T-16a/b/d (EXECUTED 2026-10-22) |
@@ -72,8 +72,8 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 
 | QS | Pruebas | Estado |
 |---|---|---|
-| QS-01 | T-01, T-02, T-02b, T-08 | EXECUTED (sandbox); T-16a/e EXECUTED (2026-10-22) |
-| QS-02 | T-03 | EXECUTED (sandbox, sin HTTP); T-14 NOT EXECUTED |
+| QS-01 | T-01, T-02, T-02b, T-08 | EXECUTED; T-16a/e EXECUTED (2026-10-22) |
+| QS-02 | T-03 | EXECUTED (sin HTTP); T-14 NOT EXECUTED |
 | QS-03 | T-06 | EXECUTED parcial (sin latencia) |
 | QS-04 | T-05, T-07 | EXECUTED; latencia de historial NOT EXECUTED |
 | QS-05 | T-09 | **NOT EXECUTED** |

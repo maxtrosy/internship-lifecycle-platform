@@ -3,7 +3,7 @@
 
 > **Pregunta central:** ¿puede el equipo justificar cómo debe estructurarse el sistema propuesto?
 
-**Versión revisada:** `E2-draft-1` · 2026-10-08 · **Commit fuente:** ninguno (el PoC es un paquete independiente; el equipo aún no tiene código del producto) · **Estado:** paquete de **diseño** + un PoC pequeño de base de datos ejecutado en sandbox (no ejecutado aún por el equipo).
+**Versión revisada:** E2-draft-2 · 2026-10-22 · Commit evaluado: `dcda267` (el PoC es un paquete independiente en prototype/; el equipo aún no tiene código del producto) · Estado: paquete de diseño + un PoC pequeño de base de datos, reejecutado por el equipo el 2026-10-22 (14 PASS).
 
 Cadena de evidencia de todo el documento:
 
@@ -101,7 +101,7 @@ Todos los valores son **objetivos propuestos (*proposed targets*)**. Donde no ha
 | Artifact | Ciclo de vida de colocación (C-06), checklist (C-07), compuerta en BD |
 | Response | Rechazo con error de negocio que lista lo pendiente; estado sin cambios; sin evento de activación; con dos activaciones válidas, una sola prevalece y la otra recibe conflicto; el bypass directo lo rechaza la BD |
 | Measure *(propuesto)* | 0 colocaciones activadas con requisitos pendientes en ≥100 ensayos por variante; 100/100 carreras con exactamente 1 éxito, 1 conflicto y 1 evento de auditoría; 100 % de intentos de bypass rechazados |
-| Evidencia | **EJECUTADO (PoC, sandbox, 2026-10-22):** T-01, T-02, T-02b (T-02 A 55 activación primero / 45 rechazo primero, 0 prohibidos; B 25/40; C 0/40 con 21 `GATE_VIOLATION`). T-08 para BR-02. T-16a/e: PASS. Ver [resultados](validation/validation-results.md) |
+| Evidencia | **EJECUTADO (PoC, equipo, 2026-10-22):** T-01, T-02, T-02b (T-02 A 55 activación primero / 45 rechazo primero, 0 prohibidos; B 25/40; C 0/40 con 21 `GATE_VIOLATION`). T-08 para BR-02. T-16a/e: PASS. Ver [resultados](validation/validation-results.md) |
 
 ### QS-02 — Aislamiento de autorización
 
@@ -113,7 +113,7 @@ Todos los valores son **objetivos propuestos (*proposed targets*)**. Donde no ha
 | Artifact | Autorización (C-02) y filtrado de consultas en cada módulo |
 | Response | Se responde "no encontrado" (sin revelar existencia); los listados incluyen solo recursos relacionados; las respuestas permitidas usan proyección mínima del estudiante |
 | Measure *(propuesto)* | 100 % de casos negativos denegados; 0 filas o campos protegidos devueltos; para cada par (sujeto, colocación), el listado y la lectura directa coinciden |
-| Evidencia | **EJECUTADO (PoC, sandbox):** T-03, 66 aserciones. Falta: capa HTTP real (NOT EXECUTED) |
+| Evidencia | **EJECUTADO (PoC, equipo):** T-03, 66 aserciones. Falta: capa HTTP real (NOT EXECUTED) |
 
 ### QS-03 — Cambio de una regla de elegibilidad
 
@@ -238,18 +238,18 @@ flowchart LR
 
 | Aspecto | Diseño | Implementación | Validación |
 |---|---|---|---|
-| Compuerta de activación | Documentado (ADR-003, SEQ-02) | **Rebanada de BD + comandos en el PoC**; no está en el producto | **Ejecutado en sandbox (2026-10-22):** T-01, T-02, T-02b (T-02 A 55/45, 0 prohibidos; B 25/40; C 0/40 con 21 `GATE_VIOLATION`) |
-| Compuerta de cierre | Documentado | Rebanada de BD + comandos en el PoC | **Ejecutado en sandbox:** T-04. Variante concurrente: NOT EXECUTED |
+| Compuerta de activación | Documentado (ADR-003, SEQ-02) | **Rebanada de BD + comandos en el PoC**; no está en el producto | **Ejecutado (PoC, equipo, 2026-10-22):** T-01, T-02, T-02b (T-02 A 55/45, 0 prohibidos; B 25/40; C 0/40 con 21 `GATE_VIOLATION`) |
+| Compuerta de cierre | Documentado | Rebanada de BD + comandos en el PoC | **Ejecutado (PoC, equipo):** T-04. Variante concurrente: NOT EXECUTED |
 | No conformidad posterior a la activación (BR-18) | Documentado (ADR-003, BR-18) | Vista derivada + comandos + trigger en el PoC | T-16a..T-16e: **14 PASS** (2026-10-22) |
-| Autorización por relación | Documentado (ADR-004) | Módulo `authz` del PoC (sin HTTP) | **Ejecutado en sandbox:** T-03 (66 aserciones) |
-| Versionado y auditoría | Documentado (ADR-005) | Tablas y triggers del PoC | **Ejecutado en sandbox:** T-05, T-07 |
-| Políticas configurables | Documentado (ADR-001) | Evaluador con 4 condiciones en el PoC | **Ejecutado en sandbox:** T-06 (sin medir latencia) |
+| Autorización por relación | Documentado (ADR-004) | Módulo `authz` del PoC (sin HTTP) | **Ejecutado (PoC, equipo):** T-03 (66 aserciones) |
+| Versionado y auditoría | Documentado (ADR-005) | Tablas y triggers del PoC | **Ejecutado (PoC, equipo):** T-05, T-07 |
+| Políticas configurables | Documentado (ADR-001) | Evaluador con 4 condiciones en el PoC | **Ejecutado (PoC, equipo):** T-06 (sin medir latencia) |
 | Adaptadores/puertos | Documentado (ADR-006) | **No implementado** | NOT EXECUTED |
 | API HTTP, UI, worker, notificaciones | Documentado | **No implementado** | NOT EXECUTED |
 | Despliegue (V-DEP) | Supuesto | **No implementado** | NOT EXECUTED |
 | Pico (QS-05), usabilidad (QS-08) | Objetivos propuestos | — | NOT EXECUTED |
 
-**Importante:** "Ejecutado en sandbox" significa que lo corrió el asistente en un entorno aislado a pedido del equipo, con comandos reproducibles (`prototype/`). **El equipo debe volver a ejecutarlo** y registrar su propia evidencia antes de afirmarlo como suyo.
+**Importante:** "Ejecutado" significa corrido por un integrante del equipo con comandos reproducibles (`prototype/`), commit `dcda267`, 2026-10-22. Sigue siendo un PoC aislado, no el producto.
 
 ---
 
@@ -331,4 +331,4 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | 19 | ¿Es razonable para un semestre? | Sí: un monolito modular, un worker, una BD, simuladores |
 | 20 | ¿Responde a "¿puede justificar cómo estructurarse?" | Sí, mediante la cadena F-01 y los hallazgos reales del PoC |
 
-**Brechas que esta revisión no puede cerrar:** aún no existe código ni stack elegido (`OPEN-17`), por lo que el modelo de este paquete es una primera versión que el equipo debe revisar y adoptar; ninguna decisión está validada con el cliente; la evidencia ejecutada proviene del sandbox del asistente y no de la máquina del equipo; `OPEN-14` queda cubierto por una **propuesta** (BR-18) **pendiente de validar con el cliente**; T-02 y T-16a..e se ejecutaron en la corrida 2026-10-22 (14 PASS; T-02 A 55/45, 0 prohibidos) y los conteos de orden varían entre corridas.
+**Brechas que esta revisión no puede cerrar:** aún no existe código ni stack elegido (`OPEN-17`), por lo que el modelo de este paquete es una primera versión que el equipo debe revisar y adoptar; ninguna decisión está validada con el cliente; la evidencia ejecutada corresponde a un PoC aislado, reejecutado por el equipo el 2026-10-22 (commit `dcda267`), no al producto; `OPEN-14` queda cubierto por una **propuesta** (BR-18) **pendiente de validar con el cliente**; T-02 y T-16a..e se ejecutaron en la corrida 2026-10-22 (14 PASS; T-02 A 55/45, 0 prohibidos) y los conteos de orden varían entre corridas.

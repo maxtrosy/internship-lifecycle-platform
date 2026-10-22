@@ -37,7 +37,7 @@
 ## Limitaciones conocidas
 - No existía `domain-model.md` ni código previo (ASM-003B cita un documento inexistente): el modelo de este paquete es la **primera versión** y la tecnología concreta aún no está elegida (OPEN-17). El equipo debe revisarlo y adoptarlo como propio.
 - Ninguna decisión está validada con el cliente ni con Servicios de TI.
-- La evidencia ejecutada **no la ha reproducido el equipo**; debe reejecutarla y registrar su commit.
+- La evidencia ejecutada fue reproducida por el equipo el 2026-10-22 (commit `dcda267`); sigue siendo un PoC aislado.
 - El PoC usa un esquema simplificado, sin HTTP ni interfaz, y no mide rendimiento.
 - Las correcciones a la Evaluación 1 están **registradas**, no aplicadas a los archivos fuente.
 

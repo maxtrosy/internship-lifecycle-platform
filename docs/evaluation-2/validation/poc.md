@@ -47,4 +47,4 @@ python tests/run_poc.py          # escribe evidence/results.json
 - **Los conteos de orden varían entre corridas** (en la corrida 2026-10-22, T-02 A dio 55/45; control B 25/40; C 21 `GATE_VIOLATION`). Lo que debe mantenerse en cualquier corrida: **0 prohibidos en las variantes A y C, y >0 en el control B**, y 100/100 en T-01.
 
 ## Estado
-`PoC: parcialmente ejecutado (sandbox del asistente)`; la corrida de 2026-10-22 cubrió T-01..T-08 y T-16a..e (**14 PASS**). Los conteos de orden de T-02 varían entre corridas; reproducible; **pendiente de reejecución y de portar al repositorio del producto cuando se elija el stack**.
+PoC: ejecutado por el equipo (2026-10-22, 14 PASS, commit `dcda267`). Los conteos de orden de T-02 varían entre corridas. Pendiente: portar al repositorio del producto cuando se elija el stack.

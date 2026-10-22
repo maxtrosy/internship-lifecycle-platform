@@ -46,7 +46,7 @@ Cada caso de uso pasa por C-02. Se necesitan índices para los predicados de rel
 - Ocultar existencia con 404 dificulta un poco el soporte.
 
 ## Verification
-- **Ejecutado (PoC, sandbox):** T-03 — 66 aserciones sobre 13 sujetos × 3 colocaciones en una base aislada: listados exactos, coincidencia lectura/listado, 9 denegaciones externas como "no encontrado", 11 denegaciones internas como "prohibido", 8/8 acciones negativas denegadas, 5/5 positivas permitidas, proyección con solo 2 campos.
+- **Ejecutado (PoC, equipo):** T-03 — 66 aserciones sobre 13 sujetos × 3 colocaciones en una base aislada: listados exactos, coincidencia lectura/listado, 9 denegaciones externas como "no encontrado", 11 denegaciones internas como "prohibido", 8/8 acciones negativas denegadas, 5/5 positivas permitidas, proyección con solo 2 campos.
 - **Hallazgo de proceso:** la primera corrida de T-03 falló por fixtures compartidos entre pruebas (defecto del harness, no del diseño); se aisló la base y se conservó la evidencia del fallo.
 - **NOT EXECUTED:** capa HTTP, usuarios externos reales, RLS, escaneo de rutas sin autorización, exportaciones/reportes.
 

@@ -1,6 +1,6 @@
 # Seguridad y privacidad
 
-> **Estado:** diseño. Solo la autorización por relación (T-03), la inmutabilidad de auditoría (T-07) y las compuertas de BD (T-01/T-02/T-04/T-08) se ejercitaron en un PoC de sandbox, **sin capa HTTP**. Todo lo demás es `NOT EXECUTED`.
+> **Estado:** diseño. Solo la autorización por relación (T-03), la inmutabilidad de auditoría (T-07) y las compuertas de BD (T-01/T-02/T-04/T-08) se ejercitaron en un PoC ejecutado por el equipo, **sin capa HTTP**. Todo lo demás es `NOT EXECUTED`.
 
 ## 1. Autenticación y sesión
 

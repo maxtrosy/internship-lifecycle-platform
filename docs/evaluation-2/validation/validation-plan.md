@@ -8,7 +8,7 @@ Objetivo: demostrar que las decisiones arquitectónicas son razonables, **sin in
 | **B. Executed** | Lo que realmente se corrió, con evidencia reproducible |
 | **C. Not executed** | `NOT EXECUTED` + qué falta |
 
-**Cómo se ejecutó B:** `prototype/tests/run_poc.py` contra una instancia real de PostgreSQL 16.2, en Windows 10. Corridas registradas: **2026-10-08** (9 PASS) y **2026-10-22** (14 PASS). Resultados crudos: `prototype/evidence/results.json`. Detalle en [validation-results.md](validation-results.md); alcance y límites en [poc.md](poc.md). Los conteos de orden de T-02 **varían entre corridas**.
+**Cómo se ejecutó B:** `prototype/tests/run_poc.py` contra una instancia real de PostgreSQL. Corridas registradas: **2026-10-08** (9 PASS, asistente, sandbox Linux; en el historial de git) y **2026-10-22** (14 PASS, equipo, Windows 10, PostgreSQL 16.2, Python 3.12). Resultados crudos: `prototype/evidence/results.json`. Detalle en [validation-results.md](validation-results.md); alcance y límites en [poc.md](poc.md). Los conteos de orden de T-02 **varían entre corridas**.
 
 ## 1. Catálogo de pruebas
 

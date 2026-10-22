@@ -44,7 +44,7 @@ Las lecturas del estado vigente hacen un *join* con la versión actual. La líne
 - La auditoría puede contener datos personales: minimizar contenido y definir retención (pendiente).
 
 ## Verification
-- **Ejecutado (PoC, sandbox):** **T-05** — la propuesta no cambia la versión vigente; un coordinador de otro programa no puede aprobar; un supervisor ajeno no puede proponer (no encontrado); al aprobar, el puntero se mueve y la v1 permanece intacta; el contenido de v1 no se puede modificar (trigger); eventos `change_proposed` y `version_approved` con antes/después. **T-07** — permiso denegado a la aplicación para `UPDATE/DELETE` sobre auditoría; el trigger rechaza al dueño; el evento sigue intacto.
+- **Ejecutado (PoC, equipo):** **T-05** — la propuesta no cambia la versión vigente; un coordinador de otro programa no puede aprobar; un supervisor ajeno no puede proponer (no encontrado); al aprobar, el puntero se mueve y la v1 permanece intacta; el contenido de v1 no se puede modificar (trigger); eventos `change_proposed` y `version_approved` con antes/después. **T-07** — permiso denegado a la aplicación para `UPDATE/DELETE` sobre auditoría; el trigger rechaza al dueño; el evento sigue intacto.
 - **NOT EXECUTED:** estado de la colocación mientras hay una versión pendiente; cambio urgente; latencia de reconstrucción del historial (QS-04); retención.
 
 ## Reconsider when

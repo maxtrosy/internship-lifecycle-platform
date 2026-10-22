@@ -6,7 +6,7 @@
 |---|---|
 | Fecha de ejecución | 2026-10-22 (23:27 UTC, corrida registrada en `results.json`) |
 | Ejecutado por | **El equipo**, en Windows 10 (corrida registrada en `results.json`) |
-| Commit evaluado | **Ninguno** (`source_commit: null` en `results.json`; el PoC es un paquete independiente en `prototype/`) |
+| Commit evaluado | `dcda267` (el PoC es un paquete independiente en `prototype/`) |
 | Entorno | Windows 10 · Python 3.12.14 · PostgreSQL 16.2 (`pgserver` 0.1.4) · psycopg 3.3.6 |
 | Evidencia cruda | `prototype/evidence/results.json` (corrida 2026-10-22) y `prototype/evidence/results-run1-T03-fixture-scope-failure.json` (primera corrida) |
 | Comando | `cd prototype && pip install pgserver "psycopg[binary]" && python tests/run_poc.py` |

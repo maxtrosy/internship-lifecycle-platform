@@ -1,8 +1,8 @@
 {
   "meta": {
     "executed_at_utc": "2026-10-22T23:27:13+00:00",
-    "executor": "assistant-run in an isolated sandbox on behalf of the team (NOT yet re-run by the team)",
-    "source_commit": null,
+    "executor": "team member, local run on Windows (Python 3.12, pgserver PostgreSQL)",
+    "source_commit": "dcda267b8813246a5c12b7dd2db91c009a14b335",
     "environment": {
       "os": "Windows-10-10.0.19045-SP0",
       "python": "3.12.14",

@@ -42,7 +42,7 @@ Postulaciones y colocaciones guardan referencias a versiones. Se necesita una pa
 - Cualquier cambio de política mal configurado puede bloquear activaciones: requiere vista previa/validación (pendiente).
 
 ## Verification
-- **Ejecutado (PoC, sandbox):** T-06 — versión v1 → v2 aplicada a evaluaciones posteriores sin cambiar código; la postulación previa conserva v1 y su resultado; 4 formas inválidas rechazadas (script, clave extra, valor inválido, vacía); coordinador de otro programa rechazado; 2 eventos de auditoría de política.
+- **Ejecutado (PoC, equipo):** T-06 — versión v1 → v2 aplicada a evaluaciones posteriores sin cambiar código; la postulación previa conserva v1 y su resultado; 4 formas inválidas rechazadas (script, clave extra, valor inválido, vacía); coordinador de otro programa rechazado; 2 eventos de auditoría de política.
 - **NOT EXECUTED:** latencia de vigencia (QS-03), evaluadores de activación/finalización en el producto, pruebas de regresión por evaluador, comportamiento ante políticas con fecha de vigencia futura.
 
 ## Reconsider when

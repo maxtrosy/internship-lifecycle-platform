@@ -37,7 +37,7 @@ Una sola unidad de despliegue y versión. El worker escala por separado en proce
 - Extraer un módulo después tiene costo (datos compartidos, transacciones cruzadas).
 
 ## Verification
-- **Ejecutado (PoC, sandbox):** solo lo que depende de esta decisión a nivel de BD — transacciones locales con bloqueo y auditoría atómica (T-01, T-02, T-05).
+- **Ejecutado (PoC, equipo):** solo lo que depende de esta decisión a nivel de BD — transacciones locales con bloqueo y auditoría atómica (T-01, T-02, T-05).
 - **NOT EXECUTED:** verificación de fronteras de módulo, humo de despliegue, QS-05 (pico).
 
 ## Reconsider when

@@ -1,6 +1,6 @@
 # ADR-003 — Compuertas de activación, finalización y cierre
 
-**Status:** propuesta, **parcialmente verificada** en un PoC ejecutado en sandbox · **Fecha:** 2026-10-08 · **Corrida 2026-10-22:** 14 PASS (T-02 y T-16a..e incluidos)
+**Status:** propuesta, **parcialmente verificada** en un PoC ejecutado por el equipo · **Fecha:** 2026-10-08 · **Corrida 2026-10-22:** 14 PASS (T-02 y T-16a..e incluidos)
 
 ## Context
 RFP: "Students must not begin a placement before mandatory activation conditions are satisfied" y la universidad no puede registrar una finalización con evidencia faltante (sec. 2 y 7). RF-09 y RF-17 los convierten en bloqueos. Riesgos concretos: dos actores activan a la vez; un documento se rechaza mientras se activa; alguien evita la aplicación (migración, consola, defecto). Las listas exactas de condiciones están abiertas (OPEN-01, OPEN-02).
@@ -44,7 +44,7 @@ La política se evalúa al vincular y se materializa; la UI puede mostrar "listo
 - El indicador no distingue **por qué** el ítem dejó de estar `APPROVED` (en revisión, rechazo o revocación): cualquier estado distinto de `APPROVED` con la colocación `ACTIVE` cuenta como no conforme. El plazo para corregir y quién aprueba excepciones siguen abiertos (BR-18).
 - La compuerta de cierre añade otra condición que mantener sincronizada entre aplicación y BD.
 
-## Verification (sandbox; PostgreSQL 16.2; corridas 2026-10-08 y 2026-10-22)
+## Verification (PostgreSQL; corridas 2026-10-08, asistente en sandbox Linux, y 2026-10-22, equipo en Windows)
 - **T-01 (corrida 2026-10-22):** 100/100 carreras de activación doble → exactamente 1 éxito, 1 `INVALID_TRANSITION`, 1 evento. **Control negativo** (sin bloqueo): doble activación en 30/30. *Hallazgo:* el trigger solo **no** impide ACTIVE→ACTIVE; lo evita el bloqueo.
 - **T-02 (corrida 2026-10-22):** rechazo de documento concurrente con activación. Variante A: 100 ensayos, **0** prohibidos, **55 activación primero / 45 rechazo primero**. Control B: **25/40** prohibidos. Variante C: **0/40** (21 `GATE_VIOLATION`). *Los conteos de orden varían entre corridas.*
 - **T-16a..e (corrida 2026-10-22):** **14 PASS**. T-16a rechaza directamente un ítem `APPROVED` con la colocación `ACTIVE` y registra `checklist_item.rejected_after_activation`; T-16b..e verifican la compuerta de cierre y la revisión desde `REQUIRED`.
