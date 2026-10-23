@@ -5,7 +5,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.errors import BusinessError, DomainError, Forbidden, NotFound
+from app.config import get_settings
+from app.errors import BusinessError, DomainError, Forbidden, NotFound, TooManyRequests, Unauthorized
 from app.modules.applications.router import router as applications_router
 from app.modules.identity.router import router as identity_router
 from app.modules.lifecycle.router import router as lifecycle_router
@@ -14,10 +15,10 @@ from app.modules.policies.router import router as policies_router
 
 app = FastAPI(title="DH-05 Placement API", version="0.1.0")
 
-# Dev CORS: the Vite frontend runs on :5173 during development.
+settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=list(settings.allowed_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,7 +38,11 @@ def health() -> dict:
 
 @app.exception_handler(DomainError)
 def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
-    if isinstance(exc, NotFound):
+    if isinstance(exc, Unauthorized):
+        body = {"error": "unauthorized"}
+    elif isinstance(exc, TooManyRequests):
+        body = {"error": "too_many_requests"}
+    elif isinstance(exc, NotFound):
         body = {"error": "not_found"}
     elif isinstance(exc, Forbidden):
         body = {"error": "forbidden"}

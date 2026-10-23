@@ -17,8 +17,11 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
-      JWT_SECRET: dev-insecure-secret-change-me
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET:-local-only-dh05-secret-change-for-any-shared-environment-2026}
       JWT_TTL_MINUTES: "15"
+      APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      PASSWORD_RESET_DELIVERY: ${PASSWORD_RESET_DELIVERY:-development-token}
     ports:
       - "8000:8000"
     depends_on:

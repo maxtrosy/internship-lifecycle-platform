@@ -11,12 +11,17 @@ import time
 
 import psycopg
 import pytest
+from psycopg.types.json import Jsonb
 from psycopg.rows import dict_row
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-from migrations.schema_sql import SCHEMA  # noqa: E402
+from app import security  # noqa: E402
+from migrations.schema_sql import CURRENT_SCHEMA as SCHEMA  # noqa: E402
+
+TEST_PASSWORD = "Test-Only-Password-2026!"
+_TEST_PASSWORD_HASH = security.hash_password(TEST_PASSWORD)
 
 
 class DbEnv:
@@ -51,13 +56,13 @@ class DbEnv:
 def env():
     e = DbEnv()
     os.environ["DATABASE_URL"] = e.uri
-    os.environ.setdefault("JWT_SECRET", "test-secret")
+    os.environ.setdefault("JWT_SECRET", "test-only-secret-long-enough-for-hs256-2026")
     yield e
     e.close()
 
 
 _TABLES = (
-    "academic_program, host_org, user_account, role_assignment, invitation, policy_version, "
+    "academic_program, host_org, auth_password_reset, auth_session, user_account, role_assignment, invitation, policy_version, "
     "opportunity, application, placement, placement_version, supervisor_assignment, "
     "checklist_item, completion_requirement, progress_entry, audit_event"
 )
@@ -76,12 +81,12 @@ def seed_base(env: DbEnv) -> dict:
     c.execute("INSERT INTO host_org(name) VALUES ('Org Alfa (synthetic)'),('Org Beta (synthetic)')")
     P = {r["code"]: r["id"] for r in c.execute("SELECT * FROM academic_program").fetchall()}
     users: dict[str, int] = {}
-
     def u(key, name, roles, credits=None, level=None, courses=()):
         users[key] = c.execute(
-            "INSERT INTO user_account(display_name, credits, academic_level, completed_courses) "
-            "VALUES (%s,%s,%s,%s) RETURNING id",
-            (name, credits, level, list(courses)),
+            """INSERT INTO user_account(username,email,password_hash,is_active,display_name,
+                                         credits,academic_level,completed_courses)
+               VALUES (%s,%s,%s,true,%s,%s,%s,%s) RETURNING id""",
+            (key, f"{key}@tests.example", _TEST_PASSWORD_HASH, name, credits, level, list(courses)),
         ).fetchone()["id"]
         for role, program, org in roles:
             c.execute(
@@ -103,6 +108,22 @@ def seed_base(env: DbEnv) -> dict:
     u("ws_beta", "Workplace Sup Beta", [("WORKPLACE_SUPERVISOR", None, 2)])
     u("f1", "Faculty Sup 1", [("FACULTY_SUPERVISOR", None, None)])
     u("dual1", "Dual", [("PROGRAM_COORDINATOR", "ING-SIS", None), ("FACULTY_SUPERVISOR", None, None)])
+    for code, coordinator in (("ING-SIS", "pc_sys"), ("ADM", "pc_adm")):
+        c.execute(
+            "INSERT INTO policy_version(policy_key,version_no,conditions,created_by) VALUES (%s,1,%s,%s)",
+            (f"ACTIVATION:{code}", Jsonb([
+                {"type": "REQUIRE_DOCUMENTS", "value": ["DOC_INSURANCE"]},
+                {"type": "SUPERVISORS_ASSIGNED", "value": True},
+            ]), users[coordinator]),
+        )
+        c.execute(
+            "INSERT INTO policy_version(policy_key,version_no,conditions,created_by) VALUES (%s,1,%s,%s)",
+            (f"COMPLETION:{code}", Jsonb([
+                {"type": "FINAL_REPORT", "value": True},
+                {"type": "FINAL_EVALUATION", "value": True},
+                {"type": "MIN_HOURS", "value": 100},
+            ]), users[coordinator]),
+        )
     users["P"] = P
     return users
 
@@ -139,20 +160,37 @@ def make_doc_pending(env, users, student, opp, docs_approved=True, supervisor="w
                   (p, k, "APPROVED" if docs_approved else "REQUIRED"))
     c.execute("INSERT INTO checklist_item(placement_id,kind,status) VALUES (%s,'COND_SUPERVISOR_ASSIGNED',%s)",
               (p, "APPROVED" if supervisor else "REQUIRED"))
+    student_program = c.execute(
+        "SELECT program_id FROM role_assignment WHERE user_id=%s AND role='STUDENT' LIMIT 1",
+        (users[student],),
+    ).fetchone()["program_id"]
+    program_code = c.execute("SELECT code FROM academic_program WHERE id=%s", (student_program,)).fetchone()["code"]
+    activation_version = c.execute(
+        "SELECT id FROM policy_version WHERE policy_key=%s ORDER BY version_no DESC LIMIT 1",
+        (f"ACTIVATION:{program_code}",),
+    ).fetchone()["id"]
+    completion_version = c.execute(
+        "SELECT id FROM policy_version WHERE policy_key=%s ORDER BY version_no DESC LIMIT 1",
+        (f"COMPLETION:{program_code}",),
+    ).fetchone()["id"]
+    c.execute(
+        """INSERT INTO completion_requirement(placement_id,kind,threshold) VALUES
+           (%s,'FINAL_REPORT',NULL),(%s,'FINAL_EVALUATION',NULL),(%s,'MIN_HOURS',100)""",
+        (p, p, p),
+    )
     c.execute("UPDATE placement_version SET status='APPROVED' WHERE placement_id=%s", (p,))
-    c.execute("UPDATE placement SET state='DOCUMENTATION_PENDING', activation_requirements_instantiated=true WHERE id=%s", (p,))
+    c.execute(
+        """UPDATE placement SET state='DOCUMENTATION_PENDING', activation_requirements_instantiated=true,
+           completion_requirements_instantiated=true, activation_policy_version_id=%s,
+           completion_policy_version_id=%s WHERE id=%s""",
+        (activation_version, completion_version, p),
+    )
     return p
 
 
 def make_active(env, users, student, opp):
     p = make_doc_pending(env, users, student, opp)
     env.admin.execute("UPDATE placement SET state='ACTIVE' WHERE id=%s", (p,))
-    env.admin.execute(
-        """INSERT INTO completion_requirement(placement_id,kind,threshold) VALUES
-           (%s,'FINAL_REPORT',NULL),(%s,'FINAL_EVALUATION',NULL),(%s,'MIN_HOURS',100)""",
-        (p, p, p),
-    )
-    env.admin.execute("UPDATE placement SET completion_requirements_instantiated=true WHERE id=%s", (p,))
     return p
 
 

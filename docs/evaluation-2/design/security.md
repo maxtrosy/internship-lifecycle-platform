@@ -1,21 +1,27 @@
 # Seguridad y privacidad
 
-> **Estado:** diseño. Solo la autorización por relación (T-03), la inmutabilidad de auditoría (T-07) y las compuertas de BD (T-01/T-02/T-04/T-08) se ejercitaron en un PoC ejecutado por el equipo, **sin capa HTTP**. Todo lo demás es `NOT EXECUTED`.
+> **Estado:** autenticación local y autorización por rol/relación están implementadas en el producto. T-31 cubre credenciales, estado de cuenta, cookie y recuperación; T-20..T-30 cubren rutas y flujos de negocio. No se ha configurado SSO, proveedor de correo, pruebas de penetración ni controles operacionales de producción.
 
 ## 1. Autenticación y sesión
 
 | Tema | Decisión / supuesto | Estado |
 |---|---|---|
-| Usuarios institucionales | Autentican por el servicio de identidad universitario o un **equivalente simulado** (RFP sec. 7) | Simulado |
-| Usuarios externos | El RFP solo exige acceso "controlado y limitado". Propuesta: cuentas **creadas por invitación** de un coordinador, autenticadas en un reino externo simulado | **OPEN-21** |
-| Identidad ≠ autorización | El IdP dice *quién*; roles y relaciones son datos de DH-05 (ADR-004) | Propuesta |
-| Sesión | Token firmado de corta duración; cambios de rol o relación se reflejan en la siguiente solicitud (se evalúa en cada llamada, no se confía en el token para permisos) | Supuesto |
-| Cierre de sesión por cambio de rol | Sin definir | OPEN |
+| Cuenta | Inicio de sesión por nombre de usuario o correo y contraseña local | Implementado |
+| Credenciales | Argon2id con salt aleatorio; mínimo 12 caracteres; se verifica contra el hash guardado | Implementado |
+| Sesión | JWT HS256 de 15 minutos en cookie `HttpOnly`, `SameSite=Strict`; `jti` debe corresponder a una sesión activa en la BD | Implementado |
+| Logout / estado | Logout revoca `jti`; cuenta inactiva o sesión expirada/revocada se rechaza en cada solicitud | Implementado |
+| CSRF | `Origin` debe estar en `APP_ALLOWED_ORIGINS` para operaciones con cookie; frontend servido por el proxy same-origin | Implementado |
+| Roles y relaciones | Nunca viajan en cookie/JWT; se resuelven desde `role_assignment` por solicitud | Implementado |
+| Cuentas y roles | Sin registro público; operador con acceso privilegiado aprovisiona. Invitación externa asigna el rol y organización desde el servidor | Implementado |
+| Recuperación | Respuesta genérica; token aleatorio de un uso, hash en BD, 30 minutos; todas las sesiones se revocan al cambiar contraseña | Implementado |
+| Entrega de recuperación | No hay proveedor de correo; el token solo se devuelve en `APP_ENV=development` con `PASSWORD_RESET_DELIVERY=development-token` | Limitación local |
+| Límite de intentos | 10 fallos por identificador/15 min y 60 por IP/15 min; recuperación limitada por solicitud. El contador es por proceso | Demo de un trabajador |
+| SSO institucional | No hay IdP, protocolo ni configuración en el RFP/artefactos disponibles | OPEN-21 |
 
 ## 2. Principios
 
 1. **Mínimo privilegio:** cada rol ve solo lo necesario para su tarea y para las colocaciones con las que tiene relación.
-2. **Denegar por defecto:** toda ruta declara su acción; una ruta sin declaración se rechaza (prueba propuesta, NOT EXECUTED).
+2. **Denegar por defecto:** toda ruta autenticada declara su acción; T-20 verifica las excepciones explícitas.
 3. **No revelar existencia** a externos (404).
 4. **Proyección mínima** del estudiante para externos (BR-13).
 5. **Separación de funciones:** quien propone no aprueba su propia propuesta (propuesta de diseño; no probada).
@@ -72,8 +78,9 @@
 | S-04 | **Escalada**: un actor aprueba algo fuera de su alcance (p. ej. coordinador de otro programa) | Acción exige rol **y** relación | T-03, T-05, T-06 |
 | S-05 | **Activar/cerrar saltándose la aplicación** | Trigger de BD | T-02b, T-04 |
 | S-06 | **Manipulación de la auditoría** | Permisos + trigger; el superusuario puede deshabilitar el trigger (**riesgo residual**) | T-07 |
-| S-07 | **Suplantación en la identidad simulada** | La simulación es una limitación: no representa un IdP real | Limitación declarada |
-| S-08 | **Descarga de documentos ajenos** | El acceso al archivo se resuelve por permiso sobre la colocación, no por URL adivinable | NOT EXECUTED |
+| S-07 | **Robo de credenciales o abuso de login** | Argon2id, errores genéricos, cookie `HttpOnly`, expiración/revocación de sesión, bloqueo por ventana y validación de `Origin` | T-31; rate limit distribuido pendiente |
+| S-12 | **Afirmar que una cuenta local es identidad institucional** | La pantalla y documentación identifican el acceso como local; no hay integración SSO declarada | Revisión documental; OPEN-21 |
+| S-08 | **Descarga de documentos ajenos** | La descarga se resuelve por rol y relación con la colocación, no por URL adivinable | T-29 (estudiante y revisor legal permitidos; anfitrión denegado) |
 | S-09 | **Repetición/concurrencia de comandos** | Bloqueo de fila; transiciones por estado | T-01, T-02 |
 | S-10 | **Datos personales en la auditoría o en registros** | Minimizar contenido; retención sin definir | OPEN |
 | S-11 | **Inyección y entradas maliciosas en políticas** | Vocabulario cerrado, sin expresiones (ADR-001) | T-06 |

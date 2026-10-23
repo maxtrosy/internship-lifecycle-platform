@@ -61,7 +61,7 @@ def test_t02_reject_vs_activate(env):
         act_first = random.random() < 0.5
         out = race(
             lambda: cmd(U["ec1"], lc.activate, p, naive=naive, pause=0.05),
-            lambda: cmd(U["legal1"], lc.review_document, item, "REJECTED", naive=naive),
+            lambda: cmd(U["legal1"], lc.review_document, p, item, "REJECTED", "Documento no válido", naive=naive),
             delay_a=0.0 if act_first else 0.02,
             delay_b=0.02 if act_first else 0.0,
         )
@@ -151,7 +151,7 @@ def test_t16a_reject_after_activation(env):
     item = _item_id(env, p)
     with db.read() as cur:
         assert lc.activation_noncompliant(cur, p) is False
-    cmd(U["legal1"], lc.review_document, item, "REJECTED")
+    cmd(U["legal1"], lc.review_document, p, item, "REJECTED", "Documento vencido.")
     with db.read() as cur:
         assert lc.activation_noncompliant(cur, p) is True
     events = [r["action"] for r in env.admin.execute(
@@ -169,7 +169,7 @@ def test_t16b_confirm_completion_noncompliant(env):
 
     p = make_active(env, U, "s1", opp)
     _satisfy_closure(env, U, "s1", p)
-    cmd(U["legal1"], lc.review_document, _item_id(env, p), "REJECTED")
+    cmd(U["legal1"], lc.review_document, p, _item_id(env, p), "REJECTED", "Documento vencido.")
     with pytest.raises(BusinessError) as ei:
         cmd(U["pc_sys"], lc.confirm_completion, p)
     assert ei.value.code == "ACTIVATION_NONCOMPLIANT"
@@ -180,7 +180,7 @@ def test_t16c_direct_update_completed(env):
     U = seed_base(env)
     opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
     p = make_active(env, U, "s1", opp)
-    cmd(U["legal1"], lc.review_document, _item_id(env, p), "REJECTED")
+    cmd(U["legal1"], lc.review_document, p, _item_id(env, p), "REJECTED", "Documento vencido.")
     raw = env.conn()
     with pytest.raises(psycopg.errors.RaiseException):
         raw.execute("UPDATE placement SET state='COMPLETED' WHERE id=%s", (p,))
@@ -194,11 +194,11 @@ def test_t16d_redeliver_approve_close(env):
     p = make_active(env, U, "s1", opp)
     item = _item_id(env, p)
     _satisfy_closure(env, U, "s1", p)
-    cmd(U["legal1"], lc.review_document, item, "REJECTED")
+    cmd(U["legal1"], lc.review_document, p, item, "REJECTED", "Documento vencido.")
     with pytest.raises(BusinessError):
         cmd(U["pc_sys"], lc.confirm_completion, p)
-    env.admin.execute("UPDATE checklist_item SET status='SUBMITTED' WHERE id=%s", (item,))
-    cmd(U["legal1"], lc.review_document, item, "APPROVED")
+    cmd(U["s1"], lc.submit_document, p, item, "insurance.pdf", "application/pdf", b"%PDF-1.7 corrected synthetic document")
+    cmd(U["legal1"], lc.review_document, p, item, "APPROVED", "Nueva versión vigente.")
     cmd(U["pc_sys"], lc.confirm_completion, p)
     cmd(U["ec1"], lc.close_placement, p)
     assert env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"] == "CLOSED"
@@ -210,6 +210,6 @@ def test_t16e_review_required(env):
     p = make_doc_pending(env, U, "s1", opp, docs_approved=False)
     item = _item_id(env, p)
     with pytest.raises(BusinessError) as ei:
-        cmd(U["legal1"], lc.review_document, item, "APPROVED")
+        cmd(U["legal1"], lc.review_document, p, item, "APPROVED", "Documento revisado.")
     assert ei.value.code == "INVALID_TRANSITION"
     assert env.admin.execute("SELECT status FROM checklist_item WHERE id=%s", (item,)).fetchone()["status"] == "REQUIRED"

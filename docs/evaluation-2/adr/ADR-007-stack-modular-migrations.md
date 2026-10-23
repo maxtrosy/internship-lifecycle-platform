@@ -12,7 +12,10 @@ OPEN-17 dejaba sin elegir la tecnología. El PoC (`prototype/`) demostró en Pos
 4. **Frontend:** React + TypeScript + Vite (iniciado en `frontend/` con el flujo de oportunidades y postulaciones; crecerá por fases).
 5. **Desarrollo:** **Docker Compose** con servicios `db` (postgres:16) y `api`.
 6. **Monolito modular (ADR-002):** `backend/app/modules/<módulo>/` con C-01 identity, C-02 authz, C-03 opportunities, C-04 applications, C-05 policies, C-06 lifecycle, C-07 checklist, C-08 supervision, C-09 messaging, C-10 notifications, C-11 audit, C-12 reports, y `backend/app/adapters/` + `backend/app/ports/` para C-13. Un módulo usa solo la interfaz pública (`service.py`) de otro, nunca sus tablas; el dominio no importa adaptadores (verificado por T-23, chequeo AST).
-7. **Autenticación simulada (C-01, OPEN-21):** JWT HS256 de 15 min que **solo** lleva el `sub` (id del sujeto); los roles NO viajan en el token y se evalúan en BD en cada solicitud. Usuarios externos entran por invitación con token cuyo hash se guarda.
+7. **Autenticación local (C-01, RNF-07):** cuentas con nombre de usuario, correo, estado activo y hash Argon2id; JWT HS256 de 15 min en cookie `HttpOnly`, con `sub` y `jti` pero sin roles. Cada solicitud valida sesión y estado en PostgreSQL y vuelve a resolver permisos desde `role_assignment`. No hay signup público. El operador aprovisiona cuentas y las invitaciones solo crean los roles externos permitidos.
+8. **SSO institucional (OPEN-21):** no implementado. No se encontró proveedor, protocolo, URL de descubrimiento, credenciales ni cuenta de prueba. La autenticación local sirve como alternativa operativa; la integración OIDC/SAML queda pendiente de decisión e información institucional.
+9. **Recuperación:** tokens aleatorios de un solo uso, guardados como hash y válidos 30 minutos; las sesiones existentes se revocan al cambiar la contraseña. Sin correo configurado, solo el entorno local puede devolver el token al operador.
+10. **Mitigación de intentos repetidos:** límite en memoria por usuario/IP en la instancia local de un trabajador. Para varios procesos o producción se requiere un almacén compartido o WAF.
 
 ## Alternatives considered
 | Alternativa | Evaluación |
@@ -33,9 +36,9 @@ OPEN-17 dejaba sin elegir la tecnología. El PoC (`prototype/`) demostró en Pos
 - Alembic con `op.execute` delega la corrección del SQL en el equipo; hay que revisar cada migración.
 
 ## Verification
-- **EXECUTED (backend).** `pytest` en `backend/`: **28 PASS** (T-20..T-23, T-24/T-25 y los tests portados T-01/T-02/T-02b/T-04/T-08/T-16a..e) contra PostgreSQL real (pgserver, Python 3.12).
-- **EXECUTED.** `alembic upgrade head` + `python -m app.seed` + `GET /health` responden `{"status":"ok"}`.
-- **Frontend:** `tsc -b && vite build` genera `frontend/dist/` (bundler OK); pnpm emite una advertencia de build-script de esbuild ignorado. La integración navegador↔API no se probó end-to-end (NOT EXECUTED).
+- **EXECUTED (backend).** Evidencia histórica: 45 pruebas antes de autenticación local. T-31 agrega login, cuenta desactivada, sesión, recuperación y límites de intentos; el total final se registra en [validation-results.md](../validation/validation-results.md).
+- **Migraciones y Compose:** véase la validación con la migración 0003 y base limpia en el informe de resultados.
+- **Frontend:** `tsc -b && vite build` compila la interfaz; el recorrido completo automatizado en un navegador sigue pendiente.
 
 ## Reconsider when
 El equipo adopte formalmente este stack o decida cambiarlo antes de Fase 2; si se elige ORM; si el volumen de migraciones hace inviable revisarlas a mano.

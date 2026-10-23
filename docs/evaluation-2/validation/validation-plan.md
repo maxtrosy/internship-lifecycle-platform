@@ -31,18 +31,24 @@ Objetivo: demostrar que las decisiones arquitectónicas son razonables, **sin in
 | T-09 | Pico de inicio de período (QS-05) | API, worker, BD, 12 000 estudiantes sintéticos, generador de carga | Carga propuesta de QS-05 | p95 lecturas < 800 ms, escrituras < 1 500 ms, errores < 1 %, 0 violaciones | — | **NOT EXECUTED** (sin API ni generador de carga) |
 | T-10 | Adaptador caído y contratos (QS-07) | Simuladores con fallo a pedido | Registros estudiantiles caído; notificación caída | Elegibilidad "no evaluada"; notificación en cola y reintentada | — | **NOT EXECUTED** (puertos sin implementar) |
 | T-11 | Notificaciones y recordatorios (RF-15) | Worker + bandeja de salida | Plazo próximo/vencido | Notificación creada una vez y entregada | — | **NOT EXECUTED** |
-| T-12 | Humo de despliegue (V-DEP) | Contenedores de demo | Levantar, migrar, flujo mínimo | Sistema operativo desde cero | — | **NOT EXECUTED** |
+| T-12 | Humo de despliegue (V-DEP) | Contenedores de demo | Levantar, migrar, flujo mínimo | Contenedores arriba, Alembic en `0003`, `/health` y login local OK | Pendiente de verificación final en base limpia | **PARTIAL** |
 | T-13 | Comprensión de estado (QS-08) | 5 participantes, prototipo de UI | Tareas "¿en qué estado estoy y qué sigue?" | ≥ 4 de 5 aciertos | — | **NOT EXECUTED** |
 | T-14 | RLS como defensa en profundidad (ADR-004) | Esquema con políticas de fila | Repetir T-03 por SQL directo | Mismos resultados | — | **NOT EXECUTED** |
 | T-15 | Fronteras de módulo (ADR-002) | Herramienta de reglas de importación | Introducir dependencia prohibida | La verificación falla | — | **NOT EXECUTED** |
 | **T-20** | Rutas sin acción declarada (R-012) | `backend/app/main.py` + `app.routes` | Enumerar rutas y exigir `requires(action)` en cada una (excepto exentas) | Ninguna ruta sin acción | PASS | **EXECUTED — PASS** |
-| **T-21** | Token sin roles / cambio de rol efectivo en la siguiente solicitud (C-01) | `backend/tests/test_identity.py` | Emitir JWT, mutar `role_assignment`, releer sujeto | El token solo lleva `sub`; los roles se leen en BD | PASS | **EXECUTED — PASS** |
-| **T-22** | Invitación expirada / reutilizada / de otra organización (OPEN-21) | `backend/tests/test_invitations.py` | Crear/aceptar invitaciones | `INVITATION_EXPIRED`, `INVITATION_USED`; 404 sin relación | PASS | **EXECUTED — PASS** |
+| **T-21** | Token sin roles / cambio de rol efectivo en la siguiente solicitud (C-01) | `backend/tests/test_identity.py` | Emitir JWT, mutar `role_assignment`, releer sujeto | JWT lleva `sub` y `jti`, sin roles; los permisos se leen en BD | PASS | **EXECUTED — PASS** |
+| **T-22** | Invitación expirada / reutilizada / de otra organización (OPEN-21) | `backend/tests/test_invitations.py` | Crear/aceptar invitaciones | `INVITATION_EXPIRED`, `INVITATION_USED`; rol externo y organización asignados por el servidor | PASS | **EXECUTED — PASS** |
 | **T-23** | Fronteras de módulo (ADR-002/ADR-007) | chequeo AST en `backend/tests/test_module_boundaries.py` | Importar adaptadores o archivos no públicos entre módulos | El chequeo falla | PASS | **EXECUTED — PASS** |
 | **T-24** | Oportunidades: creación y listado por rol/relación (C-03) | `backend/tests/test_opportunities.py` | Crear/listar con `HOST_ORG_MEMBER`, `PROGRAM_COORDINATOR` | Creación permitida/denegada; listado filtrado por relación | PASS | **EXECUTED — PASS** |
 | **T-25** | Postulaciones con elegibilidad (C-04/C-05) | `backend/tests/test_applications.py` | Crear política, postular | `ELIGIBLE`/`INELIGIBLE`; `OPPORTUNITY_NOT_PUBLISHED`; `NO_POLICY_IN_EFFECT`; no-estudiante denegado | PASS | **EXECUTED — PASS** |
+| **T-26** | Selección del empleador (T1) | `backend/tests/test_selection.py` | Empleador lista/selecciona postulaciones | `application.state=SELECTED`; placement `PENDING_ACADEMIC_APPROVAL`; auditoría `application.selected`; repetida → `INVALID_TRANSITION`; ajeno denegado | PASS | **EXECUTED — PASS** |
+| **T-27** | Aprobación/rechazo académico (T2/T3) | `backend/tests/test_selection.py` | Coordinador lista pendientes y aprueba/rechaza | aprobación → `DOCUMENTATION_PENDING`; rechazo → `REJECTED` (placement y application); auditoría; no-autorizado denegado; estudiante ve estado | PASS | **EXECUTED — PASS** |
+| **T-28** | Documentos + activación (Sprint 3) | `backend/tests/test_documents.py` | Estudiante entrega/reentrega; legal revisa; EC activa | `REQUIRED/REJECTED→SUBMITTED`; `SUBMITTED→APPROVED/REJECTED`; compuerta de activación; `ACTIVATION_CONDITIONS_UNMET`; política `REQUIRE_DOCUMENTS` | PASS | **EXECUTED — PASS** |
+| **T-29** | Revisiones y acceso a archivos (RF-08, RF-20) | `backend/tests/test_documents.py` | Subir revisiones; revisar con/sin motivo; descargar como estudiante, legal y anfitrión | Historial y motivos conservados; falta de motivo rechazada; estudiante/legal autorizados y anfitrión denegado; condición `COND_*` no se trata como documento | PASS | **EXECUTED — PASS** |
+| **T-30** | Versionado y binding de políticas (EB-08) | `backend/tests/test_documents.py`, `backend/tests/test_applications.py` | Añadir versiones de elegibilidad/activación/finalización; intentar usar vocabulario cruzado | Política activa se fija al aprobar; nuevas versiones no cambian colocaciones existentes; vocabularios y documentos `DOC_*` validados por tipo | PASS | **EXECUTED — PASS** |
+| **T-31** | Autenticación, sesión y recuperación de cuenta (RNF-07) | `backend/tests/test_authentication.py` | Credenciales correctas/incorrectas, usuario inexistente/desactivado, cookie inválida/expirada, logout, roles y reset de contraseña | Error genérico; solo credenciales válidas emiten cookie HttpOnly; sesión revocable; roles no seleccionables; reset de un uso revoca sesiones | Pendiente de la corrida final | **PLANNED** |
 
-> **Backend (Fase 1 + incremento):** los tests del PoC T-01, T-02, T-02b, T-04, T-08 y T-16a..e se portaron a `backend/tests/` y se ejecutaron contra el código de `backend/app`; junto con T-20..T-25 dan **28 PASS**. Migración `alembic upgrade head`, `app.seed` y `GET /health` verificados.
+> El resultado final de T-31, la suite, `tsc -b && vite build` y la migración 0003 sobre base limpia se asentará en [validation-results.md](validation-results.md).
 
 ## 2. Trazabilidad requisito → prueba
 
@@ -62,6 +68,11 @@ Objetivo: demostrar que las decisiones arquitectónicas son razonables, **sin in
 | T-23 | RNF-09 | — | — | ADR-002, ADR-007 |
 | T-24 | RF-01..RF-04 | BR-03 | QS-02 | ADR-007 |
 | T-25 | RF-05, RF-06 | BR-08, BR-12 | QS-03 | ADR-001, ADR-007 |
+| T-26 | RF-06 | BR-10 | QS-01 | ADR-003, ADR-007 |
+| T-27 | RF-07 | BR-11, BR-17 | QS-01 | ADR-003, ADR-007 |
+| T-28 | RF-08, RF-09 | BR-01, BR-02, BR-14 | QS-01 | ADR-003, ADR-001 |
+| T-29 | RF-08, RF-20, RNF-04 | BR-03, BR-14 | QS-02 | ADR-004, ADR-005 |
+| T-30 | RF-05, RF-08, RF-09, RF-17, RNF-03 | BR-08, BR-12, BR-14 | QS-01, QS-03 | ADR-001, ADR-003 |
 | T-09 | RNF-02, RNF-12 | — | QS-05 | ADR-002 |
 | T-10 | RNF-08 | — | QS-07 | ADR-006 |
 

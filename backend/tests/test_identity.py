@@ -8,10 +8,10 @@ from tests.conftest import seed_base
 
 def test_token_has_no_roles(env):
     U = seed_base(env)
-    token = security.issue_token(U["s1"])
+    token = security.issue_token(U["s1"], "test-session")
     payload = __import__("jwt").decode(token, options={"verify_signature": False})
-    assert set(payload) == {"sub", "iat", "exp"}
-    assert security.decode_token(token) == U["s1"]
+    assert set(payload) == {"sub", "jti", "iat", "exp", "iss", "aud"}
+    assert security.decode_token(token) == (U["s1"], "test-session")
 
 
 def test_role_change_takes_effect_next_request(env):

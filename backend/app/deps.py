@@ -4,18 +4,30 @@ from __future__ import annotations
 from fastapi import Request
 
 from app import db, security
-from app.errors import Forbidden, NotFound
+from app.config import get_settings
+from app.errors import Forbidden, Unauthorized
 from app.modules.authz import service as authz
 
 
 def _authenticate(request: Request) -> int:
-    header = request.headers.get("authorization", "")
-    if not header.lower().startswith("bearer "):
-        raise Forbidden("missing bearer token")
-    user_id = security.decode_token(header[7:].strip())
+    token = request.cookies.get(security.SESSION_COOKIE)
+    if not token:
+        raise Unauthorized()
+    user_id, session_id = security.decode_token(token)
     with db.read() as cur:
-        if authz.subject(cur, user_id) is None:
-            raise NotFound()
+        session = cur.execute(
+            """SELECT s.user_id FROM auth_session s JOIN user_account u ON u.id=s.user_id
+               WHERE s.jti=%s AND s.user_id=%s AND s.revoked_at IS NULL
+                 AND s.expires_at>now() AND u.is_active=true""",
+            (session_id, user_id),
+        ).fetchone()
+        if session is None:
+            raise Unauthorized()
+    if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("origin", "").rstrip("/")
+        if origin not in get_settings().allowed_origins:
+            raise Forbidden("untrusted origin")
+    request.state.auth_session_id = session_id
     return user_id
 
 

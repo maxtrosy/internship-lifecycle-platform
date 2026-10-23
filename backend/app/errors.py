@@ -19,6 +19,14 @@ class Forbidden(DomainError):
     status = 403
 
 
+class Unauthorized(DomainError):
+    status = 401
+
+
+class TooManyRequests(DomainError):
+    status = 429
+
+
 class BusinessError(DomainError):
     """Typed business error (BR rules). ``code`` mirrors the PoC error vocabulary."""
 

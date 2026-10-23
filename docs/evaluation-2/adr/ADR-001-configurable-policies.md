@@ -33,7 +33,7 @@ El RFP exige que las reglas de elegibilidad y finalización por programa "puedan
 Atiende el requisito real del RFP (reglas cambiables) sin pagar el costo de un motor general. Las versiones inmutables dan reproducibilidad: se puede explicar por qué una postulación fue (in)elegible meses después.
 
 ## Consequences
-Postulaciones y colocaciones guardan referencias a versiones. Se necesita una pantalla/endpoint de gestión de políticas (US-036, propuesta). La auditoría registra cada versión creada.
+Postulaciones y colocaciones guardan referencias a versiones. La demo implementa pantalla/API de gestión de políticas (US-036, pendiente de validación institucional); las políticas de activación y finalización se fijan al aprobar académicamente. La auditoría registra cada versión creada.
 
 ## What gets worse / trade-offs
 - Expresividad limitada: OR, excepciones por estudiante o reglas dependientes del tiempo requieren rediseño.
@@ -42,8 +42,9 @@ Postulaciones y colocaciones guardan referencias a versiones. Se necesita una pa
 - Cualquier cambio de política mal configurado puede bloquear activaciones: requiere vista previa/validación (pendiente).
 
 ## Verification
-- **Ejecutado (PoC, equipo):** T-06 — versión v1 → v2 aplicada a evaluaciones posteriores sin cambiar código; la postulación previa conserva v1 y su resultado; 4 formas inválidas rechazadas (script, clave extra, valor inválido, vacía); coordinador de otro programa rechazado; 2 eventos de auditoría de política.
-- **NOT EXECUTED:** latencia de vigencia (QS-03), evaluadores de activación/finalización en el producto, pruebas de regresión por evaluador, comportamiento ante políticas con fecha de vigencia futura.
+- **PoC (equipo):** T-06 — versión v1 → v2 aplicada a evaluaciones posteriores; la postulación previa conserva v1 y su resultado; formas inválidas y coordinador de otro programa rechazados.
+- **Backend demo:** T-28..T-30 y prueba HTTP local — vocabularios separados por familia, campos validados, políticas de activación/finalización fijadas al aprobar y no cambiadas al crear versiones nuevas; checklist y evidencia de cierre materializadas desde la política fijada.
+- **Pendiente:** validar listas y reglas exactas con la institución (OPEN-01/02/04/11), latencia de vigencia (QS-03), migración de colocaciones y comportamiento de políticas con vigencia futura.
 
 ## Reconsider when
 Más de ~5 reglas reales exigen OR o anidamiento; el cliente exige que usuarios no técnicos definan lógica arbitraria; la frecuencia de nuevos tipos de condición hace inviable el release por condición.

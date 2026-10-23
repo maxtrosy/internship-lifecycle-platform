@@ -44,7 +44,7 @@ flowchart TB
 | CT-2 | API monolito modular | Casos de uso, dominio, guardas, autorización, auditoría, lectura de paneles | No envía notificaciones por sí mismo; no guarda archivos | Lógica; usa CT-4 |
 | CT-3 | Worker | Entrega de notificaciones pendientes; detección de plazos vencidos/próximos | No ejecuta comandos de ciclo de vida de usuarios | Nada propio; lee/escribe notificaciones |
 | CT-4 | Base de datos relacional | **Única fuente de verdad** de estado, versiones, políticas, requisitos materializados, notificaciones y auditoría; red de seguridad (triggers, permisos) | No contiene archivos | Todo el estado persistente |
-| — | Servicios simulados | Imitan identidad, registros, documentos y canal | No representan sistemas reales | Datos **sintéticos** |
+| — | Servicios simulados | Imitan registros, documentos y canal | No representan sistemas reales | Datos **sintéticos** |
 
 ## Decisiones visibles en la figura
 1. **Un solo proceso transaccional (CT-2 + CT-4)** protege activación, cierre y auditoría como unidad (ADR-002/003).

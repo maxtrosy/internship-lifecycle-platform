@@ -37,7 +37,7 @@ Esta evaluación documenta **cómo debería estructurarse** el sistema y por qu�
 | **Ejecutado** | Resultado real de una prueba | T-xx con evidencia; si no se corrió: `NOT EXECUTED` |
 
 **Qué está diseñado:** estructura (contexto, contenedores, componentes, despliegue), dominio y datos, ciclo de vida de la colocación, secuencias críticas, reglas de negocio, interfaces, seguridad.
-**Qué sigue provisional:** todas las reglas institucionales (listas de documentos, evidencia de cierre, aprobaciones de cambios, elegibilidad humana), la tecnología concreta y el mecanismo de autenticación de usuarios externos. Ver el registro `OPEN` en §11.
+**Qué sigue provisional:** todas las reglas institucionales (listas de documentos, evidencia de cierre, aprobaciones de cambios, elegibilidad humana), adopción formal de tecnología y el SSO institucional (OPEN-21). DH-05 ya ofrece cuentas locales; ver el registro `OPEN` en §11.
 
 ---
 
@@ -77,7 +77,7 @@ Un requisito es *significativo* si cambia la estructura, las fronteras o las res
 | RNF-03 | Reglas cambiables por programa | **Alta** | Es el origen del vocabulario cerrado de políticas (el RFP no exige "sin redeploy") | ADR-001, C-05 |
 | RNF-04 | Seguridad y privacidad por rol y relación | **Alta** | Define la capa de autorización y la proyección mínima | ADR-004, [security](design/security.md) |
 | RNF-05 | Auditabilidad | **Alta** | Define el historial append-only | ADR-005, T-07 |
-| RNF-07 | Autenticación institucional (o simulada) | Media | Identidad ≠ autorización; el IdP queda detrás de un puerto | ADR-006, IF-ID |
+| RNF-07 | Autenticación confiable; IdP institucional según configuración disponible | Media | C-01 usa credenciales locales y mantiene roles separados; SSO no se afirma sin IdP configurado | ADR-007, IF-ID, OPEN-21 |
 | RNF-08 | Integraciones simulables | Media | Puertos y adaptadores con simuladores | ADR-006, C-13 |
 | RNF-09 | Mantenibilidad, viable en un semestre | **Alta** como filtro | Penaliza microservicios y motores de reglas genéricos | ADR-001, ADR-002 |
 | RNF-11 | El estudiante ve estado y siguiente paso | Media | Obliga a un **estado derivado** de "listo para activar" y a tres dimensiones de estado visibles | V-STATE-PLC (§ estados descartados), QS-08 |
@@ -214,7 +214,7 @@ Todas las decisiones son **propuestas del equipo**: ninguna está validada con e
 
 ## 8. Arquitectura en una página
 
-**Estructura:** un navegador (SPA) habla con un **monolito modular** (API) que organiza 13 componentes; un **worker** (mismo código, otro proceso) envía notificaciones y detecta plazos; una **base de datos relacional transaccional** es la fuente de verdad de estado, versiones, políticas y auditoría; los servicios externos (identidad, registros estudiantiles, documentos, notificaciones) existen **solo como simuladores** detrás de puertos.
+**Estructura:** un navegador (SPA) habla con un **monolito modular** (API) que organiza 13 componentes; un **worker** (mismo código, otro proceso) envía notificaciones y detecta plazos; una **base de datos relacional transaccional** es la fuente de verdad de estado, versiones, políticas, cuentas y auditoría; los servicios externos (registros estudiantiles, documentos, notificaciones) existen **solo como simuladores** detrás de puertos. La autenticación actual es local; el IdP institucional no está configurado.
 
 ```mermaid
 flowchart LR
@@ -222,7 +222,7 @@ flowchart LR
   WEB --> API["API monolito modular<br/>C-01 a C-13"]
   API --> DB[("BD relacional<br/>estado, versiones, políticas, auditoría")]
   WORK["Worker"] --> DB
-  API -.->|"puertos"| SIM["Servicios SIMULADOS<br/>identidad, registros, documentos, notificación"]
+  API -.->|"puertos"| SIM["Servicios SIMULADOS<br/>registros, documentos, notificación"]
   WORK -.->|"puerto de notificación"| SIM
 ```
 
@@ -283,7 +283,7 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | OPEN-18 | Rol "Administrador": ¿quién configura políticas y administra? | US-027/029 | Roles |
 | OPEN-19 | Conflicto de recursos entre colocaciones | CL-013, PT-005 | Excluido del diseño |
 | OPEN-20 | Qué se almacena de cada documento (metadatos + referencia) | RFP sec. 10 | Modelo de datos |
-| OPEN-21 | Autenticación de usuarios **externos**: **propuesta de invitaciones con IdP simulado** (ADR-007 / C-01), pendiente de validación | RFP sec. 7 | Puerto de identidad externo |
+| OPEN-21 | **SSO institucional:** no se encontró proveedor, protocolo, URL de descubrimiento, credenciales ni cuenta de prueba. C-01 tiene autenticación local; usuarios externos limitados pueden aceptar invitaciones con rol/organización asignados por el servidor. | RFP sec. 7 | Decisión e información de TI; integrar OIDC/SAML cuando se suministre |
 
 **Elementos `NOT EXECUTED`:** QS-05 (pico), QS-07 (indisponibilidad de integración), QS-08 (comprensión de estado), T-09..T-14 del [plan](validation/validation-plan.md), la variante concurrente de T-04, medición de latencia de T-06 y reconstrucción de historial, pruebas de adaptadores y de arquitectura, humo de despliegue.
 

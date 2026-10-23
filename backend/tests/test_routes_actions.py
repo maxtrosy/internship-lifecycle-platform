@@ -8,7 +8,10 @@ from fastapi.routing import APIRoute
 
 from app.main import app
 
-EXEMPT = {"/health", "/auth/login", "/auth/accept-invitation"}
+EXEMPT = {
+    "/health", "/auth/login", "/auth/accept-invitation",
+    "/auth/password-reset/request", "/auth/password-reset/complete",
+}
 
 
 def _declared_action(route: APIRoute) -> str | None:

@@ -6,10 +6,10 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 
 | Requisito | Escenario de calidad | Driver | ADR | Componente | Vista | Regla | Validación |
 |---|---|---|---|---|---|---|---|
-| RF-05 | QS-03 | AD-02 | ADR-001 | C-04, C-05 | V-COMP, SEQ-01 | BR-08, BR-12 | **T-06** (EXECUTED) |
-| RF-06 / RF-07 | QS-01 (precondición) | AD-01 | ADR-003 | C-06 | V-STATE-PLC T1–T3, SEQ-01 | BR-10, BR-11 | T-03 (parcial); **T1–T3 NOT EXECUTED** |
-| RF-08 | QS-01, QS-03 | AD-01, AD-02 | ADR-001, ADR-003 | C-05, C-07 | V-DOM | BR-14 | T-02 (revisión/rechazo/revocación); T-16e (EXECUTED 2026-10-22); entrega: NOT EXECUTED |
-| RF-09 | QS-01 | AD-01 | ADR-003 | C-06, C-07 | V-STATE-PLC T4, SEQ-02 | BR-01, BR-02, BR-18 | **T-01, T-02, T-02b, T-08** (EXECUTED); T-16a/b/d (EXECUTED 2026-10-22) |
+| RF-05 | QS-03 | AD-02 | ADR-001 | C-04, C-05 | V-COMP, SEQ-01 | BR-08, BR-12 | **T-06, T-25, T-30** (EXECUTED) |
+| RF-06 / RF-07 | QS-01 (precondición) | AD-01 | ADR-003 | C-06 | V-STATE-PLC T1–T3, SEQ-01 | BR-10, BR-11 | **T-26/T-27** (selección y aprobación); T-03 autorización (EXECUTED) |
+| RF-08 | QS-01, QS-03 | AD-01, AD-02 | ADR-001, ADR-003 | C-05, C-07 | V-DOM | BR-14 | T-02/T-16e (PoC); T-28 (entrega, revisión y activación), T-29 (revisiones, motivos y descarga) |
+| RF-09 | QS-01 | AD-01 | ADR-003 | C-06, C-07 | V-STATE-PLC T4, SEQ-02 | BR-01, BR-02, BR-18 | **T-01, T-02, T-02b, T-08** (EXECUTED); T-16a/b/d (PoC); T-28/T-30 (política y compuerta) |
 | RF-13 | QS-04 | AD-04 | ADR-005 | C-06, C-11 | V-DOM, SEQ-03 | BR-04 | **T-05** (EXECUTED) |
 | RF-15 | QS-07 | AD-05 | ADR-006 | C-10, C-13 | V-CONT | — | T-11 NOT EXECUTED |
 | RF-17 | QS-06 | AD-01 | ADR-003 | C-06, C-08 | V-STATE-PLC T7, T8 | BR-05, BR-17, BR-18 | **T-04** (EXECUTED; variante concurrente NOT EXECUTED); T-16b/c/d (EXECUTED 2026-10-22) |
@@ -20,7 +20,7 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | RNF-03 | QS-03 | AD-02 | ADR-001 | C-05 | V-COMP | BR-12 | **T-06** |
 | RNF-04 | QS-02 | AD-03 | ADR-004 | C-02 | security | BR-03, BR-13 | **T-03** |
 | RNF-05 | QS-04 | AD-04 | ADR-005 | C-11 | V-DOM | BR-06, BR-07 | **T-07** |
-| RNF-07 | — | AD-05 | ADR-006 | C-01 | V-CTX | — | NOT EXECUTED |
+| RNF-07 | — | AD-05 | ADR-007 | C-01 | V-CTX | — | **T-31** (autenticación local); SSO institucional OPEN-21 |
 | RNF-08 | QS-07 | AD-05 | ADR-006 | C-13 | V-COMP | — | T-10 NOT EXECUTED |
 | RNF-09 | — (filtro) | AD-06 | ADR-001, ADR-002 | todos | V-CONT | — | T-15 NOT EXECUTED |
 | RNF-11 | QS-08 | — | ADR-003 (estado derivado) | CT-1, C-06 | V-STATE-PLC | — | T-13 NOT EXECUTED |
@@ -52,7 +52,7 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | RF-18 | US-028, US-029 | quitar "conflictos" (AUD-23) |
 | RF-19 | US-027 | mover el habilitador de auditoría a antes de la 1ª aprobación (AUD-24) |
 | RF-20 | **ninguna** | **US-032** |
-| RNF-07 | US-031 | — |
+| RNF-07 | US-031 | **T-31** (cuentas locales, sesión segura; SSO sigue OPEN-21) |
 | RNF-11 | US-007 | — |
 | — | US-030 (calendario) | sin RF; OPEN-10 |
 | — | — | **US-035** (interrupción/cancelación, OPEN-08) |
@@ -66,28 +66,28 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | ADR-003 | RF-09, RF-17 | QS-01, QS-06 | AD-01 |
 | ADR-004 | RF-20, RNF-04, RNF-07 | QS-02 | AD-03 |
 | ADR-005 | RF-13, RF-14, RF-19, RNF-05 | QS-04 | AD-04 |
-| ADR-006 | RNF-07, RNF-08, RF-15 | QS-07 | AD-05 |
+| ADR-006 | RNF-08, RF-15 | QS-07 | AD-05 |
 
 ## D.3 Escenario de calidad → Validación
 
 | QS | Pruebas | Estado |
 |---|---|---|
-| QS-01 | T-01, T-02, T-02b, T-08 | EXECUTED; T-16a/e EXECUTED (2026-10-22) |
-| QS-02 | T-03 | EXECUTED (sin HTTP); T-14 NOT EXECUTED |
-| QS-03 | T-06 | EXECUTED parcial (sin latencia) |
+| QS-01 | T-01, T-02, T-02b, T-08, T-26..T-28, T-30 | EXECUTED; T-16a/e PoC (2026-10-22) |
+| QS-02 | T-03, T-29 | EXECUTED at domain/service level; T-14 NOT EXECUTED |
+| QS-03 | T-06, T-25, T-30 | EXECUTED partial (no latency measurement) |
 | QS-04 | T-05, T-07 | EXECUTED; latencia de historial NOT EXECUTED |
 | QS-05 | T-09 | **NOT EXECUTED** |
 | QS-06 | T-04 | EXECUTED; variante concurrente NOT EXECUTED; T-16b/c/d EXECUTED (2026-10-22) |
 | QS-07 | T-10 | **NOT EXECUTED** |
 | QS-08 | T-13 | **NOT EXECUTED** |
 
-**Fase 1 (backend, ADR-007):** los tests del PoC se portaron a `backend/tests/` (T-01, T-02, T-02b, T-04, T-08, T-16a..e) y se agregaron T-20 (rutas con acción declarada), T-21 (token sin roles), T-22 (invitaciones), T-23 (fronteras de módulo), T-24 (oportunidades) y T-25 (postulaciones con elegibilidad). **EXECUTED — 28 PASS** (pytest), más `alembic upgrade head`, `app.seed` y `GET /health` verificados.
+**Backend (ADR-007):** T-31 cubre autenticación, sesión y recuperación local; T-20..T-30 cubren rutas y flujos de negocio. El conteo actualizado, la migración 0003 y la verificación Docker de base limpia se registran en [validation-results.md](validation/validation-results.md).
 
 ## D.4 Componente → Responsabilidad y razón de existir
 
 | Componente | Responsabilidad | **¿Por qué existe?** (requisito / driver / ADR) |
 |---|---|---|
-| C-01 Identidad y sesión | Autenticar y mapear sujeto | RNF-07 · AD-05 · ADR-006 |
+| C-01 Identidad y sesión | Autenticar cuenta local, emitir y revocar sesión | RNF-07 · AD-05 · ADR-007 |
 | C-02 Autorización | Rol + relación, filtrado, proyección | RF-20, RNF-04 · AD-03 · ADR-004 |
 | C-03 Oportunidades | Registro, revisión, publicación, búsqueda | RF-01..RF-04 (CRUD/flujo estándar) |
 | C-04 Postulaciones y elegibilidad | Postular y evaluar con política | RF-05 · AD-02 · ADR-001 |

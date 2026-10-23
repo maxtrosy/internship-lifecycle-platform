@@ -1,7 +1,9 @@
 """HTTP endpoints for C-06 lifecycle (Phase 1)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from app import db
@@ -13,12 +15,9 @@ from app.modules.lifecycle import service as lifecycle
 router = APIRouter()
 
 
-class ApproveAcademicBody(BaseModel):
-    required_kinds: list[str]
-
-
 class ReviewBody(BaseModel):
     decision: str
+    reason: str
 
 
 class EvidenceBody(BaseModel):
@@ -27,6 +26,77 @@ class EvidenceBody(BaseModel):
 
 class HoursBody(BaseModel):
     hours: float
+
+
+class RejectAcademicBody(BaseModel):
+    reason: str
+
+
+@router.get("/placements/pending-academic")
+def pending_academic(subject_id: int = Depends(requires("placement:list"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.list_pending_academic(cur, subj)
+
+
+@router.get("/placements/documents-pending")
+def documents_pending(subject_id: int = Depends(requires("document:review"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.list_documents_pending(cur, subj)
+
+
+@router.get("/placements/pending-activation")
+def pending_activation(subject_id: int = Depends(requires("placement:activate"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.list_pending_activation(cur, subj)
+
+
+@router.get("/placements/{pid}/checklist")
+def checklist(pid: int, subject_id: int = Depends(requires("placement:read"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.list_checklist(cur, subj, pid)
+
+
+@router.get("/placements/{pid}/activation-status")
+def activation_status(pid: int, subject_id: int = Depends(requires("placement:read"))) -> dict:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.activation_status(cur, subj, pid)
+
+
+@router.post("/placements/{pid}/items/{item_id}/submit", status_code=201)
+async def submit_document(pid: int, item_id: int, request: Request,
+                          subject_id: int = Depends(requires("document:submit"))) -> dict:
+    filename = request.query_params.get("filename", "")
+    content_type = request.headers.get("content-type", "application/octet-stream")
+    content = await request.body()
+    with db.command(subject_id) as ctx:
+        return lifecycle.submit_document(ctx, pid, item_id, filename, content_type, content)
+
+
+@router.get("/placements/{pid}/items/{item_id}/submissions")
+def submissions(pid: int, item_id: int,
+                subject_id: int = Depends(requires("document:read"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.list_submissions(cur, subj, pid, item_id)
+
+
+@router.get("/placements/{pid}/items/{item_id}/submissions/{submission_id}/download")
+def download_submission(pid: int, item_id: int, submission_id: int,
+                        subject_id: int = Depends(requires("document:read"))) -> Response:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        document = lifecycle.get_submission(cur, subj, pid, item_id, submission_id)
+    filename = quote(document["original_filename"], safe="")
+    return Response(
+        content=bytes(document["content"]),
+        media_type=document["content_type"],
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
 
 
 @router.get("/placements/{pid}")
@@ -46,10 +116,17 @@ def history(pid: int, subject_id: int = Depends(requires("placement:read"))) -> 
 
 
 @router.post("/placements/{pid}/approve-academic", status_code=204)
-def approve_academic(pid: int, body: ApproveAcademicBody,
+def approve_academic(pid: int,
                      subject_id: int = Depends(requires("placement:approve_academic"))) -> None:
     with db.command(subject_id) as ctx:
-        lifecycle.academic_approve(ctx, pid, body.required_kinds)
+        lifecycle.academic_approve(ctx, pid)
+
+
+@router.post("/placements/{pid}/reject-academic", status_code=204)
+def reject_academic(pid: int, body: RejectAcademicBody,
+                    subject_id: int = Depends(requires("placement:reject_academic"))) -> None:
+    with db.command(subject_id) as ctx:
+        lifecycle.academic_reject(ctx, pid, body.reason)
 
 
 @router.post("/placements/{pid}/activate", status_code=204)
@@ -75,7 +152,7 @@ def close(pid: int, subject_id: int = Depends(requires("placement:close"))) -> N
 def review(pid: int, item_id: int, body: ReviewBody,
            subject_id: int = Depends(requires("document:review"))) -> None:
     with db.command(subject_id) as ctx:
-        lifecycle.review_document(ctx, item_id, body.decision)
+        lifecycle.review_document(ctx, pid, item_id, body.decision, body.reason)
 
 
 @router.post("/placements/{pid}/submit-evidence", status_code=204)

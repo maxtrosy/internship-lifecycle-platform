@@ -1,7 +1,13 @@
 """Synthetic seed data (RNF-06). Run: python -m app.seed (after alembic upgrade head)."""
 from __future__ import annotations
 
+import os
+
 from app import db
+from app import security
+from psycopg.types.json import Jsonb
+
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "Demo-Only-2026!")
 
 
 def seed(cur) -> dict:
@@ -15,9 +21,11 @@ def seed(cur) -> dict:
                  email: str | None = None, credits: int | None = None,
                  level: int | None = None, courses: tuple[str, ...] = ()) -> None:
         uid = cur.execute(
-            "INSERT INTO user_account(email, display_name, credits, academic_level, completed_courses) "
-            "VALUES (%s,%s,%s,%s,%s) RETURNING id",
-            (email, name, credits, level, list(courses)),
+            """INSERT INTO user_account(username,email,password_hash,is_active,display_name,
+                                         credits,academic_level,completed_courses)
+               VALUES (%s,%s,%s,true,%s,%s,%s,%s) RETURNING id""",
+            (key, email or f"{key}@demo.local", security.hash_password(DEMO_PASSWORD),
+             name, credits, level, list(courses)),
         ).fetchone()["id"]
         for role, program_code, org_id in roles:
             cur.execute(
@@ -42,14 +50,32 @@ def seed(cur) -> dict:
     # At least one user with TWO roles (T-03/T-21 multi-role coverage).
     add_user("dual1", "Dual Coordinator/Faculty",
              [("PROGRAM_COORDINATOR", "ING-SIS", None), ("FACULTY_SUPERVISOR", None, None)])
+    for code, coordinator in (("ING-SIS", "pc_sys"), ("ADM", "pc_adm")):
+        cur.execute(
+            "INSERT INTO policy_version(policy_key,version_no,conditions,created_by) VALUES (%s,1,%s,%s)",
+            (f"ACTIVATION:{code}", Jsonb([
+                {"type": "REQUIRE_DOCUMENTS", "value": ["DOC_INSURANCE"]},
+                {"type": "SUPERVISORS_ASSIGNED", "value": True},
+            ]), users[coordinator]),
+        )
+        cur.execute(
+            "INSERT INTO policy_version(policy_key,version_no,conditions,created_by) VALUES (%s,1,%s,%s)",
+            (f"COMPLETION:{code}", Jsonb([
+                {"type": "FINAL_REPORT", "value": True},
+                {"type": "FINAL_EVALUATION", "value": True},
+                {"type": "MIN_HOURS", "value": 100},
+            ]), users[coordinator]),
+        )
     users["programs"] = programs
     return users
 
 
 def main() -> None:
+    if os.environ.get("APP_ENV", "development").strip().lower() != "development":
+        raise RuntimeError("The synthetic seed is available only with APP_ENV=development")
     with db.admin() as cur:
         seed(cur)
-    print("seed complete")
+    print("Synthetic development accounts and sample data created.")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ flowchart TB
     API["API"]
     WRK["Worker"]
     DB[("PostgreSQL")]
-    MOCK["Simuladores<br/>identidad, registros,<br/>documentos, notificación"]
+    MOCK["Simuladores<br/>registros, documentos,<br/>notificación"]
   end
 
   BR -->|"HTTPS"| PX
@@ -52,7 +52,7 @@ flowchart TB
 | Disponibilidad | Una sola instancia, sin alta disponibilidad; umbral sin definir (RNF-12) | **OPEN-16** |
 | Escalabilidad | Vertical; el worker puede ejecutarse en varios procesos; no hay escalado automático | Supuesto |
 | Observabilidad | Registro operativo estructurado, con eventos de seguridad (denegaciones) separados de la auditoría de negocio | Supuesto |
-| Autenticación | IdP simulado emitiendo tokens firmados de corta duración; usuarios externos: **OPEN-21** | Supuesto |
+| Autenticación | Cuentas locales: Argon2id y sesión corta en cookie `HttpOnly`; SSO institucional: **OPEN-21** | Implementado local; IdP no configurado |
 | Red | Acceso remoto por HTTPS; sin VPN | Supuesto |
 
 ## Qué no se debe afirmar

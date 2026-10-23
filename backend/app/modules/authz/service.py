@@ -73,15 +73,19 @@ def _role_action(role: dict, c: dict, subj: dict, action: str) -> bool:
     return {
         "placement:read": True,
         "placement:approve_academic": own_program,
+        "placement:reject_academic": own_program,
         "version:approve": own_program,
         "placement:confirm_completion": own_program,
         "placement:activate": r == "EXPERIENTIAL_COORDINATOR",
         "placement:close": r == "EXPERIENTIAL_COORDINATOR",
         "document:review": r == "LEGAL_REVIEWER",
+        "document:read": r == "LEGAL_REVIEWER"
+                          or (r == "STUDENT" and c["student_id"] == subj["id"]),
         "placement:propose_change": r == "EXPERIENTIAL_COORDINATOR"
                                      or (r == "WORKPLACE_SUPERVISOR" and c["is_workplace_sup"]),
         "progress:create": r == "STUDENT" and c["student_id"] == subj["id"],
         "evidence:submit": r == "STUDENT" and c["student_id"] == subj["id"],
+        "document:submit": r == "STUDENT" and c["student_id"] == subj["id"],
     }[action]
 
 

@@ -6,7 +6,7 @@
 El RFP: acceso "dependiente del rol y de la relación con la oportunidad o colocación", acceso externo "controlado y limitado" y preocupación explícita porque "host organizations may access more student information than necessary" (sec. 2 y 7). RF-20, RNF-04. Hay muchos usuarios con el **mismo rol pero distinta relación**: dos organizaciones anfitrionas, supervisores docentes asignados a ciertas colocaciones, coordinadores de un programa. ASM-003B propone política a nivel de fila (cita un `domain-model.md` que no existe, AUD-34). La autenticación de usuarios externos no está definida por el RFP (OPEN-21).
 
 ## Decision
-1. **Identidad ≠ autorización.** El servicio de identidad (simulado) entrega *quién es* el sujeto; los roles y relaciones son datos de DH-05.
+1. **Identidad ≠ autorización.** C-01 autentica la cuenta local y entrega *quién es* el sujeto; los roles y relaciones son datos de DH-05. OPEN-21 mantiene pendiente el SSO institucional.
 2. Un **componente central de autorización (C-02)** decide con predicados **rol + relación** sobre el recurso:
 
 | Rol | Relación requerida para leer una colocación |
@@ -33,7 +33,7 @@ El RFP: acceso "dependiente del rol y de la relación con la oportunidad o coloc
 | **Aplicación con predicados de relación + consultas filtradas + proyección (elegida)** | Testeable, portable y proporcional |
 
 ## Rationale
-Es la forma mínima que satisface "rol y relación" y es verificable con una matriz de pruebas. Mantener la identidad separada permite sustituir el IdP simulado sin tocar permisos.
+Es la forma mínima que satisface "rol y relación" y es verificable con una matriz de pruebas. Mantener identidad separada permite integrar un IdP institucional futuro sin tocar permisos.
 
 ## Consequences
 Cada caso de uso pasa por C-02. Se necesitan índices para los predicados de relación. La matriz de seguridad (`design/security.md`) es la especificación de pruebas.
@@ -51,7 +51,7 @@ Cada caso de uso pasa por C-02. Se necesitan índices para los predicados de rel
 - **NOT EXECUTED:** capa HTTP, usuarios externos reales, RLS, escaneo de rutas sin autorización, exportaciones/reportes.
 
 ## Reconsider when
-TI exige RLS; el número de tipos de relación crece o las políticas deben cambiarlas no desarrolladores (entonces evaluar un motor externo); se define la autenticación externa (OPEN-21).
+TI exige RLS; el número de tipos de relación crece o las políticas deben cambiarlas no desarrolladores (entonces evaluar un motor externo); TI define y habilita SSO institucional (OPEN-21).
 
 ## Related requirements
 RF-20, RNF-04, RNF-07 · RFP sec. 2 y 7 · CL-008, PT-003

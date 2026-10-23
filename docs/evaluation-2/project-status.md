@@ -1,16 +1,20 @@
 # Estado del proyecto
 
-**Fecha de corte:** 2026-10-08. **Regla:** nada se marca como completado si solo fue diseñado.
+**Fecha de corte:** 2026-10-22. **Regla:** nada se marca como completado si solo fue diseñado.
 
 ## Completado
 | Qué | Evidencia |
 |---|---|
 | Artefactos de la Evaluación 1 (Visión y Alcance; Requisitos/Backlog/Riesgos/Criterios; Interesados/Aclaraciones/Supuestos/AS-IS/TO-BE/Pendientes) | Entregados por el equipo (los tres archivos analizados) |
 | Auditoría de coherencia de la Evaluación 1 | [`evaluation-1-audit.md`](evaluation-1-audit.md): 34 hallazgos con decisión |
-| **Borrador** de la documentación de arquitectura y diseño (este paquete) | Documentos de `docs/evaluation-2/` — **diseño, no implementación** |
+| Documentación de arquitectura y diseño | `docs/evaluation-2/` distingue el diseño acordado, el estado real del demo y los pendientes institucionales |
 | PoC de la rebanada crítica ejecutado por el equipo | `prototype/evidence/results.json`: **14 PASS, 0 FAIL** (2026-10-22; incluye T-02 y T-16a..e) |
-| Backend Fase 1 validado (identidad, authz, auditoría, lifecycle) | `backend/`: `pytest` **28 PASS**; `alembic upgrade head` + `app.seed` + `GET /health` OK |
-| Incremento oportunidades + postulaciones (Sprint 1) | `backend/app/modules/{opportunities,applications,policies}` + `frontend/` (React+Vite, build OK); T-24/T-25 PASS |
+| Backend Fase 1 (identidad, authz, auditoría, lifecycle) | `backend/`: T-20..T-31; autenticación local con Argon2id, cookie de sesión y recuperación |
+| Incremento oportunidades + postulaciones (Sprint 1) | `backend/app/modules/{opportunities,applications,policies}` + frontend React; T-24/T-25 |
+| Sprint 2: selección del empleador + aprobación académica | Selección, aprobación/rechazo, relación por programa y auditoría; pruebas T-26/T-27 |
+| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages}`; `npm run build` EXIT 0. Revisión visual parcial del login, políticas y cola legal a viewport estrecho; E2E y otros tamaños/roles pendientes |
+| Sprint 3: documentos + activación | Archivos PDF/PNG/JPG/DOCX en PostgreSQL (≤10 MB), revisiones con motivo, historial y reentrega; permisos de descarga; activación/cierre por políticas versionadas; vistas de estudiante, revisor legal y EC; T-28..T-30 |
+| Políticas EB-08 | UI de coordinación para versiones de elegibilidad, activación y cierre; validadores de vocabulario cerrado; las colocaciones fijan las versiones al aprobarse académicamente |
 
 ## En progreso
 | Qué | Nota |
@@ -19,10 +23,10 @@
 | Decidir el stack y revisar el modelo de dominio de este paquete para adoptarlo como el primero del equipo | OPEN-17; EB-03 |
 
 ## No implementado
-Producto completo; API HTTP; interfaz web; worker; notificaciones; adaptadores y simuladores como puertos; flujos de oportunidad y postulación; transiciones T1, T3, T5, T6, T9; comunicación; evaluaciones e incidentes; paneles; despliegue.
+Revisión/publicación de oportunidades (OPEN-05); IdP/SSO institucional (OPEN-21); proveedor real de correo para recuperación; reglas institucionales exactas de documentos/evidencia y actores (OPEN-01/02); workers y notificaciones; adaptadores con fallos a pedido; supervisión, evaluaciones, incidentes, mensajes y paneles.
 
 ## No validado
-Todas las decisiones con el cliente y con Servicios de TI; los 21 elementos `OPEN`; QS-05, QS-07, QS-08; T-09..T-15; el diseño frente al código real.
+Las decisiones institucionales marcadas `OPEN`; QS-05, QS-07, QS-08; T-09..T-15; revisión visual completa/responsive/E2E; comportamiento de un repositorio de documentos externo y del SSO real.
 
 ## Riesgos (priorizados)
 
@@ -36,10 +40,10 @@ Todas las decisiones con el cliente y con Servicios de TI; los 21 elementos `OPE
 | R-009 *(actualizado)* | Exposición de datos a externos; RF-20 sin historia | **Media** (antes Baja) | Alta | US-032, ADR-004; T-03 en el producto | Arquitecto | Abierto; mitigación probada solo en PoC |
 | R-014 *(nuevo)* | El vocabulario cerrado resulta insuficiente cuando se descubren las reglas reales | Media | Alta | Validar con coordinadores; reconsiderar ADR-001 | Analista de negocio | Abierto |
 | R-015 *(actualizado)* | Documento rechazado tras la activación: hay propuesta (BR-18), pero **no está validada** con el cliente (OPEN-14) | Media | Alta | EB-10: validar la propuesta y definir plazo/excepciones | Product Owner | Abierto; propuesta probada en el PoC (2026-10-22) |
-| R-018 *(nuevo)* | Autenticación de usuarios externos sin definir (OPEN-21) | Media | Alta | EB-11 consultar a TI | Arquitecto | Abierto |
-| R-011 *(nuevo)* | Carreras en comandos del ciclo de vida | Media | Alta | ADR-003 | Arquitecto | **Mitigación demostrada en el PoC**; falta en el producto |
-| R-012 *(nuevo)* | Un endpoint nuevo olvida la autorización | Media | Alta | Prueba que exija acción declarada (no ejecutada) | Líder técnico | Abierto |
-| R-016 *(nuevo)* | La lógica del trigger diverge de la política de aplicación o se rompe en migraciones | Baja | Media | Pruebas de contrato app↔BD; revisar en cada migración | Líder técnico | Abierto |
+| R-018 *(nuevo)* | SSO institucional sin proveedor ni configuración (OPEN-21); cuentas locales implementadas como alternativa | Media | Alta | EB-11 consultar a TI | Arquitecto | Abierto: datos de TI pendientes |
+| R-011 *(nuevo)* | Carreras en comandos del ciclo de vida | Media | Alta | ADR-003 | Arquitecto | Mitigación en backend; T-01/T-02 portadas y ejecutadas |
+| R-012 *(nuevo)* | Un endpoint nuevo olvida la autorización | Media | Alta | Prueba de rutas con acción declarada | Líder técnico | T-20 PASS; mantener en CI |
+| R-016 *(nuevo)* | La lógica del trigger diverge de la política de aplicación o se rompe en migraciones | Baja | Media | Pruebas de contrato app↔BD; revisar cada migración | Líder técnico | Migración 0002 aplicada en Docker; pruebas de gates ejecutadas |
 | R-001 *(sin cambio de nivel)* | Reglas por programa desconocidas o cambiantes | — | — | ADR-001 | — | Abierto |
 | R-002 *(sin cambio de nivel)* | Integración simulada oculta problemas reales | — | — | ADR-006; contratos | — | Abierto |
 
@@ -51,10 +55,10 @@ Todas las decisiones con el cliente y con Servicios de TI; los 21 elementos `OPE
 | EB-02 | Agregar US-032..US-036 y SC-13 al backlog y validarlas | Alta | Product Owner | EB-01 | Pendiente |
 | EB-03 | Elegir el stack y revisar en equipo `views/domain-model.md` para adoptarlo (o corregirlo) como el modelo oficial | Alta | Líder técnico | — | Propuesta de stack en ADR-007, pendiente de adopción |
 | EB-04 | Reejecutar `run_poc.py` y registrar commit y fecha | Alta | Líder técnico | — | Hecho (2026-10-22, commit `dcda267`) |
-| EB-05 | Portar las compuertas (ADR-003) con pruebas T-01/T-02 en la tecnología real | Alta | Desarrollo | EB-03 | EXECUTED en `backend/` (28 PASS) |
-| EB-06 | Autorización C-02 con matriz de pruebas (ADR-004), **antes** de exponer postulantes a externos | Alta | Desarrollo | EB-03 | EXECUTED en `backend/` (T-03, 28 PASS) |
-| EB-07 | Escritor de auditoría atómico (ADR-005), **antes** de la primera aprobación | Alta | Desarrollo | EB-03 | EXECUTED en `backend/` (T-07, 28 PASS) |
-| EB-08 | Políticas C-05: 4 condiciones de elegibilidad + activación + finalización | Alta | Desarrollo | EB-03 | Pendiente |
+| EB-05 | Portar las compuertas (ADR-003) con pruebas T-01/T-02 en la tecnología real | Alta | Desarrollo | EB-03 | Ejecutado y cubierto por suite del backend |
+| EB-06 | Autorización C-02 con matriz de pruebas (ADR-004), **antes** de exponer postulantes a externos | Alta | Desarrollo | EB-03 | T-03 y T-29; lectura de archivos limitada a titular/revisor legal |
+| EB-07 | Escritor de auditoría atómico (ADR-005), **antes** de la primera aprobación | Alta | Desarrollo | EB-03 | Ejecutado; eventos de entrega y revisión registran metadatos/motivos, nunca bytes |
+| EB-08 | Políticas C-05: 4 condiciones de elegibilidad + activación + finalización | Alta | Desarrollo | EB-03 | Implementado en API/UI con versiones inmutables y binding al aprobar; probar reglas reales y validar listas institucionales sigue OPEN-01/02/04/11 |
 | EB-10 | Validar con el cliente la propuesta para OPEN-14 (BR-18: sigue `Active`, indicador derivado y compuerta de cierre) y definir plazo de corrección y aprobador de excepciones | Alta | Product Owner | — | Propuesta probada en el PoC (2026-10-22) |
 | EB-11 | Cerrar OPEN-01, 02, 03, 21 con interesados y TI | Alta | Analista de negocio | — | Pendiente |
 | EB-17 | Re-secuenciar sprints con habilitadores primero y reestimar | Alta | Gestor de proyecto | EB-02 | Pendiente |
@@ -68,12 +72,12 @@ Todas las decisiones con el cliente y con Servicios de TI; los 21 elementos `OPE
 *Fechas: sin asignar; las define el equipo.*
 
 ## Propuesta de re-secuenciación (a validar y reestimar)
-Sprint 1: identidad simulada (US-031), **autorización (US-032)**, **escritor de auditoría**, registro/publicación y búsqueda, postulación con elegibilidad y políticas mínimas. Sprint 2: selección, aprobación académica, checklist y entrega de documentos, compuerta de activación. Sprint 3: activación, supervisión, horas, cambios. Sprint 4: evaluaciones, finalización/cierre, notificaciones, paneles. **El flujo extremo a extremo debería cerrarse antes del último sprint** y el calendario (US-030) queda opcional.
+Plan inicial por sprint (referencia histórica): Sprint 1 proponía identidad, **autorización (US-032)**, auditoría, oportunidades, postulaciones y políticas; DH-05 ahora usa cuentas locales para identidad. Sprint 2 cubría selección, aprobación académica, checklist y documentos; Sprint 3, activación, supervisión, horas y cambios; Sprint 4, evaluaciones, cierre, notificaciones y paneles. **El flujo extremo a extremo debería cerrarse antes del último sprint** y el calendario (US-030) queda opcional.
 
 ## Próximos pasos (por prioridad)
 1. EB-03: elegir el stack y revisar el modelo en equipo. (EB-04 ya está hecho.)
 2. EB-01 y EB-02: corregir y ampliar la Evaluación 1.
 3. EB-11 y EB-10: resolver con el cliente OPEN-01/02/03/14/21.
 4. EB-06 y EB-07: autorización y auditoría antes de que haya flujos con externos o aprobaciones.
-5. EB-05 y EB-08: compuertas y políticas en la tecnología real.
-6. Resto del backlog según prioridad.
+5. OPEN-05: acordar el actor de revisión/publicación antes de cambiar el flujo de oportunidades.
+6. Verificación visual/E2E por rol, QS-05/QS-07 y módulos de supervisión/cierre.

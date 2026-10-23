@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **ID** | V-CTX |
-| **Propósito** | Mostrar quién interactúa con DH-05 y con qué sistemas externos (todos simulados) |
+| **Propósito** | Mostrar quién interactúa con DH-05 y con qué sistemas externos |
 | **Requisitos** | RF-20, RNF-07, RNF-08 · RFP sec. 4, 7 y 10 |
 | **ADRs** | ADR-004, ADR-006 |
 
@@ -20,7 +20,7 @@ flowchart LR
 
   SYS["DH-05<br/>Sistema de Gestión de<br/>Pasantías y Prácticas"]
 
-  IDP["Servicio de identidad<br/>SIMULADO"]
+  IDP["IdP institucional<br/>NO CONFIGURADO · OPEN-21"]
   SREC["Registros estudiantiles<br/>y académicos SIMULADO"]
   DOCR["Repositorio de documentos<br/>SIMULADO"]
   NTF["Canal de notificación<br/>SIMULADO, OPEN-15"]
@@ -35,14 +35,13 @@ flowchart LR
   LEG -->|"revisa acuerdos y documentos"| SYS
   ITS -.->|"opera, configura, soporta"| SYS
 
-  SYS -->|"autentica, resuelve sujeto"| IDP
   SYS -->|"consulta perfil académico"| SREC
   SYS -->|"guarda y recupera archivos"| DOCR
   SYS -->|"entrega notificaciones"| NTF
   SYS -.->|"sincroniza fechas, opcional"| CAL
 ```
 
-**Lectura.** Los siete actores humanos de la izquierda interactúan con una sola aplicación; **cada uno ve solo lo que su rol y su relación con la colocación permiten** (ADR-004). A la derecha están los únicos sistemas externos justificados por el RFP o por un requisito acordado. **Ninguno es real en esta entrega.**
+**Lectura.** Los siete actores humanos de la izquierda interactúan con una sola aplicación; **cada uno ve solo lo que su rol y su relación con la colocación permiten** (ADR-004). C-01 autentica cuentas locales dentro de DH-05; el IdP institucional aparece como dependencia futura y no hay conexión hacia él. Los demás sistemas externos siguen simulados o pendientes.
 
 ## Relaciones principales
 
@@ -50,7 +49,8 @@ flowchart LR
 |---|---|---|---|
 | Estudiante → DH-05 | entrada/salida | Postulaciones, documentos, horas, estado | RFP sec. 4 |
 | Anfitrión → DH-05 | entrada/salida (limitada) | Oportunidades, selección, evaluación | RF-20: sin acceso innecesario |
-| DH-05 → Identidad | salida | Credenciales, sujeto | RNF-07; usuarios **externos**: OPEN-21 |
+| Usuario → C-01 local | entrada | Nombre/email y contraseña; sesión HttpOnly | RNF-07; roles se consultan en DH-05 |
+| DH-05 → IdP institucional | — | Sin intercambio actual | OPEN-21: proveedor y configuración no disponibles |
 | DH-05 → Registros estudiantiles | salida | Programa, nivel, créditos, cursos | Necesario para RF-05 |
 | DH-05 → Repositorio de documentos | salida | Archivos; el sistema guarda metadatos y referencia | RFP sec. 7/10; OPEN-20 |
 | DH-05 → Canal de notificación | salida | Avisos y recordatorios | RF-15 |

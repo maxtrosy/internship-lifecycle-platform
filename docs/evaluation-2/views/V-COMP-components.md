@@ -54,7 +54,7 @@ flowchart TB
 
 | ID | Componente | Responsabilidad | **No** es responsable de | Requisitos | Reglas |
 |---|---|---|---|---|---|
-| C-01 | Identidad y sesión | Autenticar vía `IdentityPort`; mapear identidad externa a usuario y roles; emitir sesión | Decidir qué puede hacer un usuario | RNF-07 | — |
+| C-01 | Identidad y sesión | Verificar contraseña local; emitir/revocar sesión; resolver usuario | Decidir qué puede hacer un usuario | RNF-07 | — |
 | C-02 | Autorización | Decidir por **rol + relación**; filtrar consultas; proyección mínima para externos | Autenticar; guardar el historial | RF-20, RNF-04 | BR-03, BR-13 |
 | C-03 | Oportunidades | Registrar organizaciones y oportunidades; revisión y publicación; búsqueda y filtro | Evaluar elegibilidad | RF-01..RF-04 | BR-09 |
 | C-04 | Postulaciones y elegibilidad | Postular; evaluar elegibilidad con la política vigente; guardar motivos y entradas | Definir las reglas; decidir selección | RF-05, RF-06 | BR-08, BR-10, BR-12 |
@@ -66,7 +66,7 @@ flowchart TB
 | C-10 | Notificaciones y recordatorios | Persistir notificaciones; detectar plazos; reintentos de entrega | Decidir reglas de negocio | RF-15 | — |
 | C-11 | Auditoría e historial | Registrar eventos append-only; consultar línea de tiempo | Modificar o borrar eventos | RF-19, RNF-05 | BR-06, BR-07 |
 | C-12 | Reportes y paneles | Modelos de lectura: retrasadas, en riesgo, interrumpidas, incompletas; reportes por programa/período | Modificar estado | RF-18 | BR-03 |
-| C-13 | Adaptadores | Puertos + simuladores de identidad, registros, documentos, notificación (y calendario opcional) | Lógica de negocio | RNF-08 | — |
+| C-13 | Adaptadores | Puertos + simuladores de registros, documentos, notificación (y calendario opcional) | Lógica de negocio | RNF-08 | — |
 
 ## Reglas de dependencia (propuestas, sin verificación automática aún)
 1. Un módulo solo usa la **interfaz de aplicación** de otro; no lee sus tablas.

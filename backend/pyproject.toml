@@ -15,14 +15,16 @@ dependencies = [
     "alembic>=1.13",
     # SQLAlchemy is used ONLY by Alembic as the migration engine, never as an ORM (ADR-007).
     "sqlalchemy>=2.0",
-    # JWT HS256 only carries the subject id; roles are evaluated in the DB per request (ADR-007 / C-01)
+    # JWT HS256 carries subject/session identifiers only; roles are evaluated in the DB per request (ADR-007 / C-01)
     "pyjwt>=2.8",
+    "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2",
     "pgserver>=0.1.4",
+    "httpx>=0.27",
 ]
 
 [tool.pytest.ini_options]

@@ -14,7 +14,7 @@
 
 > **Corrida 2026-10-22.** 14 PASS. T-02 variante A: **55 activación primero / 45 rechazo primero**, 0 prohibidos; control B: **25/40**; variante C: **0/40** con 21 `GATE_VIOLATION`. T-16a..e: PASS. **Los conteos de orden varían entre corridas.**
 
-> **Lectura honesta.** "PASS" significa que *este PoC* se comportó como se diseñó en *esta* base de datos. No demuestra el producto, ni la capa HTTP, ni el rendimiento. No se capturaron pantallas porque no existe interfaz.
+> **Lectura honesta.** Los 14 PASS de esta cabecera son del PoC; no demuestran el producto, la capa HTTP ni el rendimiento. Las verificaciones del producto aparecen en su propia sección más abajo. La interfaz del PoC no existe; el frontend del producto se inspeccionó visualmente en un conjunto pequeño de pantallas, sin capturas archivadas.
 
 ## B. Executed
 
@@ -86,17 +86,29 @@ Resultados de la corrida 2026-10-22:
 | **T-16d** | PASS. Indicador `true` tras el rechazo, finalización denegada con `ACTIVATION_NONCOMPLIANT`; tras reentrega y aprobación, indicador `false`, confirmación y cierre `OK`, estado `CLOSED`. |
 | **T-16e** | PASS. Revisión desde `REQUIRED` → `INVALID_TRANSITION`, estado y auditoría intactos; control positivo desde `SUBMITTED` → `OK`. |
 
-### Backend — Fase 1 + incremento oportunidades/postulaciones (Executed)
+### Backend y demo local — Fase 1 + Sprint 1 + Sprint 2 + Sprint 3 (Executed)
 
 Ejecutado en `backend/` contra PostgreSQL real (pgserver, Python 3.12):
 
 | Ítem | Resultado |
 |---|---|
-| `pytest` (T-01/T-02/T-02b/T-04/T-08/T-16a..e portados + T-20..T-25) | **28 PASS** |
-| `alembic upgrade head` | OK |
-| `python -m app.seed` | OK |
+| `pytest -q` (T-01/T-02/T-02b/T-04/T-08/T-16a..e portados + T-20..T-30) | **45 PASS, 2 warnings** (clave JWT de prueba menor a la longitud recomendada) |
+| `npm run build` (`tsc -b && vite build`) | EXIT 0; 43 módulos compilados |
+| `docker compose up --build -d` | EXIT 0; imágenes de API y frontend reconstruidas |
+| Alembic en contenedor | `0002 (head)` |
 | `GET /health` | `{"status":"ok"}` |
-| Frontend `tsc -b && vite build` | bundler OK; genera `frontend/dist/` (pnpm advierte build-script de esbuild ignorado). Integración navegador↔API: NOT EXECUTED |
+| Flujo Sprint 3 vía HTTP, datos sintéticos | Política versionada → oportunidad/postulación/selección/aprobación → entrega PDF → revisión con motivo → listo para activar → `ACTIVE`; descarga autorizada validada como `%PDF-1.4` |
+| Revisión visual en navegador embebido | Login, panel de políticas y cola del revisor legal inspeccionados a viewport estrecho; no cubre todos los roles/rutas ni el flujo UI completo |
+
+El flujo HTTP añadió registros sintéticos de demo en la base local que ya estaba en ejecución. El comando de seed no se volvió a lanzar sobre esa base.
+
+### Hallazgo local — varias colocaciones activas para un estudiante
+
+Consulta de solo lectura del 2026-10-23: `student1@demo.local` (cuenta sintética `Student One`) tiene dos postulaciones `SELECTED` y dos colocaciones `ACTIVE`: `Pasantia Demo` (postulación 1 / colocación 1) y `HTTP smoke — Synthetic Internship` (postulación 3 / colocación 2). La bitácora registra selección, aprobación académica y activación para ambas. La segunda está identificada explícitamente como flujo HTTP de smoke; ambas pertenecen al conjunto de datos sintéticos de desarrollo. No se borró ni modificó ningún registro.
+
+El esquema solo hace único `placement.application_id`; no impone unicidad por estudiante. `select_application` bloquea la postulación seleccionada, sin consultar ni bloquear otras postulaciones/colocaciones de ese estudiante, y cada activación evalúa una colocación individual. Por tanto, el backend actualmente permite que más de una colocación del mismo estudiante llegue a `ACTIVE`, incluso mediante selecciones concurrentes sobre postulaciones diferentes.
+
+No hay una regla aprobada que limite a una las colocaciones activas por estudiante. BR-10 deja abierto el tope de cupos y OPEN-19 indica que no hay respaldo para bloquear conflictos entre colocaciones. La política de simultaneidad —incluido si se bloquean todas las prácticas activas o solo periodos de fechas solapados— requiere definición de producto antes de añadir una restricción. Este hallazgo no cambia la base de datos.
 
 ## C. Not executed
 
@@ -105,13 +117,12 @@ Ejecutado en `backend/` contra PostgreSQL real (pgserver, Python 3.12):
 | T-09 Pico (QS-05) | API HTTP, generador de carga, conjunto de datos de 12 000 estudiantes, entorno de demo |
 | T-10 Indisponibilidad de adaptadores (QS-07) | Puertos y simuladores con fallo a pedido |
 | T-11 Notificaciones y recordatorios | Worker y bandeja de salida |
-| T-12 Humo de despliegue | Contenedores y scripts de despliegue |
+| T-12 Humo de despliegue | **Parcial:** Compose inicia con éxito, Alembic está en `0002` y `/health` responde. Falta repetir sobre una base limpia y comprobar el recorrido completo desde cero. |
 | T-13 Comprensión de estado (QS-08) | Prototipo de UI y 5 participantes |
 | T-14 RLS como defensa en profundidad | Esquema con políticas de fila y evaluación con TI |
 | T-15 Fronteras de módulo | Herramienta de reglas de importación en el repositorio del producto, cuando exista |
 | T-04 variante concurrente | Un caso análogo a T-02 para `ConfirmCompletion` |
-| Integración frontend↔backend en navegador | Levantar `uvicorn` + `vite dev` y recorrer el flujo login→oportunidades→postulación manualmente |
-| `docker compose up` | Levantar db + api y comprobar `/health` desde el contenedor |
+| Integración frontend↔backend en navegador | La revisión visual fue parcial; falta recorrer el flujo completo desde login hasta cierre en UI y todos los roles. |
 | Medición de latencias (QS-03, QS-04) | Instrumentación |
 | Flujo completo SEQ-01 | Implementación de T1, T3, T5, T6, T9 y de las vistas de oportunidad/postulación |
-| Reejecución por el equipo | Correr `run_poc.py` en su entorno y registrar commit |
+| Integración institucional | Proveedor de documentos, IdP y políticas reales aún sin conectar/validar |

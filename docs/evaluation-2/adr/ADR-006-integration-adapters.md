@@ -6,11 +6,10 @@
 El RFP permite simular las integraciones con sistemas estudiantiles, de identidad, documentales y académicos (sec. 7 y 10) y exige operar de forma independiente de otros proyectos. RNF-07, RNF-08, R-002. La auditoría detectó listas de integraciones inconsistentes (AUD-18) y un calendario no respaldado por el RFP (AUD-19).
 
 ## Decision
-Se definen **puertos** (interfaces del dominio/aplicación) con un **adaptador simulado** por cada uno. Ningún módulo de dominio importa código de adaptador.
+Se definen **puertos** (interfaces del dominio/aplicación) con un **adaptador simulado** para integraciones externas. C-01 autentica cuentas locales dentro de DH-05, por lo que identidad no se trata como integración simulada. Ningún módulo de dominio importa código de adaptador.
 
 | Puerto | Propósito | En el RFP | Estado |
 |---|---|---|---|
-| `IdentityPort` (IF-ID) | Autenticar y resolver el sujeto | Sí (sec. 7) | Simulado |
 | `StudentRecordsPort` (IF-STU) | Programa, nivel, créditos, cursos aprobados para elegibilidad | Sí (estudiantes/académicos) | Simulado |
 | `DocumentRepositoryPort` (IF-DOC) | Guardar/recuperar archivos; el sistema conserva solo metadatos, estado y referencia | Sí (documentos) | Simulado |
 | `NotificationChannelPort` (IF-NTF) | Entregar notificaciones | No lo nombra; es necesario para RF-15 (**OPEN-15**) | Simulado / interno |
@@ -19,7 +18,6 @@ Se definen **puertos** (interfaces del dominio/aplicación) con un **adaptador s
 Reglas de fallo:
 - **Registros estudiantiles caídos:** la elegibilidad no se puede evaluar → estado explícito de "no evaluada"; **nunca** se asume elegible. Los datos de entrada usados se **guardan** con el resultado.
 - **Notificación fallida:** no revierte el comando de negocio; la notificación se persiste (bandeja de salida) y el worker reintenta.
-- **Identidad caída:** impide nuevos ingresos; las sesiones vigentes siguen hasta expirar.
 - **Repositorio de documentos caído:** se puede registrar el estado, pero no adjuntar archivos; no se aprueba un documento sin referencia válida.
 Cada adaptador tiene **pruebas de contrato** compartidas entre el simulado y cualquier implementación futura.
 
