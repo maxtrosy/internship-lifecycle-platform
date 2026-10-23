@@ -72,10 +72,18 @@ def list_for_opportunity(cur: psycopg.Cursor, subj: dict, opportunity_id: int) -
            WHERE a.opportunity_id = %s ORDER BY a.id""",
         (opportunity_id,),
     ).fetchall()
-    # BR-13: never expose the student's credits/level to employers.
+    # BR-13: employers receive only the eligibility decision, not student inputs
+    # or evaluator reasons that may reveal credits, level, or completed courses.
     for r in rows:
-        if r["eligibility_result"] and "inputs" in r["eligibility_result"]:
-            r["eligibility_result"] = {k: v for k, v in r["eligibility_result"].items() if k != "inputs"}
+        eligibility = r["eligibility_result"]
+        if isinstance(eligibility, dict):
+            r["eligibility_result"] = (
+                {"result": eligibility["result"]}
+                if isinstance(eligibility.get("result"), str)
+                else None
+            )
+        else:
+            r["eligibility_result"] = None
     return rows
 
 
@@ -87,8 +95,13 @@ def select_application(ctx: CommandContext, application_id: int, details: dict) 
     opp = ctx.execute("SELECT * FROM opportunity WHERE id=%s", (app["opportunity_id"],)).fetchone()
     if not _require_employer(subj, opp["host_org_id"]):
         raise Forbidden("only the host org member may select")
+    if opp["state"] != "PUBLISHED":
+        raise BusinessError("OPPORTUNITY_NOT_PUBLISHED", opp["state"])
     if app["state"] != "SUBMITTED":
         raise BusinessError("INVALID_TRANSITION", app["state"])
+    eligibility = app["eligibility_result"]
+    if not isinstance(eligibility, dict) or eligibility.get("result") != "ELIGIBLE":
+        raise BusinessError("APPLICATION_NOT_ELIGIBLE")
 
     pid = ctx.execute(
         "INSERT INTO placement(application_id, state) VALUES (%s, 'PENDING_ACADEMIC_APPROVAL') RETURNING id",

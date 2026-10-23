@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dh05-demo-postgres-local
+      POSTGRES_DB: dh05_demo
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - dh05_demo_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dh05_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://postgres:dh05-demo-postgres-local@db:5432/dh05_demo
+      APP_ENV: demo
+      APP_DB_ROLE: app_user
+      JWT_SECRET: dh05-demo-only-secret-never-use-for-shared-environments-2026
+      JWT_TTL_MINUTES: "15"
+      APP_ALLOWED_ORIGINS: http://localhost:5174,http://127.0.0.1:5174
+      PASSWORD_RESET_DELIVERY: disabled
+      DEMO_PASSWORD: Demo-Only-2026!
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:5174:80"
+    depends_on:
+      - api
+
+volumes:
+  dh05_demo_data:
+    name: dh05-demo-postgres-data

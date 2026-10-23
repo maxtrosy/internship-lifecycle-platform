@@ -15,10 +15,10 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | RF-17 | QS-06 | AD-01 | ADR-003 | C-06, C-08 | V-STATE-PLC T7, T8 | BR-05, BR-17, BR-18 | **T-04** (EXECUTED; variante concurrente NOT EXECUTED); T-16b/c/d (EXECUTED 2026-10-22) |
 | RF-18 | (QS-05) | AD-07 | ADR-002 | C-12 | V-COMP | BR-03 | NOT EXECUTED |
 | RF-19 | QS-04 | AD-04 | ADR-005 | C-11 | V-DOM | BR-06, BR-07 | **T-05, T-07** (EXECUTED) |
-| RF-20 | QS-02 | AD-03 | ADR-004 | C-02 | SEQ-04, [security](design/security.md) | BR-03, BR-13 | **T-03** (EXECUTED, sin HTTP) |
+| RF-20 | QS-02 | AD-03 | ADR-004 | C-02 | SEQ-04, [security](design/security.md) | BR-03, BR-13 | **T-03 + T-34** (domain + HTTP role/resource checks; see results) |
 | RNF-01 / RNF-02 | QS-05 | AD-07 | ADR-002 | CT-2, CT-4 | V-CONT, V-DEP | — | T-09 NOT EXECUTED |
 | RNF-03 | QS-03 | AD-02 | ADR-001 | C-05 | V-COMP | BR-12 | **T-06** |
-| RNF-04 | QS-02 | AD-03 | ADR-004 | C-02 | security | BR-03, BR-13 | **T-03** |
+| RNF-04 | QS-02 | AD-03 | ADR-004 | C-02 | security | BR-03, BR-13 | **T-03 + T-34** |
 | RNF-05 | QS-04 | AD-04 | ADR-005 | C-11 | V-DOM | BR-06, BR-07 | **T-07** |
 | RNF-07 | — | AD-05 | ADR-007 | C-01 | V-CTX | — | **T-31** (autenticación local); SSO institucional OPEN-21 |
 | RNF-08 | QS-07 | AD-05 | ADR-006 | C-13 | V-COMP | — | T-10 NOT EXECUTED |
@@ -81,7 +81,16 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | QS-07 | T-10 | **NOT EXECUTED** |
 | QS-08 | T-13 | **NOT EXECUTED** |
 
-**Backend (ADR-007):** T-31 cubre autenticación, sesión y recuperación local; T-20..T-30 cubren rutas y flujos de negocio. El conteo actualizado, la migración 0003 y la verificación Docker de base limpia se registran en [validation-results.md](validation/validation-results.md).
+**Backend (ADR-007):** T-31 cubre autenticación, sesión y recuperación local; T-20..T-30 cubren rutas y flujos de negocio; T-34 cruza acciones HTTP con roles y relaciones. T-02 ahora incluye el caso T-02/T-02c con la migración 0004 que serializa el rechazo documental y la activación. T-35 recorre el flujo principal por navegador; T-12 prepara una base de demo aislada. Evidencia, alcance y límites en [validation-results.md](validation/validation-results.md).
+
+## D.5 Evidencia añadida en el incremento de preparación final
+
+| Prueba | Requisitos | Alcance | Evidencia |
+|---|---|---|---|
+| T-02 (producto) | RF-09, BR-01 | Rechazo documental frente a activación bajo concurrencia en PostgreSQL | `backend/tests/test_lifecycle.py`; migración `0004_serialize_checklist_and_placement_gates.py` |
+| T-34 | RF-20, RNF-04, BR-03, BR-13 | Negativas por estudiante, organización anfitriona, supervisor asignado, programa y actor legal/EC en el límite HTTP | `backend/tests/test_http_authorization.py`; [matriz endpoint/rol/relación](validation/http-authorization-matrix.md) |
+| T-35 | RF-01..RF-09, RF-20 | Login, ruta protegida, oportunidad, postulación, selección, aprobación académica, rechazo/reentrega documental y activación por roles mediante Chromium | `frontend/e2e/lifecycle.spec.ts`; resultado final en [validation-results.md](validation/validation-results.md) |
+| T-12 | RNF-01, RNF-02 | Arranque, migración y seed reproducible en PostgreSQL aislado de demo | [runbook](validation/demo-runbook.md); Compose `dh05-demo`, DB `dh05_demo` |
 
 ## D.4 Componente → Responsabilidad y razón de existir
 

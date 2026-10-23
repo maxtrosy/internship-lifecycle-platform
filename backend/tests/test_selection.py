@@ -82,6 +82,39 @@ def test_t26_repeated_selection_rejected(env):
     assert ei.value.code == "INVALID_TRANSITION"
 
 
+def test_t26_selection_requires_opportunity_still_published(env):
+    U, oid = _setup(env)
+    aid = _aid(env, oid)
+    env.admin.execute("UPDATE opportunity SET state='DRAFT' WHERE id=%s", (oid,))
+
+    with db.command(U["hm_alfa"]) as ctx:
+        with pytest.raises(BusinessError) as ei:
+            apps.select_application(ctx, aid, _details())
+
+    assert ei.value.code == "OPPORTUNITY_NOT_PUBLISHED"
+    assert env.admin.execute("SELECT state FROM application WHERE id=%s", (aid,)).fetchone()["state"] == "SUBMITTED"
+    assert env.admin.execute("SELECT count(*) AS n FROM placement WHERE application_id=%s", (aid,)).fetchone()["n"] == 0
+
+
+def test_t26_selection_requires_confirmed_eligible_result(env):
+    from psycopg.types.json import Jsonb
+
+    U, oid = _setup(env)
+    aid = _aid(env, oid)
+    env.admin.execute(
+        "UPDATE application SET eligibility_result=%s WHERE id=%s",
+        (Jsonb({"result": "NOT_ELIGIBLE", "reasons": ["credits 90 < 100"]}), aid),
+    )
+
+    with db.command(U["hm_alfa"]) as ctx:
+        with pytest.raises(BusinessError) as ei:
+            apps.select_application(ctx, aid, _details())
+
+    assert ei.value.code == "APPLICATION_NOT_ELIGIBLE"
+    assert env.admin.execute("SELECT state FROM application WHERE id=%s", (aid,)).fetchone()["state"] == "SUBMITTED"
+    assert env.admin.execute("SELECT count(*) AS n FROM placement WHERE application_id=%s", (aid,)).fetchone()["n"] == 0
+
+
 def test_t27_academic_approve(env):
     U, oid = _setup(env)
     aid = _aid(env, oid)

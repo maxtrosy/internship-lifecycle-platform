@@ -41,11 +41,17 @@ python -m uvicorn app.main:app --reload
 ```
 
 ## Pruebas
-Las pruebas usan `pgserver` (Python 3.12) si no hay `DATABASE_URL`, o el PostgreSQL indicado:
+Las pruebas usan `pgserver` (Python 3.12) si no hay `DATABASE_URL`. Si se configura una URL,
+el nombre de la base debe identificarla como base de pruebas (`*_test`, `*_tests`, `test_*` o
+equivalente); la suite limpia sus tablas con `TRUNCATE` antes de cada prueba y rechaza nombres
+ambiguos como `postgres` o `dh05_demo` para evitar borrar datos compartidos.
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path .deps).Path
-python -m pytest
+python -m pytest -q
 ```
 
-Los resultados funcionales están **NOT EXECUTED** en esta entrega (el sandbox no levanta PostgreSQL); el equipo debe correr `pytest`.
+Python 3.12 es requerido. En el equipo auditado, el Python local es 3.14 y las extensiones de
+`.deps` son para CPython 3.12; la suite se ejecutó en un contenedor Python 3.12 con una base
+temporal `dh05_release_test`. El resultado final de esta auditoría está en
+[`docs/evaluation-2/final-readiness-audit.md`](../docs/evaluation-2/final-readiness-audit.md).

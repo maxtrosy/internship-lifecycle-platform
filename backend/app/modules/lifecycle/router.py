@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app import db
 from app.deps import requires
+from app.errors import BusinessError
 from app.modules import audit as audit_service
 from app.modules import authz
 from app.modules.lifecycle import service as lifecycle
@@ -72,9 +73,22 @@ async def submit_document(pid: int, item_id: int, request: Request,
                           subject_id: int = Depends(requires("document:submit"))) -> dict:
     filename = request.query_params.get("filename", "")
     content_type = request.headers.get("content-type", "application/octet-stream")
-    content = await request.body()
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared_size = int(content_length)
+        except ValueError:
+            declared_size = 0
+        if declared_size > lifecycle.MAX_DOCUMENT_BYTES:
+            raise BusinessError("DOCUMENT_TOO_LARGE", {"max_bytes": lifecycle.MAX_DOCUMENT_BYTES})
+
+    content = bytearray()
+    async for chunk in request.stream():
+        if len(content) + len(chunk) > lifecycle.MAX_DOCUMENT_BYTES:
+            raise BusinessError("DOCUMENT_TOO_LARGE", {"max_bytes": lifecycle.MAX_DOCUMENT_BYTES})
+        content.extend(chunk)
     with db.command(subject_id) as ctx:
-        return lifecycle.submit_document(ctx, pid, item_id, filename, content_type, content)
+        return lifecycle.submit_document(ctx, pid, item_id, filename, content_type, bytes(content))
 
 
 @router.get("/placements/{pid}/items/{item_id}/submissions")

@@ -14,7 +14,7 @@ import re
 import psycopg
 
 from app.db import CommandContext
-from app.errors import BusinessError, NotFound
+from app.errors import BusinessError, Forbidden, NotFound
 from app.modules.audit import service as audit
 from app.modules.authz import service as authz
 from app.modules.policies import service as policies
@@ -299,7 +299,7 @@ def activation_status(cur, subj: dict, pid: int) -> dict:
 
 def list_documents_pending(cur, subj: dict) -> list[dict]:
     if not any(r["role"] == "LEGAL_REVIEWER" for r in subj["roles"]):
-        raise BusinessError("FORBIDDEN")
+        raise Forbidden("only legal reviewers may list pending documents")
     return cur.execute(
         """SELECT DISTINCT pl.id, pl.state, u.display_name, p.code AS program_code, o.title AS opportunity_title
            FROM checklist_item ci JOIN placement pl ON pl.id = ci.placement_id
@@ -316,7 +316,7 @@ def list_documents_pending(cur, subj: dict) -> list[dict]:
 
 def list_pending_activation(cur, subj: dict) -> list[dict]:
     if not any(r["role"] == "EXPERIENTIAL_COORDINATOR" for r in subj["roles"]):
-        raise BusinessError("FORBIDDEN")
+        raise Forbidden("only experiential coordinators may list pending activation")
     return cur.execute(
         """SELECT pl.id, pl.state, u.display_name, p.code AS program_code, o.title AS opportunity_title
            FROM placement pl JOIN application a ON a.id = pl.application_id

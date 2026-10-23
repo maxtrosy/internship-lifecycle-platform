@@ -1,5 +1,21 @@
 # Resultados de validación
 
+## Incremento de cierre — ejecución 2026-10-23
+
+Estos resultados corresponden al código actual del repositorio y no sustituyen los registros históricos del PoC que siguen abajo.
+
+| Evidencia | Comando/entorno | Resultado real |
+|---|---|---|
+| Suite backend, incluye T-31, T-34 y ciclo de vida | `docker compose -p dh05-tests -f backend/docker-compose.test.yml run --rm tests` (PostgreSQL efímero separado, Python 3.12) | **65 passed, 1 warning, 68.75 s**. Advertencia: deprecación del TestClient de Starlette/httpx; sin fallas. El proyecto de test se desmontó después. |
+| Foco HTTP y carrera T-02 | `pytest -q tests/test_http_authorization.py tests/test_lifecycle.py -k 'http_authorization_matrix or t02_reject_vs_activate'` | **2 passed, 63 deselected, 1 warning, 29.41 s**. |
+| Suite frontend | `pnpm run test` en `frontend/` | **6 passed** en 2 archivos (eligibilidad y etiquetas UI). |
+| Compilación frontend | `pnpm run build` | **EXIT 0**: `tsc -b && vite build`; 45 módulos. |
+| E2E Chromium (T-35) | `E2E_BASE_URL=http://localhost:5174 pnpm run test:e2e` contra `dh05-demo` limpio | Resultado final asentado tras la corrida reproducible; una corrida previa detectó y permitió corregir selectores del propio test. No se reporta como validado hasta que la última corrida finalice en PASS. |
+| Demo limpia (T-12) | `scripts/Start-Demo.ps1 -Reset` con confirmación explícita; `docker-compose.demo.yml` | **PASS**: Compose aislado `dh05-demo`, base `dh05_demo`, volumen `dh05-demo-postgres-data`, Alembic `0004 (head)`, `/health` OK y seed verificó 14 cuentas. Los puertos son 5433/8001/5174 en loopback. |
+| Preservación de datos locales | Inspección de destino de Compose/test y script de seed | Pruebas backend usaron DB sin volumen; demo limpia solo usó `dh05-demo`. No se conectó ni se aplicó reset/seed al Compose local existente. No se borraron ni editaron registros del conjunto local. |
+
+La suite del backend prueba autorización a nivel HTTP para cruces de titularidad, organización, supervisor, programa y actores institucionales. La matriz documenta todos los endpoints; E2E cubre un camino principal por los roles incluidos, no cada endpoint ni todos los permisos posibles.
+
 ## Cabecera de evidencia
 
 | Campo | Valor |

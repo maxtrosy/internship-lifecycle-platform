@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app import db
 from app.errors import BusinessError, Forbidden
+from app.main import app
 from app.modules import authz
 from app.modules.applications import service as apps
 from app.modules.lifecycle import service as lifecycle
 from app.modules.opportunities import service as opps
 from app.modules.policies import service as policies
-from tests.conftest import seed_base
+from tests.conftest import TEST_PASSWORD, seed_base
 
 
 def _setup(env, kinds=("DOC_INSURANCE",)):
@@ -147,6 +149,37 @@ def test_document_submission_requires_valid_file_and_review_reason(env):
         with pytest.raises(BusinessError) as ei:
             lifecycle.review_document(ctx, pid, item, "REJECTED", "  ")
     assert ei.value.code == "DOCUMENT_REVIEW_REASON_REQUIRED"
+
+
+def test_http_upload_rejects_oversized_declared_and_streamed_bodies(env):
+    U, pid = _setup(env)
+    item = _item(env, pid, "DOC_INSURANCE")
+    origin = "http://localhost:5173"
+
+    with TestClient(app, base_url=origin) as client:
+        login = client.post("/auth/login", json={"identifier": "s1", "password": TEST_PASSWORD},
+                            headers={"Origin": origin})
+        assert login.status_code == 200
+
+        response = client.post(
+            f"/placements/{pid}/items/{item}/submit?filename=large.pdf",
+            content=b"%PDF-" + b"x" * lifecycle.MAX_DOCUMENT_BYTES,
+            headers={"Origin": origin, "Content-Type": "application/pdf"},
+        )
+        streamed_response = client.post(
+            f"/placements/{pid}/items/{item}/submit?filename=streamed-large.pdf",
+            content=iter((b"%PDF-", b"x" * lifecycle.MAX_DOCUMENT_BYTES)),
+            headers={"Origin": origin, "Content-Type": "application/pdf"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "DOCUMENT_TOO_LARGE"
+    assert streamed_response.status_code == 409
+    assert streamed_response.json()["error"] == "DOCUMENT_TOO_LARGE"
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM document_submission WHERE checklist_item_id=%s", (item,)
+    ).fetchone()["n"] == 0
+    assert env.admin.execute("SELECT status FROM checklist_item WHERE id=%s", (item,)).fetchone()["status"] == "REQUIRED"
 
 
 def test_document_download_is_limited_to_student_and_legal(env):

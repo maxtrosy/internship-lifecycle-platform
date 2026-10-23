@@ -276,4 +276,55 @@ CREATE INDEX IF NOT EXISTS auth_password_reset_user_active_idx
 GRANT SELECT, INSERT, UPDATE, DELETE ON auth_session, auth_password_reset TO app_user;
 """
 
-CURRENT_SCHEMA = SCHEMA + UPGRADE_0002_SQL + UPGRADE_0003_SQL
+UPGRADE_0004_SQL = """
+-- Serialize activation/completion gates with changes to mandatory checklist state.
+CREATE OR REPLACE FUNCTION trg_placement_gate() RETURNS trigger AS $$
+DECLARE n int;
+BEGIN
+  IF NEW.state IS DISTINCT FROM OLD.state THEN
+    -- Acquire the parent row before reading checklist/evidence requirements. The
+    -- checklist trigger below takes the same lock when its state changes.
+    PERFORM 1 FROM placement WHERE id = NEW.id FOR UPDATE;
+    IF NEW.state = 'ACTIVE' THEN
+      IF OLD.state <> 'DOCUMENTATION_PENDING' THEN
+        RAISE EXCEPTION 'GATE: illegal transition % -> ACTIVE', OLD.state; END IF;
+      IF NOT NEW.activation_requirements_instantiated THEN
+        RAISE EXCEPTION 'GATE: activation requirements not instantiated'; END IF;
+      SELECT count(*) INTO n FROM checklist_item
+        WHERE placement_id = NEW.id AND mandatory AND status <> 'APPROVED';
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory activation requirement(s) not approved', n; END IF;
+    ELSIF NEW.state = 'COMPLETED' THEN
+      IF OLD.state <> 'ACTIVE' THEN RAISE EXCEPTION 'GATE: illegal transition % -> COMPLETED', OLD.state; END IF;
+      SELECT count(*) INTO n FROM checklist_item
+        WHERE placement_id = NEW.id AND mandatory AND status <> 'APPROVED';
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory activation requirement(s) not approved', n; END IF;
+      IF NOT NEW.completion_requirements_instantiated THEN
+        RAISE EXCEPTION 'GATE: completion requirements not instantiated'; END IF;
+      SELECT count(*) INTO n FROM completion_requirement
+        WHERE placement_id = NEW.id AND mandatory AND NOT satisfied;
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory completion requirement(s) unsatisfied', n; END IF;
+    ELSIF NEW.state = 'CLOSED' THEN
+      IF OLD.state <> 'COMPLETED' THEN RAISE EXCEPTION 'GATE: illegal transition % -> CLOSED', OLD.state; END IF;
+      SELECT count(*) INTO n FROM checklist_item
+        WHERE placement_id = NEW.id AND mandatory AND status <> 'APPROVED';
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory activation requirement(s) not approved', n; END IF;
+      SELECT count(*) INTO n FROM completion_requirement
+        WHERE placement_id = NEW.id AND mandatory AND NOT satisfied;
+      IF n > 0 THEN RAISE EXCEPTION 'GATE: % mandatory completion requirement(s) unsatisfied', n; END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+CREATE FUNCTION trg_checklist_parent_lock() RETURNS trigger AS $$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    PERFORM 1 FROM placement WHERE id = NEW.placement_id FOR UPDATE;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_checklist_parent_lock BEFORE UPDATE OF status ON checklist_item
+  FOR EACH ROW EXECUTE FUNCTION trg_checklist_parent_lock();
+"""
+
+CURRENT_SCHEMA = SCHEMA + UPGRADE_0002_SQL + UPGRADE_0003_SQL + UPGRADE_0004_SQL

@@ -1,6 +1,26 @@
 # Estado del proyecto
 
-**Fecha de corte:** 2026-10-22. **Regla:** nada se marca como completado si solo fue diseñado.
+**Fecha de corte:** 2026-10-23. **Regla:** nada se marca como completado si solo fue diseñado. El estado resumido aquí prevalece sobre los rótulos históricos más abajo.
+
+## Estado actual de preparación final
+
+### Implementado y validado
+- Autenticación local y roles; matriz HTTP de rutas y relaciones con pruebas negativas: `backend/tests/test_http_authorization.py` (T-34).
+- Compuerta de activación/rechazo serializada a nivel PostgreSQL mediante migración `0004`; suite backend actual: 65 pruebas aprobadas.
+- Entorno de demostración separado, Alembic hasta `0004`, health check y seed de 14 cuentas sintéticas: [runbook](validation/demo-runbook.md).
+- Pruebas unitarias frontend y compilación TypeScript/Vite: 6 pruebas aprobadas; `tsc -b && vite build` correcto.
+- Flujo principal E2E Chromium: resultado y límites asentados en [validation-results.md](validation/validation-results.md).
+
+### Implementado sin E2E
+- Rutas/vistas y acciones frontend fuera del recorrido explícito de Chromium: supervisión docente/lugar, mensajería, evaluación, paneles, otras variantes de programa/organización y revisión visual en browsers distintos.
+- Flujos de cierre, horas y evaluación cuentan con pruebas de backend donde indicadas, pero no fueron incluidos en el E2E UI.
+
+### Pendiente de decisión institucional
+- OPEN-05 (actor y proceso de revisión/publicación); OPEN-13 (cupos); OPEN-19 (prácticas simultáneas); OPEN-01/02/06/09/14/20 (reglas, campos y actores documentales/externos); duplicados tras retiro y selección alternativa.
+- Para OPEN-19 siguen abiertas las opciones: bloquear cualquier segunda colocación activa, bloquear solo fechas solapadas o fijar máximo configurable. No se aplica límite automáticamente ni se modificaron registros sintéticos.
+
+### Bloqueado por integración externa
+- SSO institucional/IdP, envío real de recuperación por correo y repositorio de documentos externo. No existe configuración de proveedor en el repositorio; no se presentan como integraciones validadas.
 
 ## Completado
 | Qué | Evidencia |

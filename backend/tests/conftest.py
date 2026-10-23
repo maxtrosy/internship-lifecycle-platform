@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import pathlib
+import re
 import sys
 import tempfile
 import threading
@@ -11,6 +12,7 @@ import time
 
 import psycopg
 import pytest
+from psycopg.conninfo import conninfo_to_dict
 from psycopg.types.json import Jsonb
 from psycopg.rows import dict_row
 
@@ -22,12 +24,24 @@ from migrations.schema_sql import CURRENT_SCHEMA as SCHEMA  # noqa: E402
 
 TEST_PASSWORD = "Test-Only-Password-2026!"
 _TEST_PASSWORD_HASH = security.hash_password(TEST_PASSWORD)
+_TEST_DATABASE_NAME = re.compile(r"(?:^|[_-])tests?(?:$|[_-]|\d)", re.IGNORECASE)
+
+
+def is_test_database_url(url: str) -> bool:
+    """The suite truncates its schema, so refuse ambiguous/shared database names."""
+    database_name = conninfo_to_dict(url).get("dbname", "")
+    return bool(_TEST_DATABASE_NAME.search(database_name))
 
 
 class DbEnv:
     def __init__(self):
         url = os.environ.get("DATABASE_URL")
         if url:
+            if not is_test_database_url(url):
+                raise RuntimeError(
+                    "Refusing to run destructive tests against a database not named as a test DB. "
+                    "Use a disposable database with 'test' in its name; the suite truncates its tables."
+                )
             self.uri = url
             self.owned = False
         else:

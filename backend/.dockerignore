@@ -1,6 +1,5 @@
 .deps
 __pycache__
 *.pyc
-tests
 .dockerignore
 .env
