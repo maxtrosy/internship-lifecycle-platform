@@ -279,11 +279,11 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | OPEN-14 | Documento rechazado **después** de activar: **propuesta, pendiente de cliente** (la colocación sigue `Active`, indicador derivado `activation_noncompliant` y compuerta de cierre; incluye la revocación `APPROVED → REJECTED`; T-02 variante A: 55 activación primero / 45 rechazo primero, 0 prohibidos; los conteos de orden varían entre corridas) | hallazgo de T-02 | Indicador derivado y compuerta de cierre, sin estado nuevo |
 | OPEN-15 | Canal y cadencia de notificaciones | RF-15 | Adaptador de notificación |
 | OPEN-16 | Umbrales de disponibilidad y capacidad | RNF-12, ASM-009 | QS-05, despliegue |
-| OPEN-17 | Tecnología concreta (lenguaje, framework, BD) aún no elegida; **no existe** modelo de dominio ni código previo, así que este paquete contiene la primera versión del modelo | ASM-003B (cita un documento inexistente) | Todo el modelo; el equipo debe revisarlo y adoptarlo |
+| OPEN-17 | Tecnología concreta: **propuesta de stack en ADR-007** (Python 3.12 / FastAPI / PostgreSQL 16), **pendiente de adopción** por el equipo; el modelo de dominio de este paquete sigue siendo la primera versión a revisar | ASM-003B (cita un documento inexistente) | Todo el modelo; el equipo debe revisarlo y adoptarlo |
 | OPEN-18 | Rol "Administrador": ¿quién configura políticas y administra? | US-027/029 | Roles |
 | OPEN-19 | Conflicto de recursos entre colocaciones | CL-013, PT-005 | Excluido del diseño |
 | OPEN-20 | Qué se almacena de cada documento (metadatos + referencia) | RFP sec. 10 | Modelo de datos |
-| OPEN-21 | Autenticación de usuarios **externos** (el RFP solo fija la de institucionales) | RFP sec. 7 | Puerto de identidad externo |
+| OPEN-21 | Autenticación de usuarios **externos**: **propuesta de invitaciones con IdP simulado** (ADR-007 / C-01), pendiente de validación | RFP sec. 7 | Puerto de identidad externo |
 
 **Elementos `NOT EXECUTED`:** QS-05 (pico), QS-07 (indisponibilidad de integración), QS-08 (comprensión de estado), T-09..T-14 del [plan](validation/validation-plan.md), la variante concurrente de T-04, medición de latencia de T-06 y reconstrucción de historial, pruebas de adaptadores y de arquitectura, humo de despliegue.
 

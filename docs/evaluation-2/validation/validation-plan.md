@@ -35,6 +35,14 @@ Objetivo: demostrar que las decisiones arquitectónicas son razonables, **sin in
 | T-13 | Comprensión de estado (QS-08) | 5 participantes, prototipo de UI | Tareas "¿en qué estado estoy y qué sigue?" | ≥ 4 de 5 aciertos | — | **NOT EXECUTED** |
 | T-14 | RLS como defensa en profundidad (ADR-004) | Esquema con políticas de fila | Repetir T-03 por SQL directo | Mismos resultados | — | **NOT EXECUTED** |
 | T-15 | Fronteras de módulo (ADR-002) | Herramienta de reglas de importación | Introducir dependencia prohibida | La verificación falla | — | **NOT EXECUTED** |
+| **T-20** | Rutas sin acción declarada (R-012) | `backend/app/main.py` + `app.routes` | Enumerar rutas y exigir `requires(action)` en cada una (excepto exentas) | Ninguna ruta sin acción | PASS | **EXECUTED — PASS** |
+| **T-21** | Token sin roles / cambio de rol efectivo en la siguiente solicitud (C-01) | `backend/tests/test_identity.py` | Emitir JWT, mutar `role_assignment`, releer sujeto | El token solo lleva `sub`; los roles se leen en BD | PASS | **EXECUTED — PASS** |
+| **T-22** | Invitación expirada / reutilizada / de otra organización (OPEN-21) | `backend/tests/test_invitations.py` | Crear/aceptar invitaciones | `INVITATION_EXPIRED`, `INVITATION_USED`; 404 sin relación | PASS | **EXECUTED — PASS** |
+| **T-23** | Fronteras de módulo (ADR-002/ADR-007) | chequeo AST en `backend/tests/test_module_boundaries.py` | Importar adaptadores o archivos no públicos entre módulos | El chequeo falla | PASS | **EXECUTED — PASS** |
+| **T-24** | Oportunidades: creación y listado por rol/relación (C-03) | `backend/tests/test_opportunities.py` | Crear/listar con `HOST_ORG_MEMBER`, `PROGRAM_COORDINATOR` | Creación permitida/denegada; listado filtrado por relación | PASS | **EXECUTED — PASS** |
+| **T-25** | Postulaciones con elegibilidad (C-04/C-05) | `backend/tests/test_applications.py` | Crear política, postular | `ELIGIBLE`/`INELIGIBLE`; `OPPORTUNITY_NOT_PUBLISHED`; `NO_POLICY_IN_EFFECT`; no-estudiante denegado | PASS | **EXECUTED — PASS** |
+
+> **Backend (Fase 1 + incremento):** los tests del PoC T-01, T-02, T-02b, T-04, T-08 y T-16a..e se portaron a `backend/tests/` y se ejecutaron contra el código de `backend/app`; junto con T-20..T-25 dan **28 PASS**. Migración `alembic upgrade head`, `app.seed` y `GET /health` verificados.
 
 ## 2. Trazabilidad requisito → prueba
 
@@ -48,6 +56,12 @@ Objetivo: demostrar que las decisiones arquitectónicas son razonables, **sin in
 | T-07 | RF-19, RNF-05 | BR-06 | QS-04 | ADR-005 |
 | T-08 | RF-09, RF-11 | BR-02 | QS-01 | ADR-003 |
 | T-16a..T-16e | RF-09, RF-17 | BR-14, BR-18 | QS-01, QS-06 | ADR-003 |
+| T-20 | RNF-09 | — | — | ADR-007 |
+| T-21 | RNF-07, RF-20 | BR-03 | — | ADR-007 |
+| T-22 | RF-20 | BR-03, BR-13 | QS-02 | ADR-007 |
+| T-23 | RNF-09 | — | — | ADR-002, ADR-007 |
+| T-24 | RF-01..RF-04 | BR-03 | QS-02 | ADR-007 |
+| T-25 | RF-05, RF-06 | BR-08, BR-12 | QS-03 | ADR-001, ADR-007 |
 | T-09 | RNF-02, RNF-12 | — | QS-05 | ADR-002 |
 | T-10 | RNF-08 | — | QS-07 | ADR-006 |
 

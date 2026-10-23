@@ -81,6 +81,8 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | QS-07 | T-10 | **NOT EXECUTED** |
 | QS-08 | T-13 | **NOT EXECUTED** |
 
+**Fase 1 (backend, ADR-007):** los tests del PoC se portaron a `backend/tests/` (T-01, T-02, T-02b, T-04, T-08, T-16a..e) y se agregaron T-20 (rutas con acción declarada), T-21 (token sin roles), T-22 (invitaciones), T-23 (fronteras de módulo), T-24 (oportunidades) y T-25 (postulaciones con elegibilidad). **EXECUTED — 28 PASS** (pytest), más `alembic upgrade head`, `app.seed` y `GET /health` verificados.
+
 ## D.4 Componente → Responsabilidad y razón de existir
 
 | Componente | Responsabilidad | **¿Por qué existe?** (requisito / driver / ADR) |

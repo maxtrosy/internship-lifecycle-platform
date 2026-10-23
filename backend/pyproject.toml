@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dh05-backend"
+version = "0.1.0"
+description = "DH-05 placement lifecycle API (Phase 1: cross-cutting foundations)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    # SQLAlchemy is used ONLY by Alembic as the migration engine, never as an ORM (ADR-007).
+    "sqlalchemy>=2.0",
+    # JWT HS256 only carries the subject id; roles are evaluated in the DB per request (ADR-007 / C-01)
+    "pyjwt>=2.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pgserver>=0.1.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "db: tests that need a real PostgreSQL instance (pgserver or DATABASE_URL)",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "migrations*"]
+
+[tool.ruff]
+# not required in Phase 1; kept as a placeholder for linting
+line-length = 100

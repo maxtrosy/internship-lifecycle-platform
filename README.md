@@ -34,7 +34,28 @@
 | **NOT EXECUTED** | Pico (QS-05), adaptadores (QS-07), usabilidad (QS-08), T-09..T-15, variante concurrente de T-04, despliegue, API, UI |
 | **Abierto** | 21 elementos `OPEN` (ver el documento principal §11) |
 
+## Ejecutar todo con un comando (Docker)
+
+Requisitos: Docker con el daemon corriendo (Docker Desktop).
+
+```powershell
+docker compose up --build
+```
+
+Esto levanta tres servicios definidos en [`docker-compose.yml`](docker-compose.yml):
+
+| Servicio | Descripción | URL |
+|---|---|---|
+| `db` | PostgreSQL 16 | `localhost:5432` |
+| `api` | FastAPI (corre `alembic upgrade head` al arrancar) | `http://localhost:8000` |
+| `frontend` | React (build de Vite servido por nginx, proxyea `/auth`, `/opportunities`, … a `api`) | `http://localhost:5173` |
+
+Al terminar: `docker compose down`.
+
+> Estado: los servicios `db`/`api`/`frontend` están definidos y el build del frontend se verificó con `vite build`; el levantamiento completo vía `docker compose up` está **NOT EXECUTED** (el daemon de Docker no estaba corriendo en esta sesión).
+
 ## Limitaciones conocidas
+
 - No existía `domain-model.md` ni código previo (ASM-003B cita un documento inexistente): el modelo de este paquete es la **primera versión** y la tecnología concreta aún no está elegida (OPEN-17). El equipo debe revisarlo y adoptarlo como propio.
 - Ninguna decisión está validada con el cliente ni con Servicios de TI.
 - La evidencia ejecutada fue reproducida por el equipo el 2026-10-22 (commit `dcda267`); sigue siendo un PoC aislado.

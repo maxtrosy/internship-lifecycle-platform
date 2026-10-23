@@ -2,9 +2,10 @@
 .pocdeps/
 .pocdata/
 .piptmp/
+.deps/
+.env
 
 __pycache__/
 *.pyc
-
-__pycache__/
-*.pyc
+node_modules/
+dist/

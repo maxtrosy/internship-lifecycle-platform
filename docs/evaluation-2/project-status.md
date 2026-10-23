@@ -9,6 +9,8 @@
 | Auditoría de coherencia de la Evaluación 1 | [`evaluation-1-audit.md`](evaluation-1-audit.md): 34 hallazgos con decisión |
 | **Borrador** de la documentación de arquitectura y diseño (este paquete) | Documentos de `docs/evaluation-2/` — **diseño, no implementación** |
 | PoC de la rebanada crítica ejecutado por el equipo | `prototype/evidence/results.json`: **14 PASS, 0 FAIL** (2026-10-22; incluye T-02 y T-16a..e) |
+| Backend Fase 1 validado (identidad, authz, auditoría, lifecycle) | `backend/`: `pytest` **28 PASS**; `alembic upgrade head` + `app.seed` + `GET /health` OK |
+| Incremento oportunidades + postulaciones (Sprint 1) | `backend/app/modules/{opportunities,applications,policies}` + `frontend/` (React+Vite, build OK); T-24/T-25 PASS |
 
 ## En progreso
 | Qué | Nota |
@@ -47,11 +49,11 @@ Todas las decisiones con el cliente y con Servicios de TI; los 21 elementos `OPE
 |---|---|---|---|---|---|
 | EB-01 | Aplicar correcciones a la Evaluación 1 (ASM-005, CL-004, ASM-009..011, SC-06, división de US-019, enmienda de US-020, prioridades de US-003/US-017, fuente de ASM-003B) | Alta | Analista de negocio | — | Pendiente |
 | EB-02 | Agregar US-032..US-036 y SC-13 al backlog y validarlas | Alta | Product Owner | EB-01 | Pendiente |
-| EB-03 | Elegir el stack y revisar en equipo `views/domain-model.md` para adoptarlo (o corregirlo) como el modelo oficial | Alta | Líder técnico | — | Pendiente |
+| EB-03 | Elegir el stack y revisar en equipo `views/domain-model.md` para adoptarlo (o corregirlo) como el modelo oficial | Alta | Líder técnico | — | Propuesta de stack en ADR-007, pendiente de adopción |
 | EB-04 | Reejecutar `run_poc.py` y registrar commit y fecha | Alta | Líder técnico | — | Hecho (2026-10-22, commit `dcda267`) |
-| EB-05 | Portar las compuertas (ADR-003) con pruebas T-01/T-02 en la tecnología real | Alta | Desarrollo | EB-03 | Pendiente |
-| EB-06 | Autorización C-02 con matriz de pruebas (ADR-004), **antes** de exponer postulantes a externos | Alta | Desarrollo | EB-03 | Pendiente |
-| EB-07 | Escritor de auditoría atómico (ADR-005), **antes** de la primera aprobación | Alta | Desarrollo | EB-03 | Pendiente |
+| EB-05 | Portar las compuertas (ADR-003) con pruebas T-01/T-02 en la tecnología real | Alta | Desarrollo | EB-03 | EXECUTED en `backend/` (28 PASS) |
+| EB-06 | Autorización C-02 con matriz de pruebas (ADR-004), **antes** de exponer postulantes a externos | Alta | Desarrollo | EB-03 | EXECUTED en `backend/` (T-03, 28 PASS) |
+| EB-07 | Escritor de auditoría atómico (ADR-005), **antes** de la primera aprobación | Alta | Desarrollo | EB-03 | EXECUTED en `backend/` (T-07, 28 PASS) |
 | EB-08 | Políticas C-05: 4 condiciones de elegibilidad + activación + finalización | Alta | Desarrollo | EB-03 | Pendiente |
 | EB-10 | Validar con el cliente la propuesta para OPEN-14 (BR-18: sigue `Active`, indicador derivado y compuerta de cierre) y definir plazo de corrección y aprobador de excepciones | Alta | Product Owner | — | Propuesta probada en el PoC (2026-10-22) |
 | EB-11 | Cerrar OPEN-01, 02, 03, 21 con interesados y TI | Alta | Analista de negocio | — | Pendiente |

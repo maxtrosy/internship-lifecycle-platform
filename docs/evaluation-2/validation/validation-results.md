@@ -86,6 +86,18 @@ Resultados de la corrida 2026-10-22:
 | **T-16d** | PASS. Indicador `true` tras el rechazo, finalización denegada con `ACTIVATION_NONCOMPLIANT`; tras reentrega y aprobación, indicador `false`, confirmación y cierre `OK`, estado `CLOSED`. |
 | **T-16e** | PASS. Revisión desde `REQUIRED` → `INVALID_TRANSITION`, estado y auditoría intactos; control positivo desde `SUBMITTED` → `OK`. |
 
+### Backend — Fase 1 + incremento oportunidades/postulaciones (Executed)
+
+Ejecutado en `backend/` contra PostgreSQL real (pgserver, Python 3.12):
+
+| Ítem | Resultado |
+|---|---|
+| `pytest` (T-01/T-02/T-02b/T-04/T-08/T-16a..e portados + T-20..T-25) | **28 PASS** |
+| `alembic upgrade head` | OK |
+| `python -m app.seed` | OK |
+| `GET /health` | `{"status":"ok"}` |
+| Frontend `tsc -b && vite build` | bundler OK; genera `frontend/dist/` (pnpm advierte build-script de esbuild ignorado). Integración navegador↔API: NOT EXECUTED |
+
 ## C. Not executed
 
 | Ítem | Qué falta |
@@ -98,6 +110,8 @@ Resultados de la corrida 2026-10-22:
 | T-14 RLS como defensa en profundidad | Esquema con políticas de fila y evaluación con TI |
 | T-15 Fronteras de módulo | Herramienta de reglas de importación en el repositorio del producto, cuando exista |
 | T-04 variante concurrente | Un caso análogo a T-02 para `ConfirmCompletion` |
+| Integración frontend↔backend en navegador | Levantar `uvicorn` + `vite dev` y recorrer el flujo login→oportunidades→postulación manualmente |
+| `docker compose up` | Levantar db + api y comprobar `/health` desde el contenedor |
 | Medición de latencias (QS-03, QS-04) | Instrumentación |
 | Flujo completo SEQ-01 | Implementación de T1, T3, T5, T6, T9 y de las vistas de oportunidad/postulación |
 | Reejecución por el equipo | Correr `run_poc.py` en su entorno y registrar commit |
