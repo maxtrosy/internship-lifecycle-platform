@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { ActivationStatus, Application, DocumentSubmission } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
+import { hoursFromHistory, totalHours, type HoursEntry } from "../progress";
 
 export default function Documents() {
   const [apps, setApps] = useState<Application[] | null>(null);
   const [statuses, setStatuses] = useState<Record<number, ActivationStatus>>({});
   const [submissions, setSubmissions] = useState<Record<string, DocumentSubmission[]>>({});
+  const [hours, setHours] = useState<Record<number, HoursEntry[]>>({});
+  const [hoursDraft, setHoursDraft] = useState<Record<number, string>>({});
   const [files, setFiles] = useState<Record<number, File>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,9 +33,13 @@ export default function Documents() {
           await api.listDocumentSubmissions(pid, item.id),
         ] as const);
       }));
+      const hoursPairs = await Promise.all(placements
+        .filter((a) => a.placement_state === "ACTIVE")
+        .map(async (a) => [a.placement_id!, hoursFromHistory(await api.listPlacementHours(a.placement_id!))] as const));
       setApps(list);
       setStatuses(statusMap);
       setSubmissions(Object.fromEntries(submissionPairs));
+      setHours(Object.fromEntries(hoursPairs));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -71,6 +78,28 @@ export default function Documents() {
     }
   }
 
+  async function recordHours(pid: number, event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = Number(hoursDraft[pid]);
+    if (!Number.isFinite(value) || value <= 0) {
+      setError("Ingresa una cantidad de horas mayor que cero.");
+      return;
+    }
+    setBusy(pid);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.recordPlacementHours(pid, value);
+      setHoursDraft((current) => ({ ...current, [pid]: "" }));
+      setMessage("Las horas quedaron registradas en el historial de la práctica.");
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const placements = (apps ?? []).filter((a) => a.placement_id &&
     (a.placement_state === "DOCUMENTATION_PENDING" || a.placement_state === "ACTIVE"));
 
@@ -105,6 +134,32 @@ export default function Documents() {
             )}
             {status?.activation_noncompliant && (
               <Alert kind="info">La práctica sigue activa. Corrige los requisitos rechazados para completar el ciclo.</Alert>
+            )}
+            {a.placement_state === "ACTIVE" && (
+              <section className="card work-log-card" aria-label={`Seguimiento de horas de ${a.title}`}>
+                <div className="section-heading">
+                  <div><span className="eyebrow">SEGUIMIENTO</span><h2>Horas de práctica</h2>
+                    <p>Registro opcional. Si tu programa requiere horas, anota el tiempo realizado; coordinación verificará los requisitos configurados antes de confirmar el cierre.</p>
+                  </div>
+                  <strong className="metric-value">{totalHours(hours[pid] ?? [])} h</strong>
+                </div>
+                <form className="row" onSubmit={(event) => void recordHours(pid, event)}>
+                  <div className="field"><label htmlFor={`hours-${pid}`}>Horas realizadas</label>
+                    <input id={`hours-${pid}`} type="number" min="0.1" step="0.1" required value={hoursDraft[pid] ?? ""}
+                      onChange={(event) => setHoursDraft((current) => ({ ...current, [pid]: event.target.value }))} />
+                  </div>
+                  <button className="btn" type="submit" disabled={busy === pid || !hoursDraft[pid]}>
+                    {busy === pid ? <Spinner /> : "Registrar horas"}
+                  </button>
+                </form>
+                {(hours[pid] ?? []).length > 0 ? (
+                  <ul className="work-log-list">
+                    {(hours[pid] ?? []).map((entry) => (
+                      <li key={entry.id}><span>{new Date(entry.occurredAt).toLocaleString("es-CO")}</span><strong>{entry.hours} h</strong></li>
+                    ))}
+                  </ul>
+                ) : <p className="muted">Todavía no hay horas registradas.</p>}
+              </section>
             )}
             {status && status.items.length > 0 && (
               <div className="table-scroll" tabIndex={0} aria-label={`Requisitos documentales de ${a.title}`}><table>

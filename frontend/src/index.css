@@ -145,6 +145,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); outlin
 input[type="checkbox"], input[type="radio"] { width: 16px !important; min-height: 16px; height: 16px; accent-color: var(--primary); }
 input[type="file"] { padding: 7px; color: var(--ink-soft); font-size: 11px; }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.work-log-card { margin: 16px 0; padding: 18px; }
+.work-log-card .section-heading { align-items: flex-start; }
+.work-log-card .section-heading .metric-value { white-space: nowrap; padding-top: 0; }
+.work-log-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.work-log-list li { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 8px; color: var(--muted); font-size: 13px; }
+.work-log-list strong { color: var(--ink); }
 .spacer { min-width: 0; flex: 1; }
 .muted { color: var(--muted); }
 

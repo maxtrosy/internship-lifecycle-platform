@@ -103,6 +103,18 @@ def select_application(ctx: CommandContext, application_id: int, details: dict) 
     if not isinstance(eligibility, dict) or eligibility.get("result") != "ELIGIBLE":
         raise BusinessError("APPLICATION_NOT_ELIGIBLE")
 
+    if details["start_date"] > details["end_date"]:
+        raise BusinessError("INVALID_PLACEMENT_DATES")
+    supervisor_id = details.get("workplace_supervisor_id")
+    if supervisor_id is not None:
+        assigned = ctx.execute(
+            """SELECT 1 FROM role_assignment
+               WHERE user_id=%s AND role='WORKPLACE_SUPERVISOR' AND host_org_id=%s""",
+            (supervisor_id, opp["host_org_id"]),
+        ).fetchone()
+        if assigned is None:
+            raise BusinessError("SUPERVISOR_NOT_ASSIGNED_TO_HOST_ORG")
+
     pid = ctx.execute(
         "INSERT INTO placement(application_id, state) VALUES (%s, 'PENDING_ACADEMIC_APPROVAL') RETURNING id",
         (application_id,),
@@ -110,7 +122,7 @@ def select_application(ctx: CommandContext, application_id: int, details: dict) 
     vid = ctx.execute(
         """INSERT INTO placement_version(placement_id, version_no, workplace_supervisor_id, start_date, end_date,
            location, responsibilities) VALUES (%s,1,%s,%s,%s,%s,%s) RETURNING id""",
-        (pid, details.get("workplace_supervisor_id"), details["start_date"], details["end_date"],
+        (pid, supervisor_id, details["start_date"], details["end_date"],
          details["location"], details["responsibilities"]),
     ).fetchone()["id"]
     ctx.execute("UPDATE placement SET current_version_id=%s WHERE id=%s", (vid, pid))

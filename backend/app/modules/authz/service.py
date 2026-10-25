@@ -84,6 +84,7 @@ def _role_action(role: dict, c: dict, subj: dict, action: str) -> bool:
         "placement:propose_change": r == "EXPERIENTIAL_COORDINATOR"
                                      or (r == "WORKPLACE_SUPERVISOR" and c["is_workplace_sup"]),
         "progress:create": r == "STUDENT" and c["student_id"] == subj["id"],
+        "progress:read": r == "STUDENT" and c["student_id"] == subj["id"],
         "evidence:submit": r == "STUDENT" and c["student_id"] == subj["id"],
         "document:submit": r == "STUDENT" and c["student_id"] == subj["id"],
     }[action]

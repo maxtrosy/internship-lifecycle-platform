@@ -1,20 +1,25 @@
 # Estado del proyecto
 
-**Fecha de corte:** 2026-10-24. **Regla:** nada se marca como completado si solo fue diseñado. El resumen y los estados actualizados de esta fecha prevalecen sobre el plan inicial que se conserva más abajo.
+**Fecha de corte:** 2026-10-25. **Regla:** nada se marca como completado si solo fue diseñado. El resumen y los estados actualizados de esta fecha prevalecen sobre el plan inicial que se conserva más abajo.
+
+La matriz requisito por requisito vigente está en [functional-completeness-matrix.md](functional-completeness-matrix.md). El RFP fuente de ocho páginas ya se contrastó completo; faltan en el repositorio los originales de Evaluación 1 y documentos institucionales que definan OPEN-xx.
 
 ## Estado actual de preparación final
 
 ### Implementado y validado
 - Autenticación local y roles; matriz HTTP de rutas y relaciones con pruebas negativas: `backend/tests/test_http_authorization.py` (T-34).
-- Compuerta de activación/rechazo serializada a nivel PostgreSQL mediante migración `0004`; suite backend actual: 65 pruebas aprobadas.
+- Compuerta de activación/rechazo serializada a nivel PostgreSQL mediante migración `0004`; suite backend completa del corte final: 68 pruebas aprobadas.
 - Entorno de demostración separado, Alembic hasta `0004`, health check y seed de 14 cuentas sintéticas: [runbook](validation/demo-runbook.md).
-- Pruebas unitarias frontend y compilación TypeScript/Vite: 6 pruebas aprobadas; `tsc -b && vite build` correcto.
-- Flujo principal E2E Chromium: **PASÓ, 2/2 pruebas** (login inválido/ruta protegida y recorrido UI hasta activación por estudiante, empleador, coordinador, revisor legal y EC); alcance limitado a Chromium, un camino por rol y viewport 390 px en Mis postulaciones. Véase [validation-results.md](validation/validation-results.md).
+- Pruebas frontend del corte final: **8 aprobadas**; `tsc -b && vite build` correcto (48 módulos).
+- Flujo E2E Chromium del corte final: **3/3 pruebas**; incluye acceso rápido a cuentas sintéticas, credenciales inválidas/rutas protegidas y el recorrido de roles hasta activación, registro de 4.5 horas y persistencia tras recargar. El alcance sigue limitado a Chromium y a los flujos explícitos de `lifecycle.spec.ts`. Véase [validation-results.md](validation/validation-results.md).
 - Rediseño responsive de las vistas existentes: **inspección visual** en escritorio para estudiante, empleador, coordinador, revisor legal y EC; comprobación automatizada de ancho sin desbordamiento en 13 rutas/vistas a 390 px y 320 px. Capturas de comprobación en `frontend/test-results/ui-redesign/` (directorio ignorado por Git); no equivale a E2E de todas las acciones.
+- Selección valida ahora que el rango de fechas no esté invertido y que cualquier supervisor laboral indicado pertenezca a la organización anfitriona; pruebas positiva y negativas en `backend/tests/test_selection.py`.
+- Estudiante titular puede registrar horas opcionales solo en prácticas `ACTIVE` y consultar su propio total e historial. El backend valida horas finitas y mayores que cero; persistencia tras recarga probada con E2E. No existe aprobación de horas; la obligatoriedad institucional queda pendiente según el RFP.
 
 ### Implementado sin E2E
-- Rutas/vistas y acciones frontend fuera del recorrido explícito de Chromium: supervisión docente/lugar, mensajería, evaluación, paneles, otras variantes de programa/organización y revisión visual en browsers distintos. Los roles de supervisión no tienen todavía una vista de trabajo propia y la API no expone catálogos de supervisores; la asignación opcional de supervisor en la selección sigue sin una opción nominativa en UI. La API tampoco ofrece catálogos generales de organizaciones/programas: si no hay oportunidades previas de donde obtener nombres, el formulario conserva una entrada numérica como salida técnica.
-- Flujos de cierre, horas y evaluación cuentan con pruebas de backend donde indicadas, pero no fueron incluidos en el E2E UI.
+- Las rutas y acciones ya implementadas fuera del recorrido de Chromium no tienen cobertura E2E exhaustiva. Las vistas/acciones de supervisión docente/laboral, actividades, aprobación de reportes, evaluaciones intermedias/finales, incidentes, comunicación y paneles agregados siguen incompletas o no implementadas; el RFP §5 declara incompleto el proceso y §9 presenta estas capacidades como posibles, no especificación definitiva.
+- Evidencia final, confirmación académica y cierre permanecen solo en backend.
+- El servicio interno para proponer/aprobar versiones tiene pruebas de servicio pero no endpoints HTTP ni vista; depende del alcance/actor de aprobación de OPEN-03.
 
 ### Pendiente de decisión institucional
 - OPEN-05 (actor y proceso de revisión/publicación); OPEN-13 (cupos); OPEN-19 (prácticas simultáneas); OPEN-01/02/06/09/14/20 (reglas, campos y actores documentales/externos); duplicados tras retiro y selección alternativa.
@@ -26,14 +31,14 @@
 ## Completado
 | Qué | Evidencia |
 |---|---|
-| Artefactos de la Evaluación 1 (Visión y Alcance; Requisitos/Backlog/Riesgos/Criterios; Interesados/Aclaraciones/Supuestos/AS-IS/TO-BE/Pendientes) | Entregados por el equipo (los tres archivos analizados) |
+| Artefactos de la Evaluación 1 (Visión y Alcance; Requisitos/Backlog/Riesgos/Criterios; Interesados/Aclaraciones/Supuestos/AS-IS/TO-BE/Pendientes) | Tres archivos entregados en contexto fueron analizados; sus originales no están incluidos en este repositorio. |
 | Auditoría de coherencia de la Evaluación 1 | [`evaluation-1-audit.md`](evaluation-1-audit.md): 34 hallazgos con decisión |
 | Documentación de arquitectura y diseño | `docs/evaluation-2/` distingue el diseño acordado, el estado real del demo y los pendientes institucionales |
 | PoC de la rebanada crítica ejecutado por el equipo | `prototype/evidence/results.json`: **14 PASS, 0 FAIL** (2026-10-22; incluye T-02 y T-16a..e) |
 | Backend Fase 1 (identidad, authz, auditoría, lifecycle) | `backend/`: T-20..T-31; autenticación local con Argon2id, cookie de sesión y recuperación |
 | Incremento oportunidades + postulaciones (Sprint 1) | `backend/app/modules/{opportunities,applications,policies}` + frontend React; T-24/T-25 |
 | Sprint 2: selección del empleador + aprobación académica | Selección, aprobación/rechazo, relación por programa y auditoría; pruebas T-26/T-27 |
-| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages}`; build TypeScript/Vite aprobado, 6 pruebas unitarias, E2E Chromium 2/2 del camino principal; rediseño inspeccionado visualmente en los roles con vista y viewport sin desbordamiento en 13 vistas a 390/320 px. Acciones exhaustivas, supervisión y browsers adicionales siguen sin E2E |
+| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages}`; build TypeScript/Vite aprobado, 8 pruebas unitarias y E2E Chromium 3/3 en el corte final; rediseño inspeccionado visualmente en roles con vista y viewport sin desbordamiento en 13 vistas a 390/320 px. Acciones exhaustivas, supervisión y browsers adicionales siguen sin E2E |
 | Sprint 3: documentos + activación | Archivos PDF/PNG/JPG/DOCX en PostgreSQL (≤10 MB), revisiones con motivo, historial y reentrega; permisos de descarga; activación/cierre por políticas versionadas; vistas de estudiante, revisor legal y EC; T-28..T-30 |
 | Políticas EB-08 | UI de coordinación para versiones de elegibilidad, activación y cierre; validadores de vocabulario cerrado; las colocaciones fijan las versiones al aprobarse académicamente |
 
@@ -47,7 +52,7 @@
 Revisión/publicación de oportunidades (OPEN-05); IdP/SSO institucional (OPEN-21); proveedor real de correo para recuperación; reglas institucionales exactas de documentos/evidencia y actores (OPEN-01/02); workers y notificaciones; adaptadores con fallos a pedido; supervisión, evaluaciones, incidentes, mensajes y paneles.
 
 ## No validado
-Las decisiones institucionales marcadas `OPEN`; QS-05, QS-07, QS-08; T-09..T-15; revisión visual completa y cobertura responsive/E2E de todas las vistas, roles y browsers. El camino principal sí está validado en Chromium (T-35, 2/2). El repositorio de documentos externo y el SSO real no están integrados.
+Las decisiones institucionales marcadas `OPEN`; QS-05, QS-07, QS-08; T-09..T-11 y T-13..T-15; revisión visual completa y cobertura responsive/E2E de todas las vistas, roles y browsers. T-12 sí pasó según su runbook. Los flujos E2E explícitos están validados en Chromium (T-35/T-37, 3/3 pruebas en la ejecución final). El repositorio de documentos externo y el SSO real no están integrados.
 
 ## Riesgos (priorizados)
 

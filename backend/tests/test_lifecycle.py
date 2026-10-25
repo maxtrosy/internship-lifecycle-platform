@@ -125,6 +125,9 @@ def test_t08_no_hours_before_activation(env):
     U = seed_base(env)
     opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
     p = make_doc_pending(env, U, "s1", opp)
+    with pytest.raises(BusinessError) as invalid:
+        cmd(U["s1"], lc.record_hours, p, float("nan"))
+    assert invalid.value.code == "INVALID_HOURS"
     with pytest.raises(BusinessError):
         cmd(U["s1"], lc.record_hours, p, 5)
     n = env.admin.execute("SELECT count(*) AS n FROM progress_entry WHERE placement_id=%s", (p,)).fetchone()["n"]

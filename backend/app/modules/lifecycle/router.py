@@ -4,12 +4,12 @@ from __future__ import annotations
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import db
 from app.deps import requires
 from app.errors import BusinessError
-from app.modules import audit as audit_service
+from app.modules.audit import service as audit_service
 from app.modules import authz
 from app.modules.lifecycle import service as lifecycle
 
@@ -26,7 +26,7 @@ class EvidenceBody(BaseModel):
 
 
 class HoursBody(BaseModel):
-    hours: float
+    hours: float = Field(gt=0, allow_inf_nan=False)
 
 
 class RejectAcademicBody(BaseModel):
@@ -181,3 +181,10 @@ def record_hours(pid: int, body: HoursBody,
                  subject_id: int = Depends(requires("progress:create"))) -> None:
     with db.command(subject_id) as ctx:
         lifecycle.record_hours(ctx, pid, body.hours)
+
+
+@router.get("/placements/{pid}/hours")
+def list_hours(pid: int, subject_id: int = Depends(requires("progress:read"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return lifecycle.list_hours(cur, subj, pid)

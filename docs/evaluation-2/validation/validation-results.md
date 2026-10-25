@@ -1,5 +1,30 @@
 # Resultados de validación
 
+## Registro opcional de horas — ejecución final 2026-10-25
+
+| Evidencia | Comando/entorno | Resultado real |
+|---|---|---|
+| Backend focalizado | `docker compose -p dh05-func-final-20261025 -f backend/docker-compose.test.yml run --build --rm tests pytest -q tests/test_http_authorization.py tests/test_selection.py tests/test_lifecycle.py -k "http_authorization_matrix or selection_rejects or selection_accepts or t08"`; PostgreSQL recién creado y sin volumen | **PASÓ: 5 passed, 19 deselected**, 1 warning deprecado Starlette/httpx; 6.01 s. Incluye estudiante titular, estudiante ajeno, empleador, escritura no activa, horas 0 y lecturas de historial HTTP. |
+| Backend completo | `docker compose -p dh05-func-final-20261025 -f backend/docker-compose.test.yml run --rm tests pytest -q`; servicio `db` recreado entre corridas, sin volumen | **PASÓ: 68 passed**, 1 warning deprecado Starlette/httpx; 55.45 s. |
+| Frontend | `npm run test` desde `frontend/` | **PASÓ: 8 pruebas** en 3 archivos. |
+| TypeScript + build | `npm run build` desde `frontend/` | **PASÓ, EXIT 0**: ejecuta `tsc -b && vite build`; Vite compiló 48 módulos. |
+| E2E Chromium sobre demo aislada nueva | `$env:E2E_BASE_URL='http://localhost:15176'; npm run test:e2e`; Compose `dh05-hours-e2e-rerun-20261025`, DB `dh05_demo`, volumen nuevo `dh05-hours-e2e-rerun-20261025-data`, puertos 55435/18003/15176, semilla sintética de 14 cuentas | **PASÓ: 3 passed**, 32.9 s. Cubre accesos rápidos, credenciales inválidas/rutas protegidas y flujo por estudiante/empleador/coordinador/revisor legal/EC hasta activación; registra 4.5 horas y verifica fila e importe total en la vista. Tras recargar, verifica de nuevo el total obtenido desde `GET /hours`. |
+| Primera corrida del E2E de horas | `$env:E2E_BASE_URL='http://localhost:15175'; npm run test:e2e`; proyecto aislado independiente con volumen nuevo | Falló el tercer flujo después de que POST devolvió 204 y la fila `progress_entry` existía en DB: el frontend descartaba `hours` serializado como texto decimal, mostrando `0 h`. Se ajustó el adaptador para validar números y cadenas numéricas finitas; una unidad cubre esa representación; la corrida limpia siguiente pasó. No se debilitó la aserción E2E. |
+
+La verificación HTTP previa a la suite completa detectó una expectativa incorrecta del test: `PLACEMENT_NOT_ACTIVE` es un error de precondición de negocio y responde **409**, no 422. El test conserva la denegación y ahora afirma tanto 409 como el código esperado. Se corrigió también el import del servicio de auditoría que hacía responder 500 al GET `/placements/{pid}/history`; la suite de 68 pruebas pasó después. Las instancias de E2E quedaron con sus volúmenes aislados preservados; no se tocó la base local ni el volumen `dh05-demo-postgres-data` ni el volumen aislado de una ejecución anterior.
+
+## Auditoría funcional — ejecución 2026-10-24
+
+| Evidencia | Comando/entorno | Resultado real |
+|---|---|---|
+| Selección + autorización HTTP focalizada | `docker compose -p dh05-functional-audit -f backend/docker-compose.test.yml run --rm tests pytest -q tests/test_selection.py tests/test_http_authorization.py`; DB efímera dedicada sin volumen | **PASÓ: 14/14**, 1 warning deprecado de Starlette/httpx. Incluye supervisor de misma organización aceptado, supervisor ajeno rechazado, fechas invertidas rechazadas, sin colocación/application mutation ante rechazo. |
+| Suite backend completa | `docker compose -p dh05-functional-audit -f backend/docker-compose.test.yml run --build --rm tests pytest -q`; recreado el contenedor efímero entre corridas | Primera corrida reutilizó contenedor con esquema ya creado y falló en setup (68 errores por esquema duplicado); reintentada con DB de prueba recién creada. **PASÓ: 68/68**, 1 warning deprecado Starlette/httpx, 46.07 s. |
+| Pruebas frontend | `npm run test` desde `frontend/` | **PASÓ: 6 pruebas** en 2 archivos. |
+| TypeScript + build frontend | `npm run build` desde `frontend/` | **PASÓ, EXIT 0**, `tsc -b && vite build`; Vite compiló 47 módulos. |
+| E2E Chromium aislado | `$env:E2E_BASE_URL='http://localhost:15174'; npm run test:e2e` en `frontend/`; proyecto temporal `dh05-functional-audit-e2e`, DB `dh05_demo`, volumen `dh05-functional-audit-e2e-data`, puertos 55433/18001/15174 | **PASÓ: 3/3**, incluyendo acceso rápido a las 14 cuentas, credenciales inválidas/ruta protegida y flujo UI principal hasta activación. Corrida inicial falló 3/3 por CORS: la copia temporal todavía permitía `localhost:5174`; se corrigió a `15174` y la segunda corrida pasó. Se desmontó solo el proyecto/volumen temporal; demo y BD local no se tocaron. |
+
+La matriz y clasificación requisito por requisito están en [functional-completeness-matrix.md](../functional-completeness-matrix.md). Las bases de prueba fueron efímeras y separadas; no se usó ni reinició la base local de desarrollo ni la base de demo existente.
+
 ## Rediseño responsive de frontend — ejecución 2026-10-24
 
 | Evidencia | Comando/entorno | Resultado real |
@@ -27,7 +52,7 @@ Estos resultados corresponden al código actual del repositorio y no sustituyen 
 | Guardas de demo y de imagen | `scripts/Start-Demo.ps1` sin reset; `docker compose ... exec api sh -c 'test ! -d /app/tests'` | **PASÓ**: reconoce solo los 14 nombres seed esperados y conserva el dataset; el API de producción no tiene `/app/tests`. Después del E2E, DB demo reportó `dh05_demo`, 14 cuentas, 1 oportunidad E2E y 1 colocación `ACTIVE`. |
 | Preservación del entorno local | Nombres/proyectos de Compose usados durante pruebas | **PASÓ por aislamiento:** suites apuntaron a `dh05-tests`/`dh05_http_test`; demo solo a `dh05-demo`/`dh05_demo`. No se usó el proyecto Compose local (`internship-lifecycle-platform`), su puerto 5432 ni su base; ningún reset/seed se dirigió allí. |
 
-La matriz documenta las 34 operaciones HTTP enumeradas por OpenAPI. La prueba HTTP valida cruces de titularidad, organización, supervisor, programa y actores institucionales, pero no es una auditoría de penetración ni cubre cada combinación endpoint/rol. E2E valida un recorrido principal de los cinco roles nombrados en Chromium; no prueba el resto de vistas, todos los permisos ni otros browsers.
+La matriz documenta las 35 operaciones HTTP enumeradas por OpenAPI. La prueba HTTP valida cruces de titularidad, organización, supervisor, programa y actores institucionales, pero no es una auditoría de penetración ni cubre cada combinación endpoint/rol. E2E valida un recorrido principal de los cinco roles nombrados en Chromium; no prueba el resto de vistas, todos los permisos ni otros browsers.
 
 ## Cabecera de evidencia
 

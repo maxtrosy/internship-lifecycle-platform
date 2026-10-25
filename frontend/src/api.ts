@@ -49,6 +49,13 @@ export type PendingAcademic = {
   opportunity_title: string;
 };
 
+export type ProgressHoursEntry = {
+  id: number;
+  created_at: string;
+  // PostgreSQL Decimal is JSON-encoded as a string by the current API stack.
+  hours: number | string;
+};
+
 // Clear the previous demo JWT if a browser still has it. Current sessions use an HttpOnly cookie.
 if (typeof window !== "undefined") localStorage.removeItem("dh05_token");
 
@@ -90,6 +97,9 @@ function presentApiError(error: unknown, status: number): string {
     UNKNOWN_PROGRAM: "No se encontró el programa indicado.",
     POLICY_INVALID: "La configuración de la política no es válida.",
     APPLICATION_NOT_ELIGIBLE: "La postulación no cumple los criterios de elegibilidad.",
+    INVALID_PLACEMENT_DATES: "La fecha de inicio debe ser anterior o igual a la fecha de finalización.",
+    SUPERVISOR_NOT_ASSIGNED_TO_HOST_ORG: "El supervisor laboral debe pertenecer a la organización anfitriona.",
+    INVALID_HOURS: "Ingresa una cantidad de horas finita y mayor que cero.",
     COMPLETION_EVIDENCE_MISSING: "Falta completar evidencia obligatoria de la práctica.",
     COMPLETION_POLICY_MISSING: "No hay una política de finalización configurada para el programa.",
     ACTIVATION_CONDITIONS_UNMET: "Faltan requisitos obligatorios para activar la práctica.",
@@ -310,6 +320,17 @@ export function listPendingActivation(): Promise<{ id: number; state: string; di
 
 export function activatePlacement(pid: number): Promise<void> {
   return request<void>(`/placements/${pid}/activate`, { method: "POST" });
+}
+
+export function recordPlacementHours(pid: number, hours: number): Promise<void> {
+  return request<void>(`/placements/${pid}/hours`, {
+    method: "POST",
+    body: JSON.stringify({ hours }),
+  });
+}
+
+export function listPlacementHours(pid: number): Promise<ProgressHoursEntry[]> {
+  return request<ProgressHoursEntry[]>(`/placements/${pid}/hours`);
 }
 
 export type PolicyKind = "ELIGIBILITY" | "ACTIVATION" | "COMPLETION";

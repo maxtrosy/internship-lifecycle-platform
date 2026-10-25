@@ -115,6 +115,46 @@ def test_t26_selection_requires_confirmed_eligible_result(env):
     assert env.admin.execute("SELECT count(*) AS n FROM placement WHERE application_id=%s", (aid,)).fetchone()["n"] == 0
 
 
+def test_selection_rejects_supervisor_from_another_organization(env):
+    U, oid = _setup(env)
+    aid = _aid(env, oid)
+    details = {**_details(), "workplace_supervisor_id": U["ws_beta"]}
+
+    with db.command(U["hm_alfa"]) as ctx:
+        with pytest.raises(BusinessError) as ei:
+            apps.select_application(ctx, aid, details)
+
+    assert ei.value.code == "SUPERVISOR_NOT_ASSIGNED_TO_HOST_ORG"
+    assert env.admin.execute("SELECT state FROM application WHERE id=%s", (aid,)).fetchone()["state"] == "SUBMITTED"
+    assert env.admin.execute("SELECT count(*) AS n FROM placement WHERE application_id=%s", (aid,)).fetchone()["n"] == 0
+
+
+def test_selection_rejects_invalid_placement_date_range(env):
+    U, oid = _setup(env)
+    aid = _aid(env, oid)
+    details = {**_details(), "start_date": dt.date(2027, 3, 1), "end_date": dt.date(2027, 2, 1)}
+
+    with db.command(U["hm_alfa"]) as ctx:
+        with pytest.raises(BusinessError) as ei:
+            apps.select_application(ctx, aid, details)
+
+    assert ei.value.code == "INVALID_PLACEMENT_DATES"
+    assert env.admin.execute("SELECT state FROM application WHERE id=%s", (aid,)).fetchone()["state"] == "SUBMITTED"
+    assert env.admin.execute("SELECT count(*) AS n FROM placement WHERE application_id=%s", (aid,)).fetchone()["n"] == 0
+
+
+def test_selection_accepts_supervisor_assigned_to_opportunity_host(env):
+    U, oid = _setup(env)
+    aid = _aid(env, oid)
+    details = {**_details(), "workplace_supervisor_id": U["ws_alfa"]}
+
+    with db.command(U["hm_alfa"]) as ctx:
+        pid = apps.select_application(ctx, aid, details)
+
+    row = env.admin.execute("SELECT workplace_supervisor_id FROM placement_version WHERE placement_id=%s", (pid,)).fetchone()
+    assert row["workplace_supervisor_id"] == U["ws_alfa"]
+
+
 def test_t27_academic_approve(env):
     U, oid = _setup(env)
     aid = _aid(env, oid)

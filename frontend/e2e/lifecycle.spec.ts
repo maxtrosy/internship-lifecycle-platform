@@ -191,4 +191,13 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await login(page, "s1");
   await navigate(page, "Mis postulaciones");
   await expect(page.locator(".applications-table")).toContainText("Activa");
+  await navigate(page, "Mis documentos");
+  const activePlacement = page.locator(".document-placement").filter({ hasText: opportunityTitle });
+  await activePlacement.getByLabel("Horas realizadas").fill("4.5");
+  await activePlacement.getByRole("button", { name: "Registrar horas" }).click();
+  await expect(activePlacement.locator(".metric-value")).toHaveText("4.5 h");
+  await expect(activePlacement.locator(".work-log-list")).toContainText("4.5 h");
+  await page.reload();
+  const persistedPlacement = page.locator(".document-placement").filter({ hasText: opportunityTitle });
+  await expect(persistedPlacement.locator(".metric-value")).toHaveText("4.5 h");
 });

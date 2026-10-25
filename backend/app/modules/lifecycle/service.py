@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 import hashlib
+import math
 from pathlib import PurePosixPath
 import re
 
@@ -400,6 +401,9 @@ def submit_evidence(ctx: CommandContext, pid: int, kind: str) -> None:
 
 
 def record_hours(ctx: CommandContext, pid: int, hours: float) -> None:
+    if not math.isfinite(hours) or hours <= 0:
+        raise BusinessError("INVALID_HOURS")
+
     def run() -> None:
         subj = authz.subject(ctx.cur, ctx.actor_id)
         authz.authorize(ctx.cur, subj, "progress:create", pid)
@@ -410,6 +414,14 @@ def record_hours(ctx: CommandContext, pid: int, hours: float) -> None:
         _gate(run)
     except BusinessError as exc:
         raise BusinessError("PLACEMENT_NOT_ACTIVE", exc.detail) from exc
+
+
+def list_hours(cur: psycopg.Cursor, subj: dict, pid: int) -> list[dict]:
+    authz.authorize(cur, subj, "progress:read", pid)
+    return cur.execute(
+        "SELECT id, hours, created_at FROM progress_entry WHERE placement_id=%s ORDER BY id DESC",
+        (pid,),
+    ).fetchall()
 
 
 def confirm_completion(ctx: CommandContext, pid: int) -> None:

@@ -83,6 +83,23 @@ def test_http_authorization_matrix_crosses_roles_organizations_and_programs(env)
         assert clients["pc_sys"].get(f"/placements/{pending_docs}").status_code == 200
         assert clients["pc_adm"].get(f"/placements/{pending_docs}").status_code == 403
         assert clients["legal1"].get(f"/placements/{pending_docs}").status_code == 200
+        student_history = clients["s1"].get(f"/placements/{pending_docs}/history")
+        assert student_history.status_code == 200
+        assert clients["s2"].get(f"/placements/{pending_docs}/history").status_code == 403
+
+        # Progress is student-owned and cannot be entered before activation.
+        hours_path = f"/placements/{pending_docs}/hours"
+        own_hours = clients["s1"].get(hours_path)
+        assert own_hours.status_code == 200 and own_hours.json() == []
+        assert clients["s2"].get(hours_path).status_code == 403
+        assert clients["hm_alfa"].get(hours_path).status_code == 403
+        assert clients["s2"].post(hours_path, json={"hours": 2}, headers={"Origin": ORIGIN}).status_code == 403
+        assert clients["hm_alfa"].post(hours_path, json={"hours": 2}, headers={"Origin": ORIGIN}).status_code == 403
+        assert clients["s1"].post(hours_path, json={"hours": 0}, headers={"Origin": ORIGIN}).status_code == 422
+        inactive_hours = clients["s1"].post(hours_path, json={"hours": 2}, headers={"Origin": ORIGIN})
+        assert inactive_hours.status_code == 409
+        assert inactive_hours.json()["error"] == "PLACEMENT_NOT_ACTIVE"
+        assert env.admin.execute("SELECT count(*) AS n FROM progress_entry WHERE placement_id=%s", (pending_docs,)).fetchone()["n"] == 0
 
         academic_sys = clients["pc_sys"].get("/placements/pending-academic")
         academic_adm = clients["pc_adm"].get("/placements/pending-academic")
