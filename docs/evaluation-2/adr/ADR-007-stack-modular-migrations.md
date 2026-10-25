@@ -36,9 +36,9 @@ OPEN-17 dejaba sin elegir la tecnología. El PoC (`prototype/`) demostró en Pos
 - Alembic con `op.execute` delega la corrección del SQL en el equipo; hay que revisar cada migración.
 
 ## Verification
-- **EXECUTED (backend).** Evidencia histórica: 45 pruebas antes de autenticación local. T-31 agrega login, cuenta desactivada, sesión, recuperación y límites de intentos; el total final se registra en [validation-results.md](../validation/validation-results.md).
-- **Migraciones y Compose:** véase la validación con la migración 0003 y base limpia en el informe de resultados.
-- **Frontend:** `tsc -b && vite build` compila la interfaz; el recorrido completo automatizado en un navegador sigue pendiente.
+- **PASÓ (backend, 2026-10-24):** 65/65 pruebas en el Compose efímero `dh05-tests`/`dh05_http_test`, incluidas identidad T-31, autorización HTTP T-34 y concurrencia T-02. Evidencia detallada en [validation-results.md](../validation/validation-results.md).
+- **PASÓ (migraciones y Compose demo):** base nueva aislada migró a `0004 (head)`, `/health` devolvió `ok` y se sembraron 14 cuentas. La imagen API comprobada no contiene `tests/`.
+- **PASÓ (frontend):** 6 pruebas unitarias, `tsc -b && vite build` (45 módulos) y E2E Chromium T-35 (2/2) para el flujo principal. Otros roles/vistas y browsers no están cubiertos por este recorrido.
 
 ## Reconsider when
 El equipo adopte formalmente este stack o decida cambiarlo antes de Fase 2; si se elige ORM; si el volumen de migraciones hace inviable revisarlas a mano.

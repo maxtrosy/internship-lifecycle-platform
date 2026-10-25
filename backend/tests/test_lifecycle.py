@@ -1,7 +1,4 @@
-"""Ported lifecycle tests (T-01, T-02, T-02b, T-04, T-08, T-16a..e) against the backend.
-
-NOT EXECUTED in this environment; the team must run pytest and report the real output.
-"""
+"""PostgreSQL lifecycle tests (T-01, T-02, T-02b, T-04, T-08, T-16a..e)."""
 from __future__ import annotations
 
 import os

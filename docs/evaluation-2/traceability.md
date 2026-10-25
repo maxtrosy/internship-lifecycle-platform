@@ -81,7 +81,7 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 | QS-07 | T-10 | **NOT EXECUTED** |
 | QS-08 | T-13 | **NOT EXECUTED** |
 
-**Backend (ADR-007):** T-31 cubre autenticación, sesión y recuperación local; T-20..T-30 cubren rutas y flujos de negocio; T-34 cruza acciones HTTP con roles y relaciones. T-02 ahora incluye el caso T-02/T-02c con la migración 0004 que serializa el rechazo documental y la activación. T-35 recorre el flujo principal por navegador; T-12 prepara una base de demo aislada. Evidencia, alcance y límites en [validation-results.md](validation/validation-results.md).
+**Backend (ADR-007):** T-31 cubre autenticación, sesión y recuperación local; T-20..T-30 cubren rutas y flujos de negocio; T-34 cruza acciones HTTP con roles y relaciones. La migración 0004 serializa el rechazo documental y la activación bajo T-02; T-35 recorre el flujo principal en navegador; T-12 prepara una base aislada. Evidencia, alcance y límites en [validation-results.md](validation/validation-results.md).
 
 ## D.5 Evidencia añadida en el incremento de preparación final
 
@@ -89,7 +89,7 @@ Permite responder **"¿dónde se satisface este requisito?"** y **"¿por qué ex
 |---|---|---|---|
 | T-02 (producto) | RF-09, BR-01 | Rechazo documental frente a activación bajo concurrencia en PostgreSQL | `backend/tests/test_lifecycle.py`; migración `0004_serialize_checklist_and_placement_gates.py` |
 | T-34 | RF-20, RNF-04, BR-03, BR-13 | Negativas por estudiante, organización anfitriona, supervisor asignado, programa y actor legal/EC en el límite HTTP | `backend/tests/test_http_authorization.py`; [matriz endpoint/rol/relación](validation/http-authorization-matrix.md) |
-| T-35 | RF-01..RF-09, RF-20 | Login, ruta protegida, oportunidad, postulación, selección, aprobación académica, rechazo/reentrega documental y activación por roles mediante Chromium | `frontend/e2e/lifecycle.spec.ts`; resultado final en [validation-results.md](validation/validation-results.md) |
+| T-35 | RF-01..RF-09, RF-20 | Login, ruta protegida, oportunidad, postulación, selección, aprobación académica, rechazo/reentrega documental y activación por roles mediante Chromium | **PASÓ, 2/2 pruebas**; `frontend/e2e/lifecycle.spec.ts`; límites en [validation-results.md](validation/validation-results.md) |
 | T-12 | RNF-01, RNF-02 | Arranque, migración y seed reproducible en PostgreSQL aislado de demo | [runbook](validation/demo-runbook.md); Compose `dh05-demo`, DB `dh05_demo` |
 
 ## D.4 Componente → Responsabilidad y razón de existir

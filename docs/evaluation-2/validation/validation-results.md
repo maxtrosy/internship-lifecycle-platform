@@ -1,20 +1,21 @@
 # Resultados de validación
 
-## Incremento de cierre — ejecución 2026-10-23
+## Incremento de cierre — ejecución 2026-10-24
 
 Estos resultados corresponden al código actual del repositorio y no sustituyen los registros históricos del PoC que siguen abajo.
 
 | Evidencia | Comando/entorno | Resultado real |
 |---|---|---|
-| Suite backend, incluye T-31, T-34 y ciclo de vida | `docker compose -p dh05-tests -f backend/docker-compose.test.yml run --rm tests` (PostgreSQL efímero separado, Python 3.12) | **65 passed, 1 warning, 68.75 s**. Advertencia: deprecación del TestClient de Starlette/httpx; sin fallas. El proyecto de test se desmontó después. |
-| Foco HTTP y carrera T-02 | `pytest -q tests/test_http_authorization.py tests/test_lifecycle.py -k 'http_authorization_matrix or t02_reject_vs_activate'` | **2 passed, 63 deselected, 1 warning, 29.41 s**. |
-| Suite frontend | `pnpm run test` en `frontend/` | **6 passed** en 2 archivos (eligibilidad y etiquetas UI). |
-| Compilación frontend | `pnpm run build` | **EXIT 0**: `tsc -b && vite build`; 45 módulos. |
-| E2E Chromium (T-35) | `E2E_BASE_URL=http://localhost:5174 pnpm run test:e2e` contra `dh05-demo` limpio | Resultado final asentado tras la corrida reproducible; una corrida previa detectó y permitió corregir selectores del propio test. No se reporta como validado hasta que la última corrida finalice en PASS. |
-| Demo limpia (T-12) | `scripts/Start-Demo.ps1 -Reset` con confirmación explícita; `docker-compose.demo.yml` | **PASS**: Compose aislado `dh05-demo`, base `dh05_demo`, volumen `dh05-demo-postgres-data`, Alembic `0004 (head)`, `/health` OK y seed verificó 14 cuentas. Los puertos son 5433/8001/5174 en loopback. |
-| Preservación de datos locales | Inspección de destino de Compose/test y script de seed | Pruebas backend usaron DB sin volumen; demo limpia solo usó `dh05-demo`. No se conectó ni se aplicó reset/seed al Compose local existente. No se borraron ni editaron registros del conjunto local. |
+| Suite backend, incluye autenticación, T-02 y T-34 | `docker compose -p dh05-tests -f backend/docker-compose.test.yml run --build --rm tests` (Python 3.12, PostgreSQL del servicio `db`, `dh05_http_test`, sin volumen) | **PASÓ: 65/65**, 1 advertencia, 66.03 s. Advertencia deprecada de Starlette TestClient/httpx; sin fallas. Compose se desmontó con `down --volumes --remove-orphans`. |
+| Foco HTTP, T-02 y protección de DB | `docker compose -p dh05-tests -f backend/docker-compose.test.yml run --build --rm tests python -m pytest -q tests/test_http_authorization.py tests/test_lifecycle.py tests/test_database_safety.py -k "http_authorization_matrix or t02_reject_vs_activate or database"` | **PASÓ: 5**, 10 deselected, 1 advertencia, 31.76 s. T-02 no mostró bloqueos; se verificó que se rechazan nombres externos `*_test`. Compose se desmontó después. |
+| Suite frontend | `pnpm run test` en `frontend/` | **PASÓ: 6 pruebas** en 2 archivos (elegibilidad y etiquetas). |
+| Compilación frontend | `pnpm run build` en `frontend/` | **PASÓ, EXIT 0**: `tsc -b && vite build`; 45 módulos. |
+| E2E Chromium (T-35) | `$env:E2E_BASE_URL='http://localhost:5174'; pnpm run test:e2e` desde `frontend/`, contra `dh05-demo` recién reseteado | **PASÓ: 2/2, 26.0 s**. Error de credenciales, ruta protegida (403 API), flujo por estudiante, empleador, coordinador académico, legal y EC hasta `ACTIVE`; vista Mis postulaciones sin overflow a 390 px. Una ejecución anterior falló por no aceptar `window.confirm` al aprobar la segunda revisión; el test se corrigió y la corrida limpia posterior pasó. |
+| Demo limpia (T-12) | `scripts/Start-Demo.ps1 -Reset`, frase `RESET DH05 DEMO`; `docker-compose.demo.yml` | **PASÓ**: solo proyecto/volumen `dh05-demo`, base `dh05_demo`, puertos loopback 5433/8001/5174; Alembic `0004 (head)`, `/health` `ok`, seed de 14 cuentas. Script confirmó nombre/etiquetas del volumen y publicó solo loopback. |
+| Guardas de demo y de imagen | `scripts/Start-Demo.ps1` sin reset; `docker compose ... exec api sh -c 'test ! -d /app/tests'` | **PASÓ**: reconoce solo los 14 nombres seed esperados y conserva el dataset; el API de producción no tiene `/app/tests`. Después del E2E, DB demo reportó `dh05_demo`, 14 cuentas, 1 oportunidad E2E y 1 colocación `ACTIVE`. |
+| Preservación del entorno local | Nombres/proyectos de Compose usados durante pruebas | **PASÓ por aislamiento:** suites apuntaron a `dh05-tests`/`dh05_http_test`; demo solo a `dh05-demo`/`dh05_demo`. No se usó el proyecto Compose local (`internship-lifecycle-platform`), su puerto 5432 ni su base; ningún reset/seed se dirigió allí. |
 
-La suite del backend prueba autorización a nivel HTTP para cruces de titularidad, organización, supervisor, programa y actores institucionales. La matriz documenta todos los endpoints; E2E cubre un camino principal por los roles incluidos, no cada endpoint ni todos los permisos posibles.
+La matriz documenta las 34 operaciones HTTP enumeradas por OpenAPI. La prueba HTTP valida cruces de titularidad, organización, supervisor, programa y actores institucionales, pero no es una auditoría de penetración ni cubre cada combinación endpoint/rol. E2E valida un recorrido principal de los cinco roles nombrados en Chromium; no prueba el resto de vistas, todos los permisos ni otros browsers.
 
 ## Cabecera de evidencia
 

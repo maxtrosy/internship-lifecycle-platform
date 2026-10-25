@@ -1,5 +1,7 @@
 # Demo reproducible y aislada
 
+**Verificado:** 2026-10-24.
+
 La demostración usa el proyecto Compose `dh05-demo`, el frontend `http://localhost:5174`, la API `http://localhost:8001`, PostgreSQL en `127.0.0.1:5433`, la base `dh05_demo` y el volumen `dh05-demo-postgres-data`. No apunta al proyecto Compose local (`internship-lifecycle-platform`) ni a su base `postgres` en el puerto 5432.
 
 ## Arranque conservando el conjunto de demo
@@ -10,7 +12,7 @@ Desde la raíz del repositorio, en PowerShell:
 .\scripts\Start-Demo.ps1
 ```
 
-El script valida el proyecto `dh05-demo`, el destino de conexión `db/dh05_demo` y el volumen antes de arrancar. Ejecuta el seed solamente si no hay cuentas; si detecta una cantidad parcial, se detiene sin cambiar los datos. `backend/app/demo_seed.py` vuelve a comprobar `APP_ENV=demo`, host `db` y base `dh05_demo` antes de insertar.
+El script valida `APP_ENV=demo`, el destino de conexión `db/dh05_demo`, el volumen exacto `dh05-demo-postgres-data`, sus etiquetas de propiedad Compose y que los tres puertos publicados estén ligados a `127.0.0.1`. Si el volumen existente pertenece a otro proyecto, se detiene antes de cambiar datos. Ejecuta el seed solo si no hay cuentas; si encuentra 14, compara los nombres de usuario con el conjunto seed conocido y conserva los datos; otros conteos o usuarios detienen el script. `backend/app/demo_seed.py` vuelve a comprobar `APP_ENV=demo`, host `db`, base `dh05_demo` y que no existan cuentas antes de insertar.
 
 ## Base limpia para repetir la demo
 
@@ -61,4 +63,4 @@ $env:E2E_BASE_URL = "http://localhost:5174"
 pnpm run test:e2e
 ```
 
-El recorrido modifica la base `dh05_demo` al crear una oportunidad, postulación, colocación, revisiones documentales y activación. Restablece el demo con el procedimiento de reset antes de repetir la corrida. La suite no restablece ni se conecta al proyecto Compose usado por el desarrollo local.
+El recorrido modifica la base `dh05_demo` al crear una oportunidad, postulación, colocación, revisiones documentales y activación. La corrida verificada dejó una colocación activa E2E en la demo; usa el procedimiento de reset antes de presentar una base limpia o repetirla. La suite no restablece ni se conecta al proyecto Compose usado por el desarrollo local. La suite backend tiene su propio proyecto `dh05-tests` y base `dh05_http_test`, sin volumen persistente.

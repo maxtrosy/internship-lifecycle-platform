@@ -1,6 +1,6 @@
 # ADR-004 — Autorización por rol y relación con la colocación
 
-**Status:** propuesta, **parcialmente verificada** en PoC (sin capa HTTP) · **Fecha:** 2026-10-08
+**Status:** propuesta, **verificada en parte en el producto** · **Fecha:** 2026-10-24
 
 ## Context
 El RFP: acceso "dependiente del rol y de la relación con la oportunidad o colocación", acceso externo "controlado y limitado" y preocupación explícita porque "host organizations may access more student information than necessary" (sec. 2 y 7). RF-20, RNF-04. Hay muchos usuarios con el **mismo rol pero distinta relación**: dos organizaciones anfitrionas, supervisores docentes asignados a ciertas colocaciones, coordinadores de un programa. ASM-003B propone política a nivel de fila (cita un `domain-model.md` que no existe, AUD-34). La autenticación de usuarios externos no está definida por el RFP (OPEN-21).
@@ -48,7 +48,8 @@ Cada caso de uso pasa por C-02. Se necesitan índices para los predicados de rel
 ## Verification
 - **Ejecutado (PoC, equipo):** T-03 — 66 aserciones sobre 13 sujetos × 3 colocaciones en una base aislada: listados exactos, coincidencia lectura/listado, 9 denegaciones externas como "no encontrado", 11 denegaciones internas como "prohibido", 8/8 acciones negativas denegadas, 5/5 positivas permitidas, proyección con solo 2 campos.
 - **Hallazgo de proceso:** la primera corrida de T-03 falló por fixtures compartidos entre pruebas (defecto del harness, no del diseño); se aisló la base y se conservó la evidencia del fallo.
-- **NOT EXECUTED:** capa HTTP, usuarios externos reales, RLS, escaneo de rutas sin autorización, exportaciones/reportes.
+- **Ejecutado en el producto:** T-34 cruza 34 operaciones OpenAPI documentadas con autorización backend; pruebas HTTP negativas cubren estudiante, organización, supervisor asignado, programa, roles institucionales y sesión ausente. Suite backend: 65 PASS; [matriz y resultados](../validation/http-authorization-matrix.md).
+- **NOT EXECUTED:** usuarios externos institucionales reales, RLS, exportaciones/reportes y cada combinación posible de endpoint/rol. La prueba HTTP no es auditoría de penetración. `OPEN-06` mantiene pendiente el alcance final de campos externos y `OPEN-09` el alcance institucional formal.
 
 ## Reconsider when
 TI exige RLS; el número de tipos de relación crece o las políticas deben cambiarlas no desarrolladores (entonces evaluar un motor externo); TI define y habilita SSO institucional (OPEN-21).

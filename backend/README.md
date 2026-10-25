@@ -41,15 +41,20 @@ python -m uvicorn app.main:app --reload
 ```
 
 ## Pruebas
-Las pruebas usan `pgserver` (Python 3.12) si no hay `DATABASE_URL`. Si se configura una URL,
-el nombre de la base debe identificarla como base de pruebas (`*_test`, `*_tests`, `test_*` o
-equivalente); la suite limpia sus tablas con `TRUNCATE` antes de cada prueba y rechaza nombres
-ambiguos como `postgres` o `dh05_demo` para evitar borrar datos compartidos.
+Las pruebas locales usan `pgserver` (Python 3.12) cuando no hay `DATABASE_URL`. Para la corrida
+reproducible en contenedor, usa el Compose separado de pruebas: solo acepta `host=db`, puerto
+`5432` y base `dh05_http_test`, sin volumen persistente. La suite limpia esa base con `TRUNCATE`
+antes de cada prueba; rechaza URLs locales, externas, de demo o con otro nombre aunque incluyan
+la palabra `test`.
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path .deps).Path
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 python -m pytest -q
 ```
+
+En Docker: `docker compose -p dh05-tests -f docker-compose.test.yml run --build --rm tests`;
+después, retira el contenedor/base efímera con `docker compose -p dh05-tests -f docker-compose.test.yml down --volumes --remove-orphans`.
 
 Python 3.12 es requerido. En el equipo auditado, el Python local es 3.14 y las extensiones de
 `.deps` son para CPython 3.12; la suite se ejecutó en un contenedor Python 3.12 con una base

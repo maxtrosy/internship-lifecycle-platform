@@ -1,6 +1,6 @@
 # Matriz de autorización HTTP
 
-**Corte:** 2026-10-22. Esta matriz describe las rutas registradas por `backend/app/main.py` y los routers de módulos. `requires(action)` autentica la sesión y declara la intención de la ruta; la decisión efectiva de rol y relación se aplica en el servicio consultado por cada endpoint.
+**Corte:** 2026-10-24. Esta matriz enumera las 34 operaciones HTTP del OpenAPI generado desde `backend/app/main.py` y los routers de módulos. `requires(action)` autentica la sesión y declara la intención de la ruta; la decisión efectiva de rol y relación se aplica en el servicio consultado por cada endpoint.
 
 ## Convenciones
 
@@ -55,6 +55,7 @@
 - `backend/tests/test_routes_actions.py` comprueba que cada ruta autenticada declara acción.
 - `backend/tests/test_authz.py` cubre relaciones en el servicio y proyección mínima del estudiante.
 - `backend/tests/test_http_authorization.py` añade accesos HTTP cruzados por estudiante, organización, asignación de supervisor y programa; lista/selección de postulaciones; lectura/entrega/descarga de documentos; colas institucionales y sesión ausente.
+- **PASÓ:** la suite backend actual incluyó los 2 tests HTTP de autorización; la prueba matricial cruzó titularidad, organización, supervisor, programa, roles institucionales y sesión ausente. La suite completa finalizó 65/65; la corrida focalizada de autorización, T-02 y guardas de base finalizó 5/5.
 - Las lecturas legales son institucionales conforme a ADR-004/OPEN-09; no se ha inventado un alcance por programa.
 - Hay servicios internos sin endpoint HTTP, por ejemplo `approve_version`; la matriz no los presenta como rutas disponibles.
 - La verificación no es una prueba de penetración, una revisión de RLS ni una certificación de producción.

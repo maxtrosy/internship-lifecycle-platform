@@ -4,7 +4,6 @@ from __future__ import annotations
 import datetime as dt
 import os
 import pathlib
-import re
 import sys
 import tempfile
 import threading
@@ -24,13 +23,21 @@ from migrations.schema_sql import CURRENT_SCHEMA as SCHEMA  # noqa: E402
 
 TEST_PASSWORD = "Test-Only-Password-2026!"
 _TEST_PASSWORD_HASH = security.hash_password(TEST_PASSWORD)
-_TEST_DATABASE_NAME = re.compile(r"(?:^|[_-])tests?(?:$|[_-]|\d)", re.IGNORECASE)
+_TEST_DATABASE_HOST = "db"
+_TEST_DATABASE_NAME = "dh05_http_test"
 
 
 def is_test_database_url(url: str) -> bool:
-    """The suite truncates its schema, so refuse ambiguous/shared database names."""
-    database_name = conninfo_to_dict(url).get("dbname", "")
-    return bool(_TEST_DATABASE_NAME.search(database_name))
+    """Only allow the suite to truncate its own disposable Compose database."""
+    try:
+        details = conninfo_to_dict(url)
+    except psycopg.ProgrammingError:
+        return False
+    return (
+        details.get("host") == _TEST_DATABASE_HOST
+        and details.get("dbname") == _TEST_DATABASE_NAME
+        and details.get("port", "5432") == "5432"
+    )
 
 
 class DbEnv:
@@ -40,7 +47,7 @@ class DbEnv:
             if not is_test_database_url(url):
                 raise RuntimeError(
                     "Refusing to run destructive tests against a database not named as a test DB. "
-                    "Use a disposable database with 'test' in its name; the suite truncates its tables."
+                    "Use the isolated Compose service db with database dh05_http_test; the suite truncates its tables."
                 )
             self.uri = url
             self.owned = False

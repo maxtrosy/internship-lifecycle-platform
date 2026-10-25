@@ -140,6 +140,7 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await approvedCard.getByRole("button", { name: "Ver documentos" }).click();
   const submittedRow = approvedCard.getByRole("row").filter({ hasText: "Seguro" });
   await submittedRow.getByLabel("Motivo para Seguro").fill("La nueva versión es legible para esta demostración.");
+  page.once("dialog", (dialog) => dialog.accept());
   await submittedRow.getByRole("button", { name: "Aprobar" }).click();
   await expect(page.locator(".alert.success")).toContainText("Documento aprobado.");
   await logout(page);
