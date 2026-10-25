@@ -33,7 +33,11 @@ services:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_DEMO_LOGIN_ENABLED: "true"
+        VITE_DEMO_LOGIN_PASSWORD: "${DEMO_PASSWORD:-Demo-Only-2026!}"
     ports:
       - "127.0.0.1:5174:80"
     depends_on:

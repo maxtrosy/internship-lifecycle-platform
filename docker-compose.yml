@@ -22,6 +22,7 @@ services:
       JWT_TTL_MINUTES: "15"
       APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       PASSWORD_RESET_DELIVERY: ${PASSWORD_RESET_DELIVERY:-development-token}
+      DEMO_PASSWORD: "${DEMO_PASSWORD:-Demo-Only-2026!}"
     ports:
       - "8000:8000"
     depends_on:
@@ -29,7 +30,11 @@ services:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_DEMO_LOGIN_ENABLED: "true"
+        VITE_DEMO_LOGIN_PASSWORD: "${DEMO_PASSWORD:-Demo-Only-2026!}"
     ports:
       - "5173:80"
     depends_on:

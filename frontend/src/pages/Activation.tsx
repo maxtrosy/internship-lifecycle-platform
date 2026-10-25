@@ -44,7 +44,7 @@ export default function Activation() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="CICLO DE VIDA" title="Activación de prácticas" description="Consulta las condiciones obligatorias. El backend valida nuevamente la compuerta al activar." />
+      <PageHeader eyebrow="CICLO DE VIDA" title="Activación de prácticas" description="Consulta las condiciones obligatorias. El sistema las comprobará de nuevo antes de activar." />
       {error && <Alert kind="error">{error}</Alert>}
       {message && <Alert kind="success">{message}</Alert>}
       {rows === null && !error && <div className="empty"><Spinner /> Cargando…</div>}

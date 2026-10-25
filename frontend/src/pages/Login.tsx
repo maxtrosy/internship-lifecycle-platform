@@ -2,6 +2,7 @@ import { useState } from "react";
 import * as api from "../api";
 import type { User } from "../api";
 import { Alert, Spinner } from "../components/ui";
+import { isDemoLoginEnabled } from "../demoLogin";
 
 type Mode = "login" | "request-reset" | "complete-reset";
 
@@ -166,6 +167,11 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
               <button className="btn link login-link" type="button" onClick={() => { setMode("request-reset"); setError(null); setNotice(null); }}>
                 ¿Olvidaste tu contraseña?
               </button>
+              {isDemoLoginEnabled() && (
+                <button className="btn secondary login-demo-link" type="button" onClick={() => { window.location.hash = "/demo-login"; }}>
+                  Entrar con una cuenta de prueba
+                </button>
+              )}
               <p className="muted login-footnote">No hay registro público. Las cuentas se aprovisionan por el operador o mediante invitación.</p>
             </form>
           )}

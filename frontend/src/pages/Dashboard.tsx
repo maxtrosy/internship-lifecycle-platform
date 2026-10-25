@@ -35,6 +35,7 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
   const isAcademic = roles.includes("PROGRAM_COORDINATOR");
   const isLegal = roles.includes("LEGAL_REVIEWER");
   const isEc = roles.includes("EXPERIENTIAL_COORDINATOR");
+  const dashboardVariant = isStudent ? "student" : isEmployer ? "employer" : isAcademic ? "academic" : isLegal ? "legal" : isEc ? "experiential" : "limited";
 
   useEffect(() => {
     let cancelled = false;
@@ -138,33 +139,32 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
       {errors.map((error) => <Alert kind="error" key={error}>{error}</Alert>)}
       {loading && <div className="loading-line"><Spinner /> Actualizando tu espacio de trabajo…</div>}
 
-      <div className="bento-grid dashboard-grid">
+      <div className={`bento-grid dashboard-grid dashboard-grid--${dashboardVariant}`}>
         {isStudent && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" icon="01" title="Siguiente paso" description={studentDescription}>
+            <BentoCard variant="hero" className="dashboard-hero" title="Siguiente paso" description={studentDescription}>
               <div className="hero-content">
                 <div>
                   <h2>{studentHeadline}</h2>
                   {latestApplication && <p className="hero-record">Proceso más reciente · {latestApplication.title}</p>}
                   {latestApplication?.placement_state && <Badge>{latestApplication.placement_state}</Badge>}
                 </div>
-                <button className="btn" type="button" onClick={() => onNavigate(studentAction)}>{studentActionLabel}<span aria-hidden="true">↗</span></button>
+                <button className="btn" type="button" onClick={() => onNavigate(studentAction)}>{studentActionLabel}<span aria-hidden="true">→</span></button>
               </div>
             </BentoCard>
-            <MetricCard label="Mis postulaciones" value={data.applications?.length ?? null} detail="En el historial de tu cuenta" icon="02" />
-            <MetricCard label="Requisitos pendientes" value={studentUnmet} detail="En prácticas con checklist" icon="03" />
-            <BentoCard variant="action" className="dashboard-opportunities" icon="↗" title="Catálogo de oportunidades" description="Consulta las oportunidades publicadas que puedes ver con tu cuenta.">
+            <MetricCard label="Mis postulaciones" value={data.applications?.length ?? null} detail="En el historial de tu cuenta" />
+            <MetricCard label="Requisitos pendientes" value={studentUnmet} detail="En tus prácticas" />
+            <BentoCard variant="action" className="dashboard-opportunities" title="Catálogo de oportunidades" description="Consulta las oportunidades publicadas que puedes ver con tu cuenta.">
               <div className="action-card-bottom">
                 <span className="action-count">{data.opportunities?.length ?? "—"} <small>visibles</small></span>
                 <button className="btn secondary" type="button" onClick={() => onNavigate("opportunities")}>Abrir catálogo</button>
               </div>
             </BentoCard>
-            <BentoCard variant="activity" className="dashboard-activity" icon="04" title="Actividad reciente" description="Tus postulaciones más recientes">
+            <BentoCard variant="activity" className="dashboard-activity" title="Actividad reciente" description="Tus postulaciones más recientes">
               {data.applications?.length ? (
                 <ul className="activity-list">
                   {data.applications.slice(0, 3).map((application) => (
                     <li key={application.id}>
-                      <span className="activity-dot" aria-hidden="true" />
                       <span className="activity-copy"><strong>{application.title}</strong><small>{application.placement_state ? formatDomainLabel(application.placement_state) : formatDomainLabel(application.state)}</small></span>
                       <Badge>{application.state}</Badge>
                     </li>
@@ -177,16 +177,16 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {isEmployer && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" icon="01" title="Gestión de oportunidades" description="El catálogo está limitado a las oportunidades visibles para tus relaciones registradas.">
+            <BentoCard variant="hero" className="dashboard-hero" title="Gestión de oportunidades" description="El catálogo está limitado a las oportunidades visibles para tus relaciones registradas.">
               <div className="hero-content">
                 <div><h2>Revisa tus candidaturas</h2><p className="hero-record">Las postulaciones muestran la información autorizada por el sistema.</p></div>
-                <button className="btn" type="button" onClick={() => onNavigate("opportunities")}>Gestionar oportunidades<span aria-hidden="true">↗</span></button>
+                <button className="btn" type="button" onClick={() => onNavigate("opportunities")}>Gestionar oportunidades<span aria-hidden="true">→</span></button>
               </div>
             </BentoCard>
-            <MetricCard label="Oportunidades gestionadas" value={data.opportunities?.length ?? null} detail="Según el alcance de tu cuenta" icon="02" />
-            <MetricCard label="Candidaturas por revisar" value={pendingDecisions} detail="Postulaciones enviadas" icon="03" />
-            <MetricCard label="Candidatos seleccionados" value={selectedCandidates} detail="Con práctica registrada" icon="04" />
-            <BentoCard variant="action" className="dashboard-opportunities" icon="↗" title="Acceso a la bandeja" description={pendingDecisions === null ? "Abre una oportunidad para consultar su bandeja de postulaciones." : pendingDecisions ? `${pendingDecisions} candidaturas esperan una decisión.` : "No hay candidaturas pendientes de decisión."}>
+            <MetricCard label="Oportunidades gestionadas" value={data.opportunities?.length ?? null} detail="Según el alcance de tu cuenta" />
+            <MetricCard label="Candidaturas por revisar" value={pendingDecisions} detail="Postulaciones enviadas" />
+            <MetricCard label="Candidatos seleccionados" value={selectedCandidates} detail="Con práctica registrada" />
+            <BentoCard variant="action" className="dashboard-opportunities" title="Acceso a la bandeja" description={pendingDecisions === null ? "Abre una oportunidad para consultar su bandeja de postulaciones." : pendingDecisions ? `${pendingDecisions} candidaturas esperan una decisión.` : "No hay candidaturas pendientes de decisión."}>
               <button className="btn secondary" type="button" onClick={() => onNavigate("opportunities")}>Abrir postulaciones</button>
             </BentoCard>
           </>
@@ -194,14 +194,14 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {isAcademic && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" icon="01" title="Coordinación académica" description="Las selecciones se muestran según el programa asociado a tu cuenta.">
+            <BentoCard variant="hero" className="dashboard-hero" title="Coordinación académica" description="Las selecciones se muestran según el programa asociado a tu cuenta.">
               <div className="hero-content">
                 <div><h2>{data.academicQueue?.length ? "Hay selecciones por revisar" : "Revisa tu cola académica"}</h2><p className="hero-record">La aprobación fija las políticas vigentes para la colocación.</p></div>
-                <button className="btn" type="button" onClick={() => onNavigate("academic")}>Abrir revisión<span aria-hidden="true">↗</span></button>
+                <button className="btn" type="button" onClick={() => onNavigate("academic")}>Abrir revisión<span aria-hidden="true">→</span></button>
               </div>
             </BentoCard>
-            <MetricCard label="Selecciones pendientes" value={data.academicQueue?.length ?? null} detail="En tu alcance académico" icon="02" />
-            <BentoCard variant="action" className="dashboard-opportunities" icon="03" title="Políticas de programa" description="Consulta y crea versiones de las condiciones soportadas por la API.">
+            <MetricCard label="Selecciones pendientes" value={data.academicQueue?.length ?? null} detail="En tu alcance académico" />
+            <BentoCard variant="action" className="dashboard-opportunities" title="Políticas de programa" description="Consulta y crea versiones de las condiciones soportadas por el sistema.">
               <button className="btn secondary" type="button" onClick={() => onNavigate("policies")}>Administrar políticas</button>
             </BentoCard>
           </>
@@ -209,24 +209,24 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {isLegal && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" icon="01" title="Revisión documental" description="La cola está limitada por los permisos de revisión de tu cuenta.">
-              <div className="hero-content"><div><h2>Documentos que requieren atención</h2><p className="hero-record">Revisa cada archivo y registra el motivo de la decisión.</p></div><button className="btn" type="button" onClick={() => onNavigate("docreview")}>Abrir bandeja<span aria-hidden="true">↗</span></button></div>
+            <BentoCard variant="hero" className="dashboard-hero" title="Revisión documental" description="La cola está limitada por los permisos de revisión de tu cuenta.">
+              <div className="hero-content"><div><h2>Documentos que requieren atención</h2><p className="hero-record">Revisa cada archivo y registra el motivo de la decisión.</p></div><button className="btn" type="button" onClick={() => onNavigate("docreview")}>Abrir bandeja<span aria-hidden="true">→</span></button></div>
             </BentoCard>
-            <MetricCard label="Prácticas en la cola" value={data.documentQueue?.length ?? null} detail="Con documentos para revisar" icon="02" />
+            <MetricCard label="Prácticas en la cola" value={data.documentQueue?.length ?? null} detail="Con documentos para revisar" />
           </>
         )}
 
         {isEc && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" icon="01" title="Activación de prácticas" description="La API calcula las condiciones y bloquea cualquier activación que no esté lista.">
-              <div className="hero-content"><div><h2>Comprueba las compuertas</h2><p className="hero-record">La acción de activar sigue sujeta a la validación del servidor.</p></div><button className="btn" type="button" onClick={() => onNavigate("activation")}>Abrir activaciones<span aria-hidden="true">↗</span></button></div>
+            <BentoCard variant="hero" className="dashboard-hero" title="Activación de prácticas" description="El sistema calcula las condiciones y vuelve a validarlas antes de activar.">
+              <div className="hero-content"><div><h2>Comprueba las condiciones</h2><p className="hero-record">La práctica solo se podrá activar cuando cumpla todas las condiciones.</p></div><button className="btn" type="button" onClick={() => onNavigate("activation")}>Abrir activaciones<span aria-hidden="true">→</span></button></div>
             </BentoCard>
-            <MetricCard label="En documentación" value={data.activationQueue?.length ?? null} detail="Prácticas pendientes de activación" icon="02" />
+            <MetricCard label="En documentación" value={data.activationQueue?.length ?? null} detail="Prácticas pendientes de activación" />
           </>
         )}
 
         {!isStudent && !isEmployer && !isAcademic && !isLegal && !isEc && (
-          <BentoCard variant="hero" className="dashboard-hero" icon="01" title="Acceso de solo lectura" description="Tu cuenta no tiene una vista de gestión asignada en la interfaz actual.">
+          <BentoCard variant="hero" className="dashboard-hero" title="Acceso de solo lectura" description="Tu cuenta no tiene una vista de gestión asignada en la interfaz actual.">
             <div className="hero-content"><div><h2>Espacio de trabajo</h2><p className="hero-record">Las capacidades de supervisión y reportes no están implementadas en esta versión.</p></div></div>
           </BentoCard>
         )}

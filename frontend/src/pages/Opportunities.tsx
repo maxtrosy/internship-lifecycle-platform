@@ -6,6 +6,11 @@ import EligibilitySummary from "../components/EligibilitySummary";
 import { presentEligibility } from "../eligibility";
 
 export default function Opportunities({ user }: { user: User }) {
+  const assignedHostOrg = user.roles.find((role) => role.host_org_id)?.host_org_id ?? null;
+  const assignedProgram = user.roles.find((role) => role.program_id)?.program_id ?? null;
+  const isCreator = user.roles.some((r) => r.role === "HOST_ORG_MEMBER" || r.role === "PROGRAM_COORDINATOR");
+  const isEmployer = user.roles.some((r) => r.role === "HOST_ORG_MEMBER");
+  const isStudent = user.roles.some((r) => r.role === "STUDENT");
   const [items, setItems] = useState<Opportunity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -13,8 +18,8 @@ export default function Opportunities({ user }: { user: User }) {
   const [stateFilter, setStateFilter] = useState("ALL");
 
   const [title, setTitle] = useState("");
-  const [hostOrg, setHostOrg] = useState(() => String(user.roles.find((role) => role.host_org_id)?.host_org_id ?? ""));
-  const [program, setProgram] = useState(() => String(user.roles.find((role) => role.program_id)?.program_id ?? ""));
+  const [hostOrg, setHostOrg] = useState(() => String(assignedHostOrg ?? ""));
+  const [program, setProgram] = useState(() => String(assignedProgram ?? ""));
   const [creating, setCreating] = useState(false);
 
   const [apps, setApps] = useState<EmployerApplication[] | null>(null);
@@ -22,9 +27,20 @@ export default function Opportunities({ user }: { user: User }) {
   const [selectingId, setSelectingId] = useState<number | null>(null);
   const [sel, setSel] = useState({ supervisor: "", start: "", end: "", location: "", responsibilities: "" });
 
-  const isCreator = user.roles.some((r) => r.role === "HOST_ORG_MEMBER" || r.role === "PROGRAM_COORDINATOR");
-  const isEmployer = user.roles.some((r) => r.role === "HOST_ORG_MEMBER");
-  const isStudent = user.roles.some((r) => r.role === "STUDENT");
+  const organizationChoices = useMemo(() => {
+    const source = (items ?? []).filter((opportunity) => !isEmployer || opportunity.host_org_id === assignedHostOrg);
+    return [...new Map(source.map((opportunity) => [opportunity.host_org_id, opportunity.host_name])).entries()]
+      .map(([id, name]) => ({ id, name }));
+  }, [items, isEmployer, assignedHostOrg]);
+  const programChoices = useMemo(() => {
+    const source = (items ?? []).filter((opportunity) => !isEmployer || opportunity.host_org_id === assignedHostOrg);
+    return [...new Map(source.map((opportunity) => [opportunity.program_id, opportunity.program_code])).entries()]
+      .map(([id, code]) => ({ id, code }));
+  }, [items, isEmployer, assignedHostOrg]);
+
+  useEffect(() => {
+    if (!program && programChoices.length > 0) setProgram(String(programChoices[0].id));
+  }, [program, programChoices]);
 
   async function reload() {
     setError(null);
@@ -86,7 +102,7 @@ export default function Opportunities({ user }: { user: User }) {
       return;
     }
     if (sel.supervisor && (!Number.isInteger(Number(sel.supervisor)) || Number(sel.supervisor) < 1)) {
-      setError("El identificador del supervisor debe ser un número válido.");
+      setError("Selecciona un supervisor laboral válido.");
       return;
     }
     if (!window.confirm("¿Confirmar la selección de este candidato?")) return;
@@ -131,19 +147,55 @@ export default function Opportunities({ user }: { user: User }) {
       {isCreator && (
         <form className="card form-card" onSubmit={create}>
           <div className="section-heading"><div><span className="eyebrow">GESTIÓN</span><h2>Publicar oportunidad</h2><p>Al publicarla, queda disponible según el alcance configurado en el sistema.</p></div></div>
-          <div className="grid cols-3">
+          <div className="grid cols-3 opportunity-assignment-grid">
             <div className="field">
               <label htmlFor="opp-title">Título</label>
               <input id="opp-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
             </div>
-            <div className="field">
-              <label htmlFor="opp-org">ID de organización</label>
-              <input id="opp-org" type="number" min="1" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} required />
-            </div>
-            <div className="field">
-              <label htmlFor="opp-prog">ID de programa</label>
-              <input id="opp-prog" type="number" min="1" value={program} onChange={(e) => setProgram(e.target.value)} required />
-            </div>
+            {assignedHostOrg !== null ? (
+              <div className="context-field">
+                <span>Organización</span>
+                <strong>{organizationChoices.find((choice) => choice.id === assignedHostOrg)?.name ?? "Vinculada a tu cuenta"}</strong>
+                <small>Asignada a tu sesión</small>
+                <input id="opp-org" type="hidden" value={hostOrg} />
+              </div>
+            ) : organizationChoices.length > 0 ? (
+              <div className="field">
+                <label htmlFor="opp-org">Organización</label>
+                <select id="opp-org" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} required>
+                  <option value="">Selecciona una organización</option>
+                  {organizationChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="opp-org">Organización</label>
+                <input id="opp-org" type="number" min="1" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} required />
+                <small className="field-note">No hay organizaciones disponibles para seleccionar. Contacta a coordinación para revisar el acceso de tu cuenta.</small>
+              </div>
+            )}
+            {assignedProgram !== null ? (
+              <div className="context-field">
+                <span>Programa</span>
+                <strong>{programChoices.find((choice) => choice.id === assignedProgram)?.code ?? "Asignado a tu cuenta"}</strong>
+                <small>Vinculado a tu sesión</small>
+                <input id="opp-prog" type="hidden" value={program} />
+              </div>
+            ) : programChoices.length > 0 ? (
+              <div className="field">
+                <label htmlFor="opp-prog">Programa</label>
+                <select id="opp-prog" value={program} onChange={(e) => setProgram(e.target.value)} required>
+                  <option value="">Selecciona un programa</option>
+                  {programChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.code}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="opp-prog">Programa</label>
+                <input id="opp-prog" type="number" min="1" value={program} onChange={(e) => setProgram(e.target.value)} required />
+                <small className="field-note">No hay programas disponibles para seleccionar. Contacta a coordinación para revisar el acceso de tu cuenta.</small>
+              </div>
+            )}
           </div>
           <div>
             <button className="btn" type="submit" disabled={creating || !title.trim() || !hostOrg || !program}>
@@ -241,7 +293,8 @@ export default function Opportunities({ user }: { user: User }) {
                         )}
                         {selectingId === a.id && (
                           <div className="grid cols-2" style={{ marginTop: 8 }}>
-                            <div className="field"><label>Identificador del supervisor (opcional)</label>
+                            <div className="field"><label>Supervisor laboral asignado (opcional)</label>
+                              <small className="field-note">Déjalo vacío si aún no tienes una asignación de supervisor.</small>
                               <input type="number" min="1" value={sel.supervisor} onChange={(e) => setSel({ ...sel, supervisor: e.target.value })} /></div>
                             <div className="field"><label>Fecha de inicio</label>
                               <input type="date" value={sel.start} onChange={(e) => setSel({ ...sel, start: e.target.value })} /></div>

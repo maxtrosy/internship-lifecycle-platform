@@ -35,6 +35,8 @@ Invoke-RestMethod http://localhost:8001/health
 
 La salida esperada de `current_database()` es `dh05_demo`, y el estado de salud es `ok`. Evita ejecutar `docker compose down --volumes` sin el mismo `-p dh05-demo` y `-f docker-compose.demo.yml`; el script aplica ambos y verifica el destino antes de permitir reset.
 
+Para abrir el selector de perfiles sin escribir credenciales, visita `http://localhost:5174/#/demo-login` o elige **Entrar con una cuenta de prueba** en la pantalla de acceso. Cada botón inicia sesión mediante el endpoint local normal. La ruta solo se habilita en los builds locales/de demo y cuando el navegador usa `localhost` o una dirección loopback; los builds de producción la mantienen desactivada.
+
 ## Cuentas sintéticas para recorrer los roles
 
 Todas las cuentas seed usan la contraseña local de demostración `Demo-Only-2026!`:

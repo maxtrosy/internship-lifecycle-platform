@@ -4,6 +4,8 @@ import type { User } from "./api";
 import Layout, { type SectionId } from "./components/Layout";
 import { Spinner } from "./components/ui";
 import Login from "./pages/Login";
+import DemoLogin from "./pages/DemoLogin";
+import { isDemoLoginEnabled } from "./demoLogin";
 import Dashboard from "./pages/Dashboard";
 import Opportunities from "./pages/Opportunities";
 import Applications from "./pages/Applications";
@@ -43,10 +45,14 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [tab, setTab] = useState<SectionId>(sectionFromHash());
+  const [showDemoLogin, setShowDemoLogin] = useState(window.location.hash === "#/demo-login");
 
   // Hash router: keeps sections addressable (#/opportunities, #/activation, …).
   useEffect(() => {
-    const onHash = () => setTab(sectionFromHash());
+    const onHash = () => {
+      setTab(sectionFromHash());
+      setShowDemoLogin(window.location.hash === "#/demo-login");
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -90,6 +96,18 @@ export default function App() {
   }
 
   if (!user) {
+    if (isDemoLoginEnabled() && showDemoLogin) {
+      return (
+        <DemoLogin
+          onBack={() => { window.location.hash = "/login"; }}
+          onLoggedIn={(u) => {
+            setUser(u);
+            navigate("home");
+          }}
+        />
+      );
+    }
+
     return (
       <Login
         onLoggedIn={(u) => {

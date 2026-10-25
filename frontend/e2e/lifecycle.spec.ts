@@ -2,6 +2,27 @@ import { expect, test, type Page } from "@playwright/test";
 
 const demoPassword = process.env.E2E_DEMO_PASSWORD ?? "Demo-Only-2026!";
 
+test("the local demo route signs in to each synthetic account with one click", async ({ page }) => {
+  test.setTimeout(120_000);
+  const accountNames = [
+    "Student One", "Student Two", "Student Three",
+    "Host Member Alfa", "Host Member Beta", "Coord Sys", "Coord Adm",
+    "Experiential Coord 1", "Legal Reviewer", "Workplace Sup Alfa",
+    "Workplace Sup Alfa 2", "Workplace Sup Beta", "Faculty Sup 1",
+    "Dual Coordinator/Faculty",
+  ];
+
+  for (const name of accountNames) {
+    await page.goto("/#/demo-login");
+    const accountName = page.getByText(name, { exact: true });
+    await page.locator(".demo-account-card").filter({ has: accountName }).click();
+    await expect(page.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
+    await expect(page.getByText(name, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cerrar sesión" }).click();
+    await expect(page.getByLabel("Correo electrónico o nombre de usuario")).toBeVisible();
+  }
+});
+
 async function login(page: Page, username: string) {
   await page.goto("/");
   await page.getByLabel("Correo electrónico o nombre de usuario").fill(username);
@@ -56,8 +77,18 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await login(page, "hm_alfa");
   await navigate(page, "Oportunidades");
   await page.locator("#opp-title").fill(opportunityTitle);
-  await page.locator("#opp-org").fill("1");
-  await page.locator("#opp-prog").fill("1");
+  const organizationField = page.locator("#opp-org");
+  if (await organizationField.getAttribute("type") === "hidden") {
+    await expect(organizationField).toHaveValue("1");
+  } else {
+    await organizationField.fill("1");
+  }
+  const programField = page.locator("#opp-prog");
+  if (await programField.getAttribute("type") === "number") {
+    await programField.fill("1");
+  } else {
+    await programField.selectOption("1");
+  }
   await page.getByRole("button", { name: "Publicar" }).click();
   await expect(page.locator(".alert.success")).toContainText("Oportunidad creada y publicada.");
   await logout(page);
@@ -103,7 +134,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
 
   await login(page, "s1");
   await navigate(page, "Mis documentos");
-  const insuranceRow = page.getByRole("row").filter({ hasText: "Seguro" });
+  const studentPlacement = page.locator(".document-placement").filter({ hasText: opportunityTitle });
+  const insuranceRow = studentPlacement.getByRole("row").filter({ hasText: "Seguro" });
   await insuranceRow.getByLabel("Archivo para Seguro").setInputFiles({
     name: "insurance.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7 synthetic insurance"),
   });
@@ -125,7 +157,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   // Student re-submits the rejected item; legal approves the next revision.
   await login(page, "s1");
   await navigate(page, "Mis documentos");
-  const rejectedRow = page.getByRole("row").filter({ hasText: "Seguro" });
+  const rejectedPlacement = page.locator(".document-placement").filter({ hasText: opportunityTitle });
+  const rejectedRow = rejectedPlacement.getByRole("row").filter({ hasText: "Seguro" });
   await expect(rejectedRow).toContainText("Rechazado");
   await rejectedRow.getByLabel("Archivo para Seguro").setInputFiles({
     name: "insurance-corrected.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7 corrected"),

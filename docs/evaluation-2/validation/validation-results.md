@@ -1,5 +1,17 @@
 # Resultados de validación
 
+## Rediseño responsive de frontend — ejecución 2026-10-24
+
+| Evidencia | Comando/entorno | Resultado real |
+|---|---|---|
+| Pruebas frontend | `pnpm run test` en `frontend/` | **PASÓ: 6 pruebas** en 2 archivos. |
+| TypeScript + producción Vite | `pnpm run build` en `frontend/` | **PASÓ, EXIT 0**: `tsc -b && vite build`; 45 módulos. |
+| E2E Chromium sobre demo sintética aislada | `$env:E2E_BASE_URL='http://localhost:5175'; pnpm run test:e2e`; Compose `dh05-redesign`, DB `dh05_demo`, puertos 5434/8002/5175 | **PASÓ: 2/2** en una DB recién creada y sembrada con 14 cuentas. El recorrido cubre errores de login, ruta protegida y ciclo de estudiante, empleador, coordinador, revisor legal y EC hasta activación. Se acotaron las filas de documentos al nombre único de la oportunidad E2E. |
+| Acceso rápido a cuentas de demo | `$env:E2E_BASE_URL='http://localhost:5173'; pnpm exec playwright test e2e/lifecycle.spec.ts -g "local demo route signs in"` | **PASÓ: 1/1**, recorrió las 14 cuentas presentes en la base local y comprobó el inicio y cierre de cada sesión. No creó postulaciones ni modificó registros de negocio. |
+| Presentación visual de roles | Navegador Chromium a 1280 px y capturas renderizadas a 390 px | Inicio, oportunidades, postulaciones/documentos, gestión de empleador, coordinación, revisión legal y activación inspeccionados; textos de estado y elegibilidad legibles. |
+| Desbordamiento responsive | Script temporal local `frontend/visual-check.tmp.mjs` sobre el Compose aislado, 13 rutas/vistas, 390 px y 320 px (script retirado después de la corrida) | **PASÓ: 26/26** mediciones con ancho de documento igual al viewport. Las capturas no se conservaron; la comprobación fue del ancho del documento frente al viewport. |
+| Repetición del E2E | Segunda ejecución sobre datos sintéticos previos en `dh05-redesign` | La prueba encontró dos filas con tipo “Seguro” porque la búsqueda no estaba acotada a la oportunidad recién creada. Se corrigió el selector y la ejecución posterior en datos limpios pasó. La base de ejecución es temporal e independiente de la demo y BD locales. |
+
 ## Incremento de cierre — ejecución 2026-10-24
 
 Estos resultados corresponden al código actual del repositorio y no sustituyen los registros históricos del PoC que siguen abajo.
@@ -31,7 +43,7 @@ La matriz documenta las 34 operaciones HTTP enumeradas por OpenAPI. La prueba HT
 
 > **Corrida 2026-10-22.** 14 PASS. T-02 variante A: **55 activación primero / 45 rechazo primero**, 0 prohibidos; control B: **25/40**; variante C: **0/40** con 21 `GATE_VIOLATION`. T-16a..e: PASS. **Los conteos de orden varían entre corridas.**
 
-> **Lectura honesta.** Los 14 PASS de esta cabecera son del PoC; no demuestran el producto, la capa HTTP ni el rendimiento. Las verificaciones del producto aparecen en su propia sección más abajo. La interfaz del PoC no existe; el frontend del producto se inspeccionó visualmente en un conjunto pequeño de pantallas, sin capturas archivadas.
+> **Lectura honesta.** Los 14 PASS de esta cabecera son del PoC; no demuestran el producto, la capa HTTP ni el rendimiento. Las verificaciones del producto aparecen en su propia sección más abajo. La interfaz del PoC no existe; las comprobaciones visuales del producto se limitan a los roles, rutas y viewports enumerados en la sección de rediseño.
 
 ## B. Executed
 

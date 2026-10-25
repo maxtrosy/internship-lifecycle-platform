@@ -10,9 +10,10 @@
 - Entorno de demostración separado, Alembic hasta `0004`, health check y seed de 14 cuentas sintéticas: [runbook](validation/demo-runbook.md).
 - Pruebas unitarias frontend y compilación TypeScript/Vite: 6 pruebas aprobadas; `tsc -b && vite build` correcto.
 - Flujo principal E2E Chromium: **PASÓ, 2/2 pruebas** (login inválido/ruta protegida y recorrido UI hasta activación por estudiante, empleador, coordinador, revisor legal y EC); alcance limitado a Chromium, un camino por rol y viewport 390 px en Mis postulaciones. Véase [validation-results.md](validation/validation-results.md).
+- Rediseño responsive de las vistas existentes: **inspección visual** en escritorio para estudiante, empleador, coordinador, revisor legal y EC; comprobación automatizada de ancho sin desbordamiento en 13 rutas/vistas a 390 px y 320 px. Capturas de comprobación en `frontend/test-results/ui-redesign/` (directorio ignorado por Git); no equivale a E2E de todas las acciones.
 
 ### Implementado sin E2E
-- Rutas/vistas y acciones frontend fuera del recorrido explícito de Chromium: supervisión docente/lugar, mensajería, evaluación, paneles, otras variantes de programa/organización y revisión visual en browsers distintos.
+- Rutas/vistas y acciones frontend fuera del recorrido explícito de Chromium: supervisión docente/lugar, mensajería, evaluación, paneles, otras variantes de programa/organización y revisión visual en browsers distintos. Los roles de supervisión no tienen todavía una vista de trabajo propia y la API no expone catálogos de supervisores; la asignación opcional de supervisor en la selección sigue sin una opción nominativa en UI. La API tampoco ofrece catálogos generales de organizaciones/programas: si no hay oportunidades previas de donde obtener nombres, el formulario conserva una entrada numérica como salida técnica.
 - Flujos de cierre, horas y evaluación cuentan con pruebas de backend donde indicadas, pero no fueron incluidos en el E2E UI.
 
 ### Pendiente de decisión institucional
@@ -32,7 +33,7 @@
 | Backend Fase 1 (identidad, authz, auditoría, lifecycle) | `backend/`: T-20..T-31; autenticación local con Argon2id, cookie de sesión y recuperación |
 | Incremento oportunidades + postulaciones (Sprint 1) | `backend/app/modules/{opportunities,applications,policies}` + frontend React; T-24/T-25 |
 | Sprint 2: selección del empleador + aprobación académica | Selección, aprobación/rechazo, relación por programa y auditoría; pruebas T-26/T-27 |
-| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages}`; build TypeScript/Vite aprobado, 6 pruebas unitarias y E2E Chromium 2/2 del camino principal. Revisión visual parcial; las demás vistas/roles/tamaños y browsers están fuera de cobertura E2E |
+| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages}`; build TypeScript/Vite aprobado, 6 pruebas unitarias, E2E Chromium 2/2 del camino principal; rediseño inspeccionado visualmente en los roles con vista y viewport sin desbordamiento en 13 vistas a 390/320 px. Acciones exhaustivas, supervisión y browsers adicionales siguen sin E2E |
 | Sprint 3: documentos + activación | Archivos PDF/PNG/JPG/DOCX en PostgreSQL (≤10 MB), revisiones con motivo, historial y reentrega; permisos de descarga; activación/cierre por políticas versionadas; vistas de estudiante, revisor legal y EC; T-28..T-30 |
 | Políticas EB-08 | UI de coordinación para versiones de elegibilidad, activación y cierre; validadores de vocabulario cerrado; las colocaciones fijan las versiones al aprobarse académicamente |
 
