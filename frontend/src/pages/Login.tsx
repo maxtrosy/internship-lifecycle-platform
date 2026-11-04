@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { User } from "../api";
 import { Alert, Spinner } from "../components/ui";
 import { isDemoLoginEnabled } from "../demoLogin";
+import { ThemeControl } from "../theme";
 
 type Mode = "login" | "request-reset" | "complete-reset";
 
@@ -102,6 +103,12 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
             selección, aprobación académica, documentación y activación, con
             trazabilidad y control de acceso por rol.
           </p>
+          <ol className="login-cycle" aria-label="Etapas de la práctica">
+            <li><span>01</span><strong>Oportunidad</strong></li>
+            <li><span>02</span><strong>Selección</strong></li>
+            <li><span>03</span><strong>Seguimiento</strong></li>
+            <li><span>04</span><strong>Evidencias y cierre</strong></li>
+          </ol>
           <ul className="login-features">
             <li>Estudiantes: postúlate y sigue el estado de tu práctica.</li>
             <li>Empleadores: publica oportunidades y selecciona candidatos.</li>
@@ -111,6 +118,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
       </aside>
 
       <main className="login-panel">
+        <div className="login-theme"><ThemeControl /></div>
         <div className="card auth-card">
           <div className="auth-hero">
             <h2>

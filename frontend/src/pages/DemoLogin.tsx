@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { User } from "../api";
 import { Alert, Spinner } from "../components/ui";
 import { demoLoginPassword } from "../demoLogin";
+import { ThemeControl } from "../theme";
 
 type DemoAccount = {
   name: string;
@@ -73,7 +74,7 @@ export default function DemoLogin({
           <h1>Cuentas de prueba</h1>
           <p>Elige un perfil para entrar directamente. Cada acceso usa la sesión normal de la aplicación.</p>
         </div>
-        <button className="btn secondary" type="button" onClick={onBack}>Volver al inicio de sesión</button>
+        <div className="demo-header-actions"><ThemeControl /><button className="btn secondary" type="button" onClick={onBack}>Volver al inicio de sesión</button></div>
       </div>
 
       {error && <Alert kind="error">{error}</Alert>}

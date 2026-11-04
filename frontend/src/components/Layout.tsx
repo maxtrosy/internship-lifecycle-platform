@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { User } from "../api";
 import { formatDomainLabel, Icon, type IconName } from "./ui";
+import { ThemeControl } from "../theme";
 
 export type SectionId =
   | "home"
@@ -41,6 +42,7 @@ type NavItem = { id: SectionId; label: string; icon: IconName };
 type NavGroup = { label: string; items: NavItem[] };
 
 export default function Layout({ user, active, onNavigate, onLogout, children }: Props) {
+  const [collapsed, setCollapsed] = useState(false);
   const roles = user.roles.map((role) => role.role);
   const roleSummary = [...new Set(user.roles.map((role) => formatDomainLabel(role.role)))].join(" · ");
   const viewTitle = active === "home" ? `Hola, ${user.display_name.split(" ")[0]}` : SECTION_TITLES[active];
@@ -85,11 +87,14 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
   const initial = (user.display_name || "?").trim().charAt(0).toLocaleUpperCase("es");
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
         <button className="brand" type="button" onClick={() => onNavigate("home")} aria-label="DH-05, ir al inicio">
           <span className="brand-mark" aria-hidden="true">D</span>
           <span className="brand-wordmark">DH-05<small>Ciclo de prácticas</small></span>
+        </button>
+        <button className="sidebar-collapse" type="button" aria-label={collapsed ? "Expandir navegación" : "Contraer navegación"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
+          <span aria-hidden="true">{collapsed ? "›" : "‹"}</span><span className="collapse-label">{collapsed ? "Expandir" : "Contraer menú"}</span>
         </button>
 
         <nav className="sidebar-nav" aria-label="Navegación principal">
@@ -102,6 +107,8 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
                   type="button"
                   className={`nav ${active === item.id ? "active" : ""}`}
                   aria-current={active === item.id ? "page" : undefined}
+                  aria-label={item.label}
+                  title={collapsed ? item.label : undefined}
                   onClick={() => onNavigate(item.id)}
                 >
                   <Icon name={item.icon} />
@@ -120,7 +127,7 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
               <span>{roleSummary}</span>
             </span>
           </div>
-          <button className="logout-button" type="button" onClick={onLogout}>
+          <button className="logout-button" type="button" aria-label="Cerrar sesión" title={collapsed ? "Cerrar sesión" : undefined} onClick={onLogout}>
             <Icon name="logout" />
             <span>Cerrar sesión</span>
           </button>
@@ -133,7 +140,7 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
             <span className="topbar-kicker">DH-05 · ESPACIO DE TRABAJO</span>
             <h1>{viewTitle}</h1>
           </div>
-          <span className="topbar-product">Prácticas y pasantías</span>
+          <div className="topbar-actions"><span className="topbar-product">Prácticas y pasantías</span><ThemeControl /></div>
         </header>
         <main className="content" id="main-content">{children}</main>
       </div>

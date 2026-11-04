@@ -3,7 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DH-05 · Pasantías</title>
+    <meta name="theme-color" content="#f3f6f4" />
+    <title>Prácticas · DH-05</title>
+    <script>
+      try {
+        const saved = localStorage.getItem("ilp-theme");
+        const mode = saved === "light" || saved === "dark" ? saved : "system";
+        const resolved = mode === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : mode;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themeMode = mode;
+        document.documentElement.style.colorScheme = resolved;
+      } catch { document.documentElement.dataset.theme = "light"; }
+    </script>
   </head>
   <body>
     <div id="root"></div>
