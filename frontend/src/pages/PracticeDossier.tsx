@@ -137,8 +137,8 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
       {listLoading && <div className="empty"><Spinner /> Cargando prácticas…</div>}
       {!listLoading && placements?.length === 0 && <EmptyState message="No hay prácticas relacionadas con tu cuenta." />}
       {!listLoading && placements && placements.length > 0 && (
-        <div className="dossier-layout">
-          <BentoCard variant="content" className="dossier-index" title="Prácticas visibles" description={`${placements.length} ${placements.length === 1 ? "expediente" : "expedientes"} según tus relaciones actuales`}>
+        <div className={`dossier-layout${placements.length === 1 ? " dossier-layout--single" : ""}`}>
+          {placements.length > 1 && <BentoCard variant="content" className="dossier-index" title="Prácticas visibles" description={`${placements.length} expedientes según tus relaciones actuales`}>
             <ul className="dossier-list" aria-label="Prácticas disponibles">
               {placements.map((row) => (
                 <li key={row.id}>
@@ -155,7 +155,7 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
                 </li>
               ))}
             </ul>
-          </BentoCard>
+          </BentoCard>}
 
           {detailLoading && <div className="empty dossier-detail-loading"><Spinner /> Cargando expediente…</div>}
           {dossier && selectedRow && (

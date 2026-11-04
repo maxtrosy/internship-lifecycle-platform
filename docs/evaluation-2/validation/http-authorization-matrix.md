@@ -64,6 +64,7 @@
 
 ## Evidencia y límites
 
+- **SYN-01, ejecutado 2026-11-04:** E2E poblado 4/4 en PostgreSQL temporal. Con prácticas realmente relacionadas verificó lectura del titular; proyección mínima del representante anfitrión (`student.display_name`/`program_code`, sin horas ni evaluaciones); WPS relacionado con seguimiento/plan y canal académico denegado; docente asignado; coordinación del programa correcto y de otro programa denegada; organización y supervisor ajenos 404; otro estudiante denegado; Legal con documentos pero sin horas; EC con expediente autorizado. La suite backend completa de esa continuación pasó 89/89 (1 warning). La evidencia no cubre cada combinación de rol/campo ni equivale a RLS/pentest.
 - `backend/tests/test_routes_actions.py` comprueba que cada ruta autenticada declara acción.
 - `backend/tests/test_authz.py` cubre relaciones en el servicio y proyección mínima del estudiante.
 - `backend/tests/test_http_authorization.py` cubre accesos HTTP cruzados por estudiante, organización, asignación de supervisor y programa; lista/selección de postulaciones; lectura/entrega/descarga de documentos; colas institucionales y sesión ausente.

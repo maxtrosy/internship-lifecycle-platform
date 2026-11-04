@@ -166,6 +166,7 @@ input[type="file"] { padding: 7px; color: var(--ink-soft); font-size: 11px; }
 .placement-history-list strong { overflow-wrap: anywhere; color: var(--ink); font-size: 12px; }
 .placement-history-list time { color: var(--muted); font-size: 11px; }
 .dossier-layout { display: grid; min-width: 0; grid-template-columns: minmax(225px, .72fr) minmax(0, 1.8fr); align-items: start; gap: 14px; }
+.dossier-layout--single { grid-template-columns: minmax(0, 1fr); }
 .dossier-index, .dossier-detail { min-width: 0; }
 .dossier-detail { display: grid; min-width: 0; gap: 14px; }
 .dossier-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
@@ -473,6 +474,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .message-scopes { display: flex; gap: 8px; margin-bottom: 12px; }
 .message-list > li { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .message-list > li > p { margin: 9px 0 0; }
+.faculty-assignment-history .message-list > li { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 8px; }
+.faculty-assignment-history .message-list > li > time { color: var(--muted); font-size: 11px; }
+.faculty-assignment-history .message-list > li > p { grid-column: 1 / -1; }
 .message-form { margin-top: 14px; }
 .report-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .report-tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -480,6 +484,13 @@ tbody tr:last-child td { border-bottom: 0; }
 .report-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
 .report-table { width: 100%; min-width: 100%; table-layout: fixed; }
 .report-table th, .report-table td { overflow-wrap: anywhere; }
+.report-distribution-cards { display: none; }
+.report-distribution-cards > li { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted); }
+.report-distribution-cards h3 { margin: 0 0 10px; overflow-wrap: anywhere; font-size: 13px; }
+.report-distribution-cards dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.report-distribution-cards dl > div { display: grid; min-width: 0; gap: 4px; }
+.report-distribution-cards dt { overflow-wrap: anywhere; color: var(--muted); font-size: 9px; }
+.report-distribution-cards dd { margin: 0; font-size: 13px; font-weight: 650; }
 .report-subsection + .report-subsection { margin-top: 20px; }
 .report-subsection h3 { margin: 0 0 9px; font-size: 14px; }
 .faculty-assignment-panel { display: grid; gap: 12px; margin-top: 14px; }
@@ -494,6 +505,8 @@ tbody tr:last-child td { border-bottom: 0; }
   .report-metrics { grid-template-columns: 1fr; }
   .report-tables { grid-template-columns: 1fr; }
   .report-wide { grid-column: auto; }
+  .report-distribution-table { display: none; }
+  .report-distribution-cards { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .faculty-assignment-controls, .faculty-assignment-row { align-items: stretch; flex-direction: column; }
   .faculty-assignment-controls .btn, .faculty-assignment-row .btn { width: 100%; }
 }

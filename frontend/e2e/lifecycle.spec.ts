@@ -141,6 +141,12 @@ test("assigned faculty, program and legal roles reach the isolated practice fixt
   await page.screenshot({ path: process.env.E2E_REPORTS_DESKTOP_SCREENSHOT, fullPage: true, animations: "disabled" });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const mobileDistributions = page.locator(".report-distribution-cards");
+  await expect(mobileDistributions).toHaveCount(2);
+  await expect(mobileDistributions.nth(0)).toBeVisible();
+  await expect(mobileDistributions.nth(0)).toContainText("Business Admin");
+  await expect(mobileDistributions.nth(0)).toContainText("Postulaciones");
+  await expect(mobileDistributions.nth(1)).toContainText("Org Alfa");
   expect(await reportTableWrappers.evaluateAll((elements) =>
     elements.every((element) => element.scrollWidth <= element.clientWidth),
   )).toBe(true);
@@ -524,7 +530,7 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
     await page.screenshot({ path: process.env.E2E_SUPERVISOR_DASHBOARD_MOBILE_SCREENSHOT, fullPage: true, animations: "disabled" });
   }
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.locator(".dashboard-related-placements").getByRole("button", { name: "Abrir expedientes" }).click();
+  await page.locator(".dashboard-related-placements").getByRole("button", { name: "Ver todas las prácticas" }).click();
   const assignedSupervisorProjection = await dossierResponse(page, placementId);
   expect(assignedSupervisorProjection.status).toBe(200);
   expect(assignedSupervisorProjection.body.documents).toBeNull();

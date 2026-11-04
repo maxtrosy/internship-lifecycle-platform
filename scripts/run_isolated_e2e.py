@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import argparse
 import urllib.error
 import urllib.request
 
@@ -92,6 +93,12 @@ def stop(child: subprocess.Popen | None) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--populated", action="store_true",
+        help="seed a connected synthetic ecosystem and run only its populated-data browser checks",
+    )
+    args = parser.parse_args()
     repo = pathlib.Path(__file__).resolve().parents[1]
     backend, frontend = repo / "backend", repo / "frontend"
     node = shutil.which("node")
@@ -118,6 +125,7 @@ def main() -> int:
     web_log = (run_dir / "vite.log").open("w", encoding="utf-8")
     database = api = web = None
     result = 1
+    populated_test_env: dict[str, str] = {}
     try:
         database = pgserver.get_server(str(run_dir / "postgres"))
         database_url = database.get_uri()
@@ -141,7 +149,33 @@ def main() -> int:
             conn.execute(CURRENT_SCHEMA)
         with psycopg.connect(database_url, autocommit=True, row_factory=dict_row) as conn:
             seed(conn.cursor())
-            seed_assigned_faculty_practice(conn.cursor())
+            if args.populated:
+                from app.synthetic_dataset import populate_synthetic_dataset
+
+                generated = populate_synthetic_dataset(conn.cursor(), include_test_policy=True)
+                summary = {key: value for key, value in generated.items() if key != "placement_scenarios"}
+                summary.pop("scenario_students", None)
+                print(f"POPULATED_SYNTHETIC_FIXTURE={summary}", flush=True)
+                scenario_ids = generated["placement_scenarios"]
+                scenario_students = generated["scenario_students"]
+                populated_test_env = {
+                    "E2E_SCENARIO_CLOSED_ID": str(scenario_ids["cierre-completo"]),
+                    "E2E_SCENARIO_CLOSED_USER": scenario_students["cierre-completo"],
+                    "E2E_SCENARIO_ACTIVE_ID": str(scenario_ids["activa-con-avance"]),
+                    "E2E_SCENARIO_ACTIVE_USER": scenario_students["activa-con-avance"],
+                    "E2E_SCENARIO_INCIDENT_ID": str(scenario_ids["activa-con-incidente-y-cambio"]),
+                    "E2E_SCENARIO_INCIDENT_USER": scenario_students["activa-con-incidente-y-cambio"],
+                    "E2E_SCENARIO_MISSING_ID": str(scenario_ids["documentacion-pendiente"]),
+                    "E2E_SCENARIO_MISSING_USER": scenario_students["documentacion-pendiente"],
+                    "E2E_SCENARIO_REVIEW_ID": str(scenario_ids["documento-en-revision"]),
+                    "E2E_SCENARIO_REVIEW_USER": scenario_students["documento-en-revision"],
+                    "E2E_SCENARIO_CORRECTION_ID": str(scenario_ids["documento-devuelto"]),
+                    "E2E_SCENARIO_CORRECTION_USER": scenario_students["documento-devuelto"],
+                    "E2E_SCENARIO_PENDING_ID": str(scenario_ids["aprobacion-academica-pendiente-1"]),
+                    "E2E_SCENARIO_PENDING_USER": scenario_students["aprobacion-academica-pendiente-1"],
+                }
+            else:
+                seed_assigned_faculty_practice(conn.cursor())
 
         api_env = os.environ.copy()
         python_path = [str(backend)]
@@ -166,6 +200,7 @@ def main() -> int:
         test_env = web_env.copy()
         test_env.update({
             "E2E_BASE_URL": f"http://localhost:{web_port}",
+            "VISUAL_CAPTURE_DIR": str(captures),
             "E2E_DOSSIER_DESKTOP_SCREENSHOT": str(captures / "dossier-desktop.png"),
             "E2E_DOSSIER_MOBILE_SCREENSHOT": str(captures / "dossier-mobile.png"),
             "E2E_STUDENT_DASHBOARD_DESKTOP_SCREENSHOT": str(captures / "student-dashboard-desktop.png"),
@@ -174,9 +209,18 @@ def main() -> int:
             "E2E_SUPERVISOR_DASHBOARD_MOBILE_SCREENSHOT": str(captures / "supervisor-dashboard-mobile.png"),
             "E2E_REPORTS_DESKTOP_SCREENSHOT": str(captures / "reports-desktop.png"),
             "E2E_REPORTS_MOBILE_SCREENSHOT": str(captures / "reports-mobile.png"),
+            "E2E_POPULATED_SCREENSHOT": str(captures / "populated-student-dossier.png"),
+            "E2E_POPULATED_DESKTOP_SCREENSHOT": str(captures / "populated-dossier-desktop.png"),
+            "E2E_POPULATED_MOBILE_SCREENSHOT": str(captures / "populated-dossier-mobile.png"),
+            "E2E_POPULATED_DARK_DESKTOP_SCREENSHOT": str(captures / "populated-dossier-dark-desktop.png"),
+            "E2E_POPULATED_DARK_MOBILE_SCREENSHOT": str(captures / "populated-dossier-dark-mobile.png"),
         })
+        test_env.update(populated_test_env)
+        playwright_args = [node, str(playwright), "test"]
+        if args.populated:
+            playwright_args.extend(["--grep", "@populated"])
         completed = subprocess.run(
-            [node, str(playwright), "test"], cwd=frontend, env=test_env, check=False,
+            playwright_args, cwd=frontend, env=test_env, check=False,
         )
         result = completed.returncode
     finally:
