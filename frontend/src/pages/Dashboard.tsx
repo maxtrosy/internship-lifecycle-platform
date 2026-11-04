@@ -43,7 +43,23 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
   const isEc = roles.includes("EXPERIENTIAL_COORDINATOR");
   const isWorkplaceSupervisor = roles.includes("WORKPLACE_SUPERVISOR");
   const isFacultySupervisor = roles.includes("FACULTY_SUPERVISOR");
-  const dashboardVariant = isStudent ? "student" : isEmployer ? "employer" : isAcademic ? "academic" : isLegal ? "legal" : isEc ? "experiential" : "limited";
+  const dashboardVariant = isStudent ? "student" : isEmployer ? "employer" : isAcademic ? "academic" : isLegal ? "legal" : isEc ? "experiential" : isWorkplaceSupervisor ? "workplace" : isFacultySupervisor ? "faculty" : "limited";
+  const dashboardEyebrow = isStudent ? "TU PRÁCTICA" : isEmployer ? "ORGANIZACIÓN ANFITRIONA" : isAcademic ? "COORDINACIÓN ACADÉMICA" : isLegal ? "REVISIÓN DOCUMENTAL" : isEc ? "COORDINACIÓN EXPERIENCIAL" : isWorkplaceSupervisor ? "SUPERVISIÓN LABORAL" : isFacultySupervisor ? "SUPERVISIÓN DOCENTE" : "ESPACIO DE TRABAJO";
+  const dashboardDescription = isStudent
+    ? "Consulta el estado de tus postulaciones y las acciones habilitadas para tu práctica."
+    : isEmployer
+      ? "Gestiona oportunidades y candidaturas visibles para las relaciones de tu organización."
+      : isAcademic
+        ? "Revisa selecciones, políticas y prácticas del programa asociado a tu cuenta."
+        : isLegal
+          ? "Atiende los documentos disponibles en la cola autorizada para tu cuenta."
+          : isEc
+            ? "Consulta activaciones y tareas de operación institucional disponibles para tu rol."
+            : isWorkplaceSupervisor
+              ? "Sigue las prácticas y actividades vinculadas a tu relación de supervisión laboral."
+              : isFacultySupervisor
+                ? "Consulta los expedientes vinculados a tu supervisión académica."
+                : "Accede a las secciones disponibles para tu cuenta.";
 
   useEffect(() => {
     let cancelled = false;
@@ -121,9 +137,9 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="TU RESUMEN"
+        eyebrow={dashboardEyebrow}
         title={`Hola, ${user.display_name.split(" ")[0]}`}
-        description="Un espacio de trabajo con el estado de tus procesos y las acciones disponibles para tu rol."
+        description={dashboardDescription}
       />
 
       {errors.map((error) => <Alert kind="error" key={error}>{error} <button className="btn link" type="button" onClick={() => setReloadAttempt((attempt) => attempt + 1)}>Reintentar carga</button></Alert>)}
@@ -214,6 +230,22 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {(isWorkplaceSupervisor || isFacultySupervisor) && (
           <>
+            <BentoCard
+              variant="hero"
+              className="dashboard-hero"
+              title={isWorkplaceSupervisor ? "Supervisión laboral" : "Acompañamiento académico"}
+              description={isWorkplaceSupervisor
+                ? "Consulta las prácticas y sus avances cuando la relación de supervisión está registrada."
+                : "Consulta los expedientes que tienen una asignación vigente a tu cuenta."}
+            >
+              <div className="hero-content">
+                <div>
+                  <h2>{isWorkplaceSupervisor ? "Seguimiento en sitio" : "Seguimiento formativo"}</h2>
+                  <p className="hero-record">La información visible depende de las relaciones registradas para cada práctica.</p>
+                </div>
+                <button className="btn" type="button" onClick={() => onNavigate("dossier")}>Abrir expedientes<span aria-hidden="true">→</span></button>
+              </div>
+            </BentoCard>
             <MetricCard label="Prácticas vinculadas" value={data.visiblePlacements?.length ?? null} detail="Según las relaciones de supervisión" />
             <BentoCard variant="activity" className="dashboard-related-placements" title="Prácticas vinculadas" description="Los expedientes aparecen según las relaciones de supervisión registradas para tu cuenta.">
               {relatedPlacementsState === "ready" ? (
@@ -228,7 +260,7 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
               ) : relatedPlacementsState === "empty" ? <EmptyState message="No hay prácticas vinculadas actualmente." />
                 : relatedPlacementsState === "error" ? <p role="status" className="muted">No se pudo cargar la lista. Usa «Reintentar carga» en el aviso para volver a consultar.</p>
                   : <div className="loading-line"><Spinner /> Consultando relaciones…</div>}
-              <button className="btn secondary" type="button" onClick={() => onNavigate("dossier")}>Abrir expedientes</button>
+              <button className="btn secondary" type="button" onClick={() => onNavigate("dossier")}>Ver todas las prácticas</button>
             </BentoCard>
           </>
         )}

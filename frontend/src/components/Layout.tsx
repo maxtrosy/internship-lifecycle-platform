@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { User } from "../api";
 import { formatDomainLabel, Icon, type IconName } from "./ui";
 import { ThemeControl } from "../theme";
@@ -43,9 +43,10 @@ type NavGroup = { label: string; items: NavItem[] };
 
 export default function Layout({ user, active, onNavigate, onLogout, children }: Props) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const roles = user.roles.map((role) => role.role);
   const roleSummary = [...new Set(user.roles.map((role) => formatDomainLabel(role.role)))].join(" · ");
-  const viewTitle = active === "home" ? `Hola, ${user.display_name.split(" ")[0]}` : SECTION_TITLES[active];
+  const viewTitle = active === "home" ? "Inicio" : SECTION_TITLES[active];
   const groups: NavGroup[] = [
     { label: "Principal", items: [
       { id: "home", label: "Inicio", icon: "home" },
@@ -83,22 +84,67 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
       { id: "reports", label: "Reportes operativos", icon: "review" },
     ] });
   }
+  const seenSections = new Set<SectionId>();
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (seenSections.has(item.id)) return false;
+        seenSections.add(item.id);
+        return true;
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const initial = (user.display_name || "?").trim().charAt(0).toLocaleUpperCase("es");
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMobileMenuOpen(false);
+      document.getElementById("mobile-menu-toggle")?.focus();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileMenuOpen]);
+
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""} ${mobileMenuOpen ? "mobile-menu-open" : ""}`}>
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById("main-content")?.focus();
+        }}
+      >Saltar al contenido</a>
       <aside className="sidebar">
-        <button className="brand" type="button" onClick={() => onNavigate("home")} aria-label="DH-05, ir al inicio">
+        <button className="brand" type="button" onClick={() => {
+          onNavigate("home");
+          setMobileMenuOpen(false);
+        }} aria-label="DH-05, ir al inicio">
           <span className="brand-mark" aria-hidden="true">D</span>
           <span className="brand-wordmark">DH-05<small>Ciclo de prácticas</small></span>
+        </button>
+        <button
+          id="mobile-menu-toggle"
+          className="mobile-menu-toggle"
+          type="button"
+          aria-controls="primary-navigation"
+          aria-expanded={mobileMenuOpen}
+          aria-label={mobileMenuOpen ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
+          <span>{mobileMenuOpen ? "Cerrar" : "Menú"}</span>
         </button>
         <button className="sidebar-collapse" type="button" aria-label={collapsed ? "Expandir navegación" : "Contraer navegación"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
           <span aria-hidden="true">{collapsed ? "›" : "‹"}</span><span className="collapse-label">{collapsed ? "Expandir" : "Contraer menú"}</span>
         </button>
 
-        <nav className="sidebar-nav" aria-label="Navegación principal">
-          {groups.map((group) => (
+        <nav id="primary-navigation" className="sidebar-nav" aria-label="Navegación principal">
+          {visibleGroups.map((group) => (
             <div className="nav-group" key={group.label}>
               <span className="nav-caption">{group.label}</span>
               {group.items.map((item) => (
@@ -109,7 +155,10 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
                   aria-current={active === item.id ? "page" : undefined}
                   aria-label={item.label}
                   title={collapsed ? item.label : undefined}
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => {
+                    onNavigate(item.id);
+                    setMobileMenuOpen(false);
+                  }}
                 >
                   <Icon name={item.icon} />
                   <span>{item.label}</span>
@@ -138,11 +187,11 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
         <header className="topbar">
           <div className="topbar-context">
             <span className="topbar-kicker">DH-05 · ESPACIO DE TRABAJO</span>
-            <h1>{viewTitle}</h1>
+            <p className="topbar-title" aria-hidden="true">{viewTitle}</p>
           </div>
           <div className="topbar-actions"><span className="topbar-product">Prácticas y pasantías</span><ThemeControl /></div>
         </header>
-        <main className="content" id="main-content">{children}</main>
+        <main className="content" id="main-content" tabIndex={-1}>{children}</main>
       </div>
     </div>
   );

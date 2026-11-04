@@ -100,7 +100,7 @@ export function PageHeader({
   title,
   description,
   actions,
-  showTitle = false,
+  showTitle = true,
 }: {
   eyebrow?: string;
   title: string;

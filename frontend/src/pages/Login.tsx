@@ -139,12 +139,13 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
                 <label htmlFor="identifier">Correo electrónico o nombre de usuario</label>
                 <input
                   id="identifier"
+                  name="username"
                   type="text"
                   autoComplete="username"
+                  spellCheck={false}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="nombre@ejemplo.edu o usuario"
-                  autoFocus
                   required
                 />
               </div>
@@ -154,6 +155,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
                 <div className="password-input-row">
                   <input
                     id="password"
+                    name="password"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     value={password}
@@ -169,7 +171,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
               {error && <Alert kind="error">{error}</Alert>}
               {notice && <Alert kind="success">{notice}</Alert>}
 
-              <button className="btn login-submit" type="submit" disabled={loading || !identifier || !password}>
+              <button className="btn login-submit" type="submit" disabled={loading}>
                 {loading ? <><Spinner /> Verificando…</> : "Ingresar"}
               </button>
               <button className="btn link login-link" type="button" onClick={() => { setMode("request-reset"); setError(null); setNotice(null); }}>
@@ -190,8 +192,10 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
                 <label htmlFor="reset-email">Correo de la cuenta</label>
                 <input
                   id="reset-email"
+                  name="email"
                   type="email"
                   autoComplete="email"
+                  spellCheck={false}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -200,7 +204,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
               {error && <Alert kind="error">{error}</Alert>}
               {notice && <Alert kind="info">{notice}</Alert>}
               {notice && !resetToken && <p className="muted login-footnote">Esta instalación no tiene un proveedor de correo conectado. En desarrollo local, pide al operador que habilite la recuperación.</p>}
-              <button className="btn login-submit" type="submit" disabled={loading || !email}>
+              <button className="btn login-submit" type="submit" disabled={loading}>
                 {loading ? <><Spinner /> Procesando…</> : "Solicitar recuperación"}
               </button>
               <button className="btn link login-link" type="button" onClick={() => { setMode("login"); setError(null); setNotice(null); }}>
@@ -214,18 +218,18 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
               <p className="muted">Token local de desarrollo, válido por 30 minutos y de un solo uso.</p>
               <div className="field">
                 <label htmlFor="reset-token">Token de recuperación</label>
-                <input id="reset-token" value={resetToken} onChange={(e) => setResetToken(e.target.value)} required />
+                <input id="reset-token" name="reset-token" value={resetToken} onChange={(e) => setResetToken(e.target.value)} required />
               </div>
               <div className="field">
                 <label htmlFor="new-password">Nueva contraseña</label>
-                <input id="new-password" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+                <input id="new-password" name="new-password" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
               </div>
               <div className="field">
                 <label htmlFor="confirm-password">Confirmar contraseña</label>
-                <input id="confirm-password" type="password" autoComplete="new-password" minLength={12} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                <input id="confirm-password" name="confirm-password" type="password" autoComplete="new-password" minLength={12} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
               </div>
               {error && <Alert kind="error">{error}</Alert>}
-              <button className="btn login-submit" type="submit" disabled={loading || newPassword.length < 12 || !resetToken}>
+              <button className="btn login-submit" type="submit" disabled={loading}>
                 {loading ? <><Spinner /> Actualizando…</> : "Actualizar contraseña"}
               </button>
               <button className="btn link login-link" type="button" onClick={() => { setMode("login"); setError(null); setNotice(null); }}>

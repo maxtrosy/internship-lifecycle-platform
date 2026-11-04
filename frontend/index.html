@@ -13,6 +13,7 @@
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeMode = mode;
         document.documentElement.style.colorScheme = resolved;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#111a18' : '#f2f6f3');
       } catch { document.documentElement.dataset.theme = "light"; }
     </script>
   </head>

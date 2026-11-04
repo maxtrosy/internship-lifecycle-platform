@@ -23,6 +23,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       document.documentElement.dataset.theme = resolved;
       document.documentElement.dataset.themeMode = mode;
       document.documentElement.style.colorScheme = resolved;
+      document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
+        "content",
+        resolved === "dark" ? "#111a18" : "#f2f6f3",
+      );
     };
     const onSystemChange = () => { if (mode === "system") apply(); };
     apply();
