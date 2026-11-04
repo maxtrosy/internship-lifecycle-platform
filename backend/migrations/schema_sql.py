@@ -788,7 +788,53 @@ GRANT SELECT, INSERT ON placement_faculty_assignment_history TO app_user;
 GRANT USAGE, SELECT ON SEQUENCE placement_faculty_assignment_history_id_seq TO app_user;
 """
 
+UPGRADE_0013_SQL = """
+-- Replace the historical broad table/sequence grants with the least privileges
+-- used by the application services. Keep app_user NOLOGIN; runtime logins must
+-- receive SET (not ADMIN) membership in this role separately.
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM app_user;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM app_user;
+
+-- Application reads are scoped by service authorization and projection. The
+-- migration ledger is intentionally reserved for the migration owner.
+GRANT SELECT ON academic_program, application, audit_event, auth_password_reset,
+  auth_session, checklist_item, completion_evidence, completion_requirement,
+  document_review, document_submission, host_org, invitation, opportunity,
+  placement, placement_conversation, placement_evaluation,
+  placement_faculty_assignment_history, placement_incident, placement_message,
+  placement_progress_report, placement_version, placement_work_plan_item,
+  policy_version, progress_entry, role_assignment, supervisor_assignment,
+  user_account, user_notification, v_placement_activation_compliance TO app_user;
+
+GRANT INSERT ON application, audit_event, auth_password_reset, auth_session,
+  checklist_item, completion_evidence, completion_requirement, document_review,
+  document_submission, invitation, opportunity, placement, placement_conversation,
+  placement_evaluation, placement_faculty_assignment_history, placement_incident,
+  placement_message, placement_progress_report, placement_version,
+  placement_work_plan_item, policy_version, progress_entry, role_assignment,
+  supervisor_assignment, user_account, user_notification TO app_user;
+
+GRANT UPDATE ON application, auth_password_reset, auth_session, checklist_item,
+  completion_requirement, invitation, opportunity, placement, placement_version,
+  user_account, user_notification TO app_user;
+
+GRANT DELETE ON auth_password_reset, auth_session, supervisor_assignment TO app_user;
+
+-- USAGE supports default nextval() and currval(); SELECT/UPDATE sequence rights
+-- are not required by application code.
+GRANT USAGE ON SEQUENCE application_id_seq, audit_event_id_seq,
+  checklist_item_id_seq, completion_evidence_id_seq, completion_requirement_id_seq,
+  document_review_id_seq, document_submission_id_seq, invitation_id_seq,
+  opportunity_id_seq, placement_conversation_id_seq, placement_evaluation_id_seq,
+  placement_faculty_assignment_history_id_seq, placement_id_seq,
+  placement_incident_id_seq, placement_message_id_seq, placement_progress_report_id_seq,
+  placement_version_id_seq, placement_work_plan_item_id_seq, policy_version_id_seq,
+  progress_entry_id_seq, role_assignment_id_seq, user_account_id_seq,
+  user_notification_id_seq TO app_user;
+
+"""
+
 CURRENT_SCHEMA = (SCHEMA + UPGRADE_0002_SQL + UPGRADE_0003_SQL + UPGRADE_0004_SQL
                   + UPGRADE_0005_SQL + UPGRADE_0006_SQL + UPGRADE_0007_SQL
                   + UPGRADE_0008_SQL + UPGRADE_0009_SQL + UPGRADE_0010_SQL + UPGRADE_0011_SQL
-                  + UPGRADE_0012_SQL)
+                  + UPGRADE_0012_SQL + UPGRADE_0013_SQL)

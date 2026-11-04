@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import db
 from app.config import get_settings
 from app.errors import BusinessError, DomainError, Forbidden, NotFound, TooManyRequests, Unauthorized
 from app.modules.applications.router import router as applications_router
@@ -38,6 +39,23 @@ app.include_router(reports_router)
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/ready", response_model=None)
+def readiness() -> dict | JSONResponse:
+    """Confirm PostgreSQL access through app_user and the current schema marker."""
+    try:
+        with db.read() as cur:
+            row = cur.execute(
+                """SELECT to_regclass('public.placement_faculty_assignment_history') IS NOT NULL
+                          AS schema_ready"""
+            ).fetchone()
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+
+    if not row or not row["schema_ready"]:
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+    return {"status": "ready"}
 
 
 @app.exception_handler(DomainError)

@@ -1,6 +1,8 @@
 # V-DEP — Supuestos de despliegue
 
-> **Un supuesto de despliegue no es infraestructura implementada.** En esta entrega **no existe** ninguna infraestructura de despliegue. El único entorno ejecutado fue una instancia local de PostgreSQL (pgserver) en la máquina de un integrante del equipo, para el PoC.
+> **Estado al 2026-11-04:** Neon `long-truth-39527618/main` está migrado hasta `0013`, con 28 tablas de aplicación y cero filas. `app_runtime` puede cambiar a `app_user` con `SET ROLE` y `/ready` respondió HTTP 200 en la comprobación T-49. La credencial de runtime solo está en Windows Credential Manager; no se ha configurado Render. Render/Vercel todavía no tienen servicios ni URL pública. Véase [`deployment-free-preview.md`](../../deployment-free-preview.md); esto no representa un despliegue.
+
+> El diagrama siguiente conserva el supuesto original de arquitectura; no representa recursos ya aprovisionados.
 
 | Campo | Valor |
 |---|---|

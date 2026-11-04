@@ -1,6 +1,6 @@
 # Matriz de autorización HTTP
 
-**Corte:** 2026-11-02. `requires(action)` autentica la sesión y declara la intención de la ruta; la decisión efectiva de rol y relación se aplica en el servicio consultado por cada endpoint. T-42 se ejecutó en backend y Chromium el 2026-11-02; la evidencia y sus límites están en [validation-results.md](validation-results.md).
+**Corte:** 2026-11-03. `requires(action)` autentica la sesión y declara la intención de la ruta; la decisión efectiva de rol y relación se aplica en el servicio consultado por cada endpoint. T-42 se ejecutó en backend y Chromium el 2026-11-02; la evidencia y sus límites están en [validation-results.md](validation-results.md). El endpoint público `/ready` se añadió para el readiness del despliegue; su respuesta solo distingue estado listo/no listo, sin incluir errores de base de datos.
 
 ## Convenciones
 
@@ -16,6 +16,7 @@
 | Método y endpoint | Quién puede acceder | Relación / proyección aplicada |
 |---|---|---|
 | `GET /health` | Público | Estado del proceso, sin datos de usuario. |
+| `GET /ready` | Público | Requiere acceso de solo lectura como `app_user` a PostgreSQL y presencia de la tabla marcador de 0012; responde `ready` o 503 `not_ready`, sin detalles internos. |
 | `POST /auth/login` | Público | Credencial local válida y cuenta activa; `Origin` permitido. No declara SSO. |
 | `GET /auth/me` | Cualquier sesión activa | Solo la cuenta asociada a la sesión actual. |
 | `POST /auth/logout` | Cualquier sesión activa | Revoca solo su propio identificador de sesión; `Origin` permitido. |

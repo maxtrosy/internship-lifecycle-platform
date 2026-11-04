@@ -1,6 +1,7 @@
 """T-20: every route must declare an authorization action (R-012).
 
-Exempt: /health, /auth/login, /auth/accept-invitation (and FastAPI's built-in docs).
+Exempt: public health/readiness checks and unauthenticated identity bootstrap routes
+(and FastAPI's built-in docs).
 """
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from fastapi.routing import APIRoute
 from app.main import app
 
 EXEMPT = {
-    "/health", "/auth/login", "/auth/accept-invitation",
+    "/health", "/ready", "/auth/login", "/auth/accept-invitation",
     "/auth/password-reset/request", "/auth/password-reset/complete",
 }
 

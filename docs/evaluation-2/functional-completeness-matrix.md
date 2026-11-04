@@ -1,6 +1,6 @@
 # Matriz de completitud funcional DH-05
 
-**Corte:** 2026-11-03 · **Commit base:** `3bad4a7` · RFP fuente contrastado completo (8 páginas) y matriz contrastada con routers/servicios/modelos/pruebas del código actual. T-47 valida el árbol actual, migraciones `0001→0012`, asignación/reasignación docente con historial, bandeja y mensajes persistidos, reportes operativos y revisión/publicación configurable. Los cortes T-42..T-46 y anteriores permanecen históricos.
+**Corte:** 2026-11-04 · **Commit base:** `3bad4a7` · RFP fuente contrastado completo (8 páginas) y matriz contrastada con routers/servicios/modelos/pruebas del código actual. T-47 valida las capacidades funcionales en migraciones `0001→0012`; T-49 valida la migración de permisos `0013` y el rol runtime dedicado, pero no crea un despliegue público. Los cortes T-42..T-48 y anteriores permanecen históricos; véase [`validation-results.md`](validation/validation-results.md).
 
 ## Límite de fuentes
 

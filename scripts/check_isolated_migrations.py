@@ -3,7 +3,8 @@
 The script never reads or connects to an inherited DATABASE_URL. It creates a
 fresh temporary PostgreSQL cluster, inserts one legacy incident at revision
 0007, upgrades to head, and verifies the status backfill, closed work-plan guard,
-    notification tables, audience-separated conversation tables, and opportunity workflow guard.
+notification tables, audience-separated conversations, opportunity workflow guard,
+faculty history, and least-privilege application grants.
 """
 from __future__ import annotations
 
@@ -109,8 +110,8 @@ def main() -> int:
                 assignment_tables = conn.execute(
                     "SELECT to_regclass('public.placement_faculty_assignment_history')",
                 ).fetchone()[0]
-            if head != "0012":
-                raise AssertionError(f"Expected Alembic head 0012, got {head}.")
+            if head != "0013":
+                raise AssertionError(f"Expected Alembic head 0013, got {head}.")
             if migrated_status != "REPORTED":
                 raise AssertionError(f"Existing incident received unexpected status {migrated_status!r}.")
             if "placement closure" not in guard:
@@ -123,12 +124,28 @@ def main() -> int:
                 raise AssertionError("The opportunity notification categories are absent from the schema.")
             if assignment_tables is None:
                 raise AssertionError("Faculty assignment history table was not installed.")
+            with psycopg.connect(database_url) as conn:
+                privileges = conn.execute(
+                    """SELECT
+                         has_table_privilege('app_user','opportunity','INSERT'),
+                         has_table_privilege('app_user','placement','UPDATE'),
+                         has_table_privilege('app_user','audit_event','UPDATE'),
+                         has_table_privilege('app_user','alembic_version','SELECT'),
+                         has_sequence_privilege('app_user','application_id_seq','USAGE'),
+                         has_sequence_privilege('app_user','academic_program_id_seq','USAGE'),
+                         has_schema_privilege('app_user','public','CREATE'),
+                         has_database_privilege('app_user',current_database(),'CREATE'),
+                         (SELECT rolcanlogin FROM pg_roles WHERE rolname='app_user')"""
+                ).fetchone()
+            expected_privileges = (True, True, False, False, True, False, False, False, False)
+            if privileges != expected_privileges:
+                raise AssertionError(f"Unexpected app_user privilege set: {privileges!r}.")
 
             print(
-                "MIGRATION_CHAIN=0001->0012; initial_status_absent=true; "
+                "MIGRATION_CHAIN=0001->0013; initial_status_absent=true; "
                 f"legacy_incident_status={migrated_status}; closed_work_plan_guard=true; "
                 "notifications_and_audience_scoped_messages=true; opportunity_state_guard=true; "
-                "faculty_assignment_history=true"
+                "faculty_assignment_history=true; app_user_minimal_grants=true"
             )
         finally:
             server.cleanup()
@@ -153,7 +170,18 @@ def main() -> int:
                 ).fetchone()[0]
             if head_0012 != "0012" or "DRAFT" not in state_default_0010 or assignment_history is None:
                 raise AssertionError("Upgrade from the existing 0010 schema did not install 0011/0012.")
-            print("MIGRATION_UPGRADE=0010->0011->0012; opportunity_state_guard=true; faculty_assignment_history=true")
+            command.upgrade(config, "head")
+            with psycopg.connect(database_url) as conn:
+                head_0013 = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+                audit_update = conn.execute(
+                    "SELECT has_table_privilege('app_user','audit_event','UPDATE')"
+                ).fetchone()[0]
+                user_insert = conn.execute(
+                    "SELECT has_table_privilege('app_user','user_account','INSERT')"
+                ).fetchone()[0]
+            if head_0013 != "0013" or audit_update or not user_insert:
+                raise AssertionError("Upgrade from the existing 0010 schema did not install least app grants.")
+            print("MIGRATION_UPGRADE=0010->0011->0012->0013; opportunity_state_guard=true; faculty_assignment_history=true; app_user_minimal_grants=true")
         finally:
             second.cleanup()
     print("TEMPORARY_POSTGRES_CLEANED=true")

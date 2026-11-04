@@ -1,0 +1,235 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/health"
+    },
+    {
+      "source": "/auth",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/auth"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/auth/:path*"
+    },
+    {
+      "source": "/opportunities",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/opportunities"
+    },
+    {
+      "source": "/opportunities/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/opportunities/:path*"
+    },
+    {
+      "source": "/applications",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/applications"
+    },
+    {
+      "source": "/applications/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/applications/:path*"
+    },
+    {
+      "source": "/placements",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/placements"
+    },
+    {
+      "source": "/placements/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/placements/:path*"
+    },
+    {
+      "source": "/invitations",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/invitations"
+    },
+    {
+      "source": "/invitations/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/invitations/:path*"
+    },
+    {
+      "source": "/policies",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/policies"
+    },
+    {
+      "source": "/policies/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/policies/:path*"
+    },
+    {
+      "source": "/notifications",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/notifications"
+    },
+    {
+      "source": "/notifications/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/notifications/:path*"
+    },
+    {
+      "source": "/reports",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/reports"
+    },
+    {
+      "source": "/reports/:path*",
+      "destination": "https://internship-lifecycle-api-62997789.onrender.com/reports/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/health",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/auth",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/auth/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/opportunities",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/opportunities/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/applications",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/applications/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/placements",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/placements/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/invitations",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/invitations/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/policies",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/policies/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/notifications",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/notifications/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/reports",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/reports/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ]
+}

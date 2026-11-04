@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: internship-lifecycle-api-62997789
+    runtime: python
+    region: virginia
+    plan: free
+    rootDir: backend
+    buildCommand: python -m pip install --upgrade pip && python -m pip install .
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /ready
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.14
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_ALLOWED_ORIGINS
+        sync: false
+      - key: JWT_TTL_MINUTES
+        value: '15'
+      - key: PASSWORD_RESET_DELIVERY
+        value: disabled
