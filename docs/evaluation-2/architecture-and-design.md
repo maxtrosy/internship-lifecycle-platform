@@ -161,7 +161,7 @@ Todos los valores son **objetivos propuestos (*proposed targets*)**. Donde no ha
 | Artifact | C-06, C-08 y compuerta en BD |
 | Response | Rechazo con lista de evidencia faltante; sin cambio de estado; las horas se **recalculan desde las filas de origen**; el bypass lo rechaza la BD |
 | Measure *(propuesto)* | 100 % de ≥5 variantes de evidencia faltante denegadas; 0 colocaciones `Completed`/`Closed` con requisitos obligatorios insatisfechos |
-| Evidencia | **EJECUTADO (PoC):** T-04. La variante de concurrencia (retirar evidencia durante la confirmación) es **NOT EXECUTED** |
+| Evidencia | **EJECUTADO (PoC):** T-04. El producto validó en 2026-10-26 la carrera horas-vs-confirmación (1/1); la variante específica de retirar evidencia durante la confirmación es **NOT EXECUTED** |
 
 **Calidades de apoyo** (definición operacional pendiente de ejecución): **QS-07** (RNF-08, AD-05): con el adaptador de registros estudiantiles caído, la postulación queda sin evaluar con mensaje explícito, **nunca** se asume elegible, y las notificaciones en cola se entregan al recuperarse (objetivo propuesto ≤ 5 min) — *NOT EXECUTED*. **QS-08** (RNF-11): en un estudio de tareas planificado con 5 personas, ≥4 identifican estado y siguiente paso — *NOT EXECUTED*.
 
@@ -239,7 +239,7 @@ flowchart LR
 | Aspecto | Diseño | Implementación | Validación |
 |---|---|---|---|
 | Compuerta de activación | Documentado (ADR-003, SEQ-02) | **Rebanada de BD + comandos en el PoC**; no está en el producto | **Ejecutado (PoC, equipo, 2026-10-22):** T-01, T-02, T-02b (T-02 A 55/45, 0 prohibidos; B 25/40; C 0/40 con 21 `GATE_VIOLATION`) |
-| Compuerta de cierre | Documentado | Rebanada de BD + comandos en el PoC | **Ejecutado (PoC, equipo):** T-04. Variante concurrente: NOT EXECUTED |
+| Compuerta de cierre | Documentado | Rebanada de BD + comandos en el PoC | **Ejecutado (PoC, equipo):** T-04; además, horas-vs-confirmación **PASÓ 1/1** en producto (2026-10-26). Retiro concurrente de evidencia: NOT EXECUTED |
 | No conformidad posterior a la activación (BR-18) | Documentado (ADR-003, BR-18) | Vista derivada + comandos + trigger en el PoC | T-16a..T-16e: **14 PASS** (2026-10-22) |
 | Autorización por relación | Documentado (ADR-004) | Módulo `authz` del PoC (sin HTTP) | **Ejecutado (PoC, equipo):** T-03 (66 aserciones) |
 | Versionado y auditoría | Documentado (ADR-005) | Tablas y triggers del PoC | **Ejecutado (PoC, equipo):** T-05, T-07 |
@@ -267,7 +267,7 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | OPEN-02 | Evidencia de cierre por tipo; quién confirma finalización y quién cierra | CL-009, PT-007, RFP paso 15–16 | Política de finalización; actores de T7/T8 |
 | OPEN-03 | Qué cambios requieren re-aprobación, quién aprueba, estado durante la espera, cambio urgente | CL-007, RF-13 | Política de cambios; estado de la colocación |
 | OPEN-04 | Elegibilidad: ¿revisión humana?, reevaluación de postulaciones en curso, vigencias futuras | CL-003, PT-004 | Estado `EligibilityReview`; migración de políticas |
-| OPEN-05 | Quién publica; revisión de oportunidades creadas por el coordinador | CL-002, PT-001, US-003 | Roles y transición `InReview → Published` |
+| OPEN-05 | Quién revisa y publica oportunidades, incluido el alcance de creadores | CL-002, PT-001, US-003 | El flujo técnico `DRAFT→IN_REVIEW→APPROVED→PUBLISHED→CLOSED` está implementado en `0011`; elegir/configurar las autoridades de producción sigue pendiente. Las listas de roles son vacías por defecto. |
 | OPEN-06 | Campos del estudiante visibles para la organización anfitriona | CL-008, PT-003 | Proyección externa |
 | OPEN-07 | Prácticas gestionadas por el estudiante | RFP sec. 8 y 12 | Origen de la colocación; modelo |
 | OPEN-08 | Colocaciones interrumpidas o canceladas | RFP sec. 2 | Estados `Interrupted`/`Cancelled`, US-035 |
@@ -285,7 +285,7 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | OPEN-20 | Qué se almacena de cada documento (metadatos + referencia) | RFP sec. 10 | Modelo de datos |
 | OPEN-21 | **SSO institucional:** no se encontró proveedor, protocolo, URL de descubrimiento, credenciales ni cuenta de prueba. C-01 tiene autenticación local; usuarios externos limitados pueden aceptar invitaciones con rol/organización asignados por el servidor. | RFP sec. 7 | Decisión e información de TI; integrar OIDC/SAML cuando se suministre |
 
-**Elementos `NOT EXECUTED`:** QS-05 (pico), QS-07 (indisponibilidad de integración), QS-08 (comprensión de estado), T-09..T-14 del [plan](validation/validation-plan.md), la variante concurrente de T-04, medición de latencia de T-06 y reconstrucción de historial, pruebas de adaptadores y de arquitectura, humo de despliegue.
+**Elementos `NOT EXECUTED`:** QS-05 (pico), QS-07 (indisponibilidad de integración), QS-08 (comprensión de estado), T-09..T-14 del [plan](validation/validation-plan.md), retiro concurrente de evidencia en T-04, medición de latencia de T-06 y reconstrucción de historial, pruebas de adaptadores y de arquitectura, humo de despliegue.
 
 ---
 
@@ -331,4 +331,4 @@ Las 34 inconsistencias están en la [auditoría](evaluation-1-audit.md). Resumen
 | 19 | ¿Es razonable para un semestre? | Sí: un monolito modular, un worker, una BD, simuladores |
 | 20 | ¿Responde a "¿puede justificar cómo estructurarse?" | Sí, mediante la cadena F-01 y los hallazgos reales del PoC |
 
-**Brechas que esta revisión no puede cerrar:** aún no existe código ni stack elegido (`OPEN-17`), por lo que el modelo de este paquete es una primera versión que el equipo debe revisar y adoptar; ninguna decisión está validada con el cliente; la evidencia ejecutada corresponde a un PoC aislado, reejecutado por el equipo el 2026-10-22 (commit `dcda267`), no al producto; `OPEN-14` queda cubierto por una **propuesta** (BR-18) **pendiente de validar con el cliente**; T-02 y T-16a..e se ejecutaron en la corrida 2026-10-22 (14 PASS; T-02 A 55/45, 0 prohibidos) y los conteos de orden varían entre corridas.
+**Brechas que esta revisión no puede cerrar:** el modelo de este paquete sigue siendo la primera versión propuesta bajo `OPEN-17` y ninguna decisión institucional se valida con el cliente. La evidencia de esa sección corresponde al PoC aislado de 2026-10-22 (commit `dcda267`), no a la validación del producto documentada posteriormente en [validation-results.md](validation/validation-results.md). `OPEN-14` continúa como propuesta pendiente (BR-18); los conteos de T-02/T-16a..e pertenecen a las corridas históricas y varían entre ensayos.

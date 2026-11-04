@@ -1,46 +1,53 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "../api";
-import type { EmployerApplication, Opportunity, User } from "../api";
+import type { EmployerApplication, Opportunity, OpportunityCatalogs, User, WorkplaceSupervisor } from "../api";
 import { Alert, Badge, EmptyState, PageHeader, Spinner } from "../components/ui";
 import EligibilitySummary from "../components/EligibilitySummary";
 import { presentEligibility } from "../eligibility";
 
+function opportunityStateLabel(state: string): string {
+  return ({
+    DRAFT: "Borrador",
+    IN_REVIEW: "En revisión",
+    APPROVED: "Aprobada",
+    PUBLISHED: "Publicada",
+    CLOSED: "Cerrada",
+  } as Record<string, string>)[state] ?? state;
+}
+
 export default function Opportunities({ user }: { user: User }) {
-  const assignedHostOrg = user.roles.find((role) => role.host_org_id)?.host_org_id ?? null;
-  const assignedProgram = user.roles.find((role) => role.program_id)?.program_id ?? null;
   const isCreator = user.roles.some((r) => r.role === "HOST_ORG_MEMBER" || r.role === "PROGRAM_COORDINATOR");
   const isEmployer = user.roles.some((r) => r.role === "HOST_ORG_MEMBER");
   const isStudent = user.roles.some((r) => r.role === "STUDENT");
   const [items, setItems] = useState<Opportunity[] | null>(null);
+  const [catalogs, setCatalogs] = useState<OpportunityCatalogs | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("ALL");
 
   const [title, setTitle] = useState("");
-  const [hostOrg, setHostOrg] = useState(() => String(assignedHostOrg ?? ""));
-  const [program, setProgram] = useState(() => String(assignedProgram ?? ""));
+  const [hostOrg, setHostOrg] = useState("");
+  const [program, setProgram] = useState("");
   const [creating, setCreating] = useState(false);
+  const [transitioningId, setTransitioningId] = useState<number | null>(null);
 
   const [apps, setApps] = useState<EmployerApplication[] | null>(null);
+  const [supervisors, setSupervisors] = useState<WorkplaceSupervisor[] | null>(null);
   const [selectedOid, setSelectedOid] = useState<number | null>(null);
   const [selectingId, setSelectingId] = useState<number | null>(null);
   const [sel, setSel] = useState({ supervisor: "", start: "", end: "", location: "", responsibilities: "" });
 
-  const organizationChoices = useMemo(() => {
-    const source = (items ?? []).filter((opportunity) => !isEmployer || opportunity.host_org_id === assignedHostOrg);
-    return [...new Map(source.map((opportunity) => [opportunity.host_org_id, opportunity.host_name])).entries()]
-      .map(([id, name]) => ({ id, name }));
-  }, [items, isEmployer, assignedHostOrg]);
-  const programChoices = useMemo(() => {
-    const source = (items ?? []).filter((opportunity) => !isEmployer || opportunity.host_org_id === assignedHostOrg);
-    return [...new Map(source.map((opportunity) => [opportunity.program_id, opportunity.program_code])).entries()]
-      .map(([id, code]) => ({ id, code }));
-  }, [items, isEmployer, assignedHostOrg]);
+  const organizationChoices = catalogs?.organizations ?? [];
+  const programChoices = catalogs?.programs ?? [];
 
   useEffect(() => {
-    if (!program && programChoices.length > 0) setProgram(String(programChoices[0].id));
-  }, [program, programChoices]);
+    if (!catalogs) return;
+    setHostOrg((current) => catalogs.organizations.some((choice) => String(choice.id) === current)
+      ? current : catalogs.organizations.length === 1 ? String(catalogs.organizations[0].id) : "");
+    setProgram((current) => catalogs.programs.some((choice) => String(choice.id) === current)
+      ? current : catalogs.programs.length === 1 ? String(catalogs.programs[0].id) : "");
+  }, [catalogs]);
 
   async function reload() {
     setError(null);
@@ -49,18 +56,44 @@ export default function Opportunities({ user }: { user: User }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+    if (isCreator) {
+      try {
+        setCatalogs(await api.listOpportunityCatalogs());
+      } catch (err) {
+        setCatalogs(null);
+        setError(err instanceof Error ? err.message : "No se pudieron cargar organizaciones y programas.");
+      }
+    }
   }
 
   useEffect(() => {
     reload();
   }, []);
 
+  useEffect(() => {
+    if (!items) return;
+    const requestedId = Number(sessionStorage.getItem("dh05:open-opportunity"));
+    if (!Number.isInteger(requestedId) || requestedId < 1) return;
+    const requested = items.find((item) => item.id === requestedId);
+    sessionStorage.removeItem("dh05:open-opportunity");
+    if (requested) {
+      setStateFilter("ALL");
+      setSearch(requested.title);
+    }
+  }, [items]);
+
   async function loadApps(oid: number) {
     setSelectedOid(oid);
     setApps(null);
+    setSupervisors(null);
     setError(null);
     try {
-      setApps(await api.listApplicationsForOpportunity(oid));
+      const [applications, availableSupervisors] = await Promise.all([
+        api.listApplicationsForOpportunity(oid),
+        api.listWorkplaceSupervisors(oid),
+      ]);
+      setApps(applications);
+      setSupervisors(availableSupervisors);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -75,12 +108,40 @@ export default function Opportunities({ user }: { user: User }) {
     try {
       await api.createOpportunity({ host_org_id: Number(hostOrg), program_id: Number(program), title });
       setTitle("");
-      setSuccess("Oportunidad creada y publicada.");
+      setSuccess("Borrador guardado. La oportunidad no estará disponible para postulaciones hasta completar la revisión y publicación configuradas.");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function transitionOpportunity(opportunity: Opportunity, action: "submit" | "approve" | "publish" | "close") {
+    if (action === "close" && !window.confirm("¿Cerrar esta oportunidad? Los cambios de estado quedarán en el historial.")) return;
+    setError(null);
+    setSuccess(null);
+    setTransitioningId(opportunity.id);
+    try {
+      const operations = {
+        submit: api.submitOpportunityForReview,
+        approve: api.approveOpportunity,
+        publish: api.publishOpportunity,
+        close: api.closeOpportunity,
+      };
+      await operations[action](opportunity.id);
+      const messages = {
+        submit: "Oportunidad enviada a revisión.",
+        approve: "Oportunidad aprobada para publicación.",
+        publish: "Oportunidad publicada.",
+        close: "Oportunidad cerrada.",
+      };
+      setSuccess(messages[action]);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el estado de la oportunidad.");
+    } finally {
+      setTransitioningId(null);
     }
   }
 
@@ -140,66 +201,38 @@ export default function Opportunities({ user }: { user: User }) {
         eyebrow="CATÁLOGO"
         title="Oportunidades"
         description={isEmployer
-          ? "Publica oportunidades y revisa las postulaciones recibidas."
+          ? "Crea borradores, envíalos a revisión y consulta las postulaciones de oportunidades publicadas."
           : isStudent ? "Explora las oportunidades publicadas y postúlate." : "Oportunidades disponibles."}
       />
 
       {isCreator && (
         <form className="card form-card" onSubmit={create}>
-          <div className="section-heading"><div><span className="eyebrow">GESTIÓN</span><h2>Publicar oportunidad</h2><p>Al publicarla, queda disponible según el alcance configurado en el sistema.</p></div></div>
+          <div className="section-heading"><div><span className="eyebrow">GESTIÓN</span><h2>Crear borrador</h2><p>El borrador debe pasar por revisión y publicación según las autoridades institucionales configuradas.</p></div></div>
           <div className="grid cols-3 opportunity-assignment-grid">
             <div className="field">
               <label htmlFor="opp-title">Título</label>
               <input id="opp-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
             </div>
-            {assignedHostOrg !== null ? (
-              <div className="context-field">
-                <span>Organización</span>
-                <strong>{organizationChoices.find((choice) => choice.id === assignedHostOrg)?.name ?? "Vinculada a tu cuenta"}</strong>
-                <small>Asignada a tu sesión</small>
-                <input id="opp-org" type="hidden" value={hostOrg} />
-              </div>
-            ) : organizationChoices.length > 0 ? (
-              <div className="field">
-                <label htmlFor="opp-org">Organización</label>
-                <select id="opp-org" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} required>
-                  <option value="">Selecciona una organización</option>
-                  {organizationChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
-                </select>
-              </div>
-            ) : (
-              <div className="field">
-                <label htmlFor="opp-org">Organización</label>
-                <input id="opp-org" type="number" min="1" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} required />
-                <small className="field-note">No hay organizaciones disponibles para seleccionar. Contacta a coordinación para revisar el acceso de tu cuenta.</small>
-              </div>
-            )}
-            {assignedProgram !== null ? (
-              <div className="context-field">
-                <span>Programa</span>
-                <strong>{programChoices.find((choice) => choice.id === assignedProgram)?.code ?? "Asignado a tu cuenta"}</strong>
-                <small>Vinculado a tu sesión</small>
-                <input id="opp-prog" type="hidden" value={program} />
-              </div>
-            ) : programChoices.length > 0 ? (
-              <div className="field">
-                <label htmlFor="opp-prog">Programa</label>
-                <select id="opp-prog" value={program} onChange={(e) => setProgram(e.target.value)} required>
-                  <option value="">Selecciona un programa</option>
-                  {programChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.code}</option>)}
-                </select>
-              </div>
-            ) : (
-              <div className="field">
-                <label htmlFor="opp-prog">Programa</label>
-                <input id="opp-prog" type="number" min="1" value={program} onChange={(e) => setProgram(e.target.value)} required />
-                <small className="field-note">No hay programas disponibles para seleccionar. Contacta a coordinación para revisar el acceso de tu cuenta.</small>
-              </div>
-            )}
+            <div className="field">
+              <label htmlFor="opp-org">Organización</label>
+              <select id="opp-org" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} required disabled={!catalogs}>
+                <option value="">{catalogs ? "Selecciona una organización" : "Cargando organizaciones…"}</option>
+                {organizationChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+              </select>
+              {catalogs && organizationChoices.length === 0 && <small className="field-note">No hay organizaciones disponibles para tu cuenta. Contacta a coordinación.</small>}
+            </div>
+            <div className="field">
+              <label htmlFor="opp-prog">Programa</label>
+              <select id="opp-prog" value={program} onChange={(e) => setProgram(e.target.value)} required disabled={!catalogs}>
+                <option value="">{catalogs ? "Selecciona un programa" : "Cargando programas…"}</option>
+                {programChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name} · {choice.code}</option>)}
+              </select>
+              {catalogs && programChoices.length === 0 && <small className="field-note">No hay programas disponibles para tu cuenta. Contacta a coordinación.</small>}
+            </div>
           </div>
           <div>
-            <button className="btn" type="submit" disabled={creating || !title.trim() || !hostOrg || !program}>
-              {creating ? <Spinner /> : "Publicar"}
+            <button className="btn" type="submit" disabled={creating || !catalogs || !organizationChoices.length || !programChoices.length || !title.trim() || !hostOrg || !program}>
+              {creating ? <Spinner /> : "Guardar borrador"}
             </button>
           </div>
         </form>
@@ -220,7 +253,7 @@ export default function Opportunities({ user }: { user: User }) {
             <div className="catalog-heading"><div><span className="eyebrow">EXPLORAR</span><h2>Oportunidades disponibles</h2></div><span className="result-count">{filteredItems.length} de {items.length}</span></div>
             <div className="catalog-filters">
               <div className="field search-field"><label htmlFor="opportunity-search">Buscar oportunidad</label><input id="opportunity-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Título, programa u organización" /></div>
-              <div className="field state-filter"><label htmlFor="opportunity-state">Estado</label><select id="opportunity-state" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="ALL">Todos</option><option value="PUBLISHED">Publicada</option></select></div>
+              <div className="field state-filter"><label htmlFor="opportunity-state">Estado</label><select id="opportunity-state" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="ALL">Todos</option>{["DRAFT", "IN_REVIEW", "APPROVED", "PUBLISHED", "CLOSED"].map((state) => <option key={state} value={state}>{({ DRAFT: "Borrador", IN_REVIEW: "En revisión", APPROVED: "Aprobada", PUBLISHED: "Publicada", CLOSED: "Cerrada" } as Record<string, string>)[state]}</option>)}</select></div>
             </div>
           </div>
           {filteredItems.length === 0 ? <EmptyState message="No hay oportunidades que coincidan con esta búsqueda." /> : <div className="table-scroll" tabIndex={0} aria-label="Lista de oportunidades">
@@ -240,7 +273,7 @@ export default function Opportunities({ user }: { user: User }) {
                   <td>{o.title}</td>
                   <td>{o.program_code}</td>
                   <td>{o.host_name}</td>
-                  <td><Badge>{o.state}</Badge></td>
+                  <td><Badge state={o.state} label={opportunityStateLabel(o.state)}>{o.state}</Badge></td>
                   <td>
                     <div className="row">
                       {isStudent && (
@@ -253,6 +286,12 @@ export default function Opportunities({ user }: { user: User }) {
                           Postulaciones
                         </button>
                       )}
+                      {o.can_submit_for_review && <button className="btn secondary" disabled={transitioningId === o.id} onClick={() => transitionOpportunity(o, "submit")}>{transitioningId === o.id ? <Spinner /> : "Enviar a revisión"}</button>}
+                      {o.can_approve_for_publication && <button className="btn" disabled={transitioningId === o.id} onClick={() => transitionOpportunity(o, "approve")}>{transitioningId === o.id ? <Spinner /> : "Aprobar para publicación"}</button>}
+                      {o.can_publish && <button className="btn" disabled={transitioningId === o.id} onClick={() => transitionOpportunity(o, "publish")}>{transitioningId === o.id ? <Spinner /> : "Publicar oportunidad"}</button>}
+                      {o.can_close && <button className="btn danger" disabled={transitioningId === o.id} onClick={() => transitionOpportunity(o, "close")}>{transitioningId === o.id ? <Spinner /> : "Cerrar oportunidad"}</button>}
+                      {o.state === "IN_REVIEW" && !o.review_authority_configured && <span className="field-note">La autoridad institucional de revisión no está configurada.</span>}
+                      {o.state === "APPROVED" && !o.publisher_authority_configured && <span className="field-note">La autoridad institucional de publicación no está configurada.</span>}
                     </div>
                   </td>
                 </tr>
@@ -295,7 +334,13 @@ export default function Opportunities({ user }: { user: User }) {
                           <div className="grid cols-2" style={{ marginTop: 8 }}>
                             <div className="field"><label>Supervisor laboral asignado (opcional)</label>
                               <small className="field-note">Déjalo vacío si aún no tienes una asignación de supervisor.</small>
-                              <input type="number" min="1" value={sel.supervisor} onChange={(e) => setSel({ ...sel, supervisor: e.target.value })} /></div>
+                              <select aria-label="Supervisor laboral asignado (opcional)" value={sel.supervisor}
+                                onChange={(e) => setSel({ ...sel, supervisor: e.target.value })} disabled={supervisors === null}>
+                                <option value="">Sin asignar</option>
+                                {(supervisors ?? []).map((supervisor) => <option key={supervisor.id} value={supervisor.id}>{supervisor.display_name}</option>)}
+                              </select>
+                              {supervisors?.length === 0 && <small className="field-note">No hay supervisores activos registrados para esta organización.</small>}
+                            </div>
                             <div className="field"><label>Fecha de inicio</label>
                               <input type="date" value={sel.start} onChange={(e) => setSel({ ...sel, start: e.target.value })} /></div>
                             <div className="field"><label>Fecha de finalización</label>

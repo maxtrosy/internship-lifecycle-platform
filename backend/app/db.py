@@ -78,6 +78,7 @@ def command(actor_id: int | None) -> Iterator[CommandContext]:
         with conn.transaction():
             cur = conn.cursor()
             cur.execute(f"SET ROLE {get_settings().app_role}")
+            cur.execute("SELECT set_config('dh05.actor_id', %s, true)", (str(actor_id) if actor_id is not None else "",))
             ctx = CommandContext(conn, cur, actor_id, str(uuid.uuid4()))
             token = _current_command.set(ctx)
             try:

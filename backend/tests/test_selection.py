@@ -12,7 +12,7 @@ from app.modules.applications import service as apps
 from app.modules.lifecycle import service as lifecycle
 from app.modules.opportunities import service as opps
 from app.modules.policies import service as policies
-from tests.conftest import seed_base
+from tests.conftest import publish_test_opportunity, seed_base
 
 
 def _setup(env):
@@ -21,6 +21,7 @@ def _setup(env):
         policies.create_policy_version(ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}])
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
+    publish_test_opportunity(env, oid)
     with db.command(U["s1"]) as ctx:
         apps.submit_application(ctx, oid)
     return U, oid
@@ -85,7 +86,7 @@ def test_t26_repeated_selection_rejected(env):
 def test_t26_selection_requires_opportunity_still_published(env):
     U, oid = _setup(env)
     aid = _aid(env, oid)
-    env.admin.execute("UPDATE opportunity SET state='DRAFT' WHERE id=%s", (oid,))
+    env.admin.execute("UPDATE opportunity SET state='CLOSED' WHERE id=%s", (oid,))
 
     with db.command(U["hm_alfa"]) as ctx:
         with pytest.raises(BusinessError) as ei:

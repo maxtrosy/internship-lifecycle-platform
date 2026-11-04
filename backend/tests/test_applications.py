@@ -8,7 +8,7 @@ from app.errors import BusinessError, Forbidden
 from app.modules.applications import service as apps
 from app.modules.opportunities import service as opps
 from app.modules.policies import service as policies
-from tests.conftest import seed_base
+from tests.conftest import publish_test_opportunity, seed_base
 
 
 def _setup(env):
@@ -20,6 +20,7 @@ def _setup(env):
         ])
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
+    publish_test_opportunity(env, oid)
     return U, oid
 
 
@@ -36,7 +37,7 @@ def test_t25_eligible_and_ineligible(env):
 
 def test_t25_non_published(env):
     U, oid = _setup(env)
-    env.admin.execute("UPDATE opportunity SET state='DRAFT' WHERE id=%s", (oid,))
+    env.admin.execute("UPDATE opportunity SET state='CLOSED' WHERE id=%s", (oid,))
     with db.command(U["s1"]) as ctx:
         with pytest.raises(BusinessError) as ei:
             apps.submit_application(ctx, oid)
@@ -47,6 +48,7 @@ def test_t25_no_policy(env):
     U = seed_base(env)
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ADM"], "No policy")
+    publish_test_opportunity(env, oid)
     with db.command(U["s3"]) as ctx:
         with pytest.raises(BusinessError) as ei:
             apps.submit_application(ctx, oid)

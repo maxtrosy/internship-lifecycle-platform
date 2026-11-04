@@ -11,7 +11,7 @@ Se distinguen **tres cosas** que no deben mezclarse:
 | Concepto | Qué es | Dónde vive | Mutabilidad |
 |---|---|---|---|
 | **Estado vigente** | Dónde está hoy la colocación y qué versión rige | `Placement.state`, `Placement.current_version_id` | Cambia mediante comandos |
-| **Datos de negocio versionados** | Supervisor del lugar de trabajo, fechas, ubicación y responsabilidades; también `PolicyVersion` e historial de entregas de documentos | `PlacementVersion` (inmutable), `PolicyVersion`, `DocumentSubmission` | **Contenido inmutable**; solo cambia el estado de decisión (`PROPOSED → APPROVED/REJECTED`) una vez |
+| **Datos de negocio versionados** | Supervisor del lugar de trabajo, fechas, ubicación y responsabilidades; políticas, entregas documentales y evidencia/informes versionados | `PlacementVersion`, `PolicyVersion`, `DocumentSubmission`, `completion_evidence`, `placement_progress_report`, `placement_evaluation`, `placement_incident` | **Contenido inmutable**; las entregas/evaluaciones/registros se agregan por revisión. El estado de decisión de una versión cambia una vez (`PROPOSED → APPROVED/REJECTED`) |
 | **Historial de auditoría** | Quién hizo qué, cuándo, antes/después | `AuditEvent` | **Append-only** |
 
 Reglas:
@@ -19,7 +19,7 @@ Reglas:
 2. Un cambio relevante crea una versión `PROPOSED`; **la vigente no cambia hasta aprobar**. Cuando se aprueba, `current_version_id` se mueve y la anterior se conserva.
 3. **Auditoría atómica:** cada mutación aceptada escribe su `AuditEvent` en **la misma transacción** (actor, instante, acción, sujeto, antes/después, correlación). Si falla la auditoría, falla la mutación.
 4. **Inmutabilidad:** la aplicación solo puede `INSERT/SELECT` sobre auditoría (permisos) y un trigger rechaza `UPDATE/DELETE` incluso al dueño de la tabla; la versión protege su contenido con trigger.
-5. Los **incidentes** no crean versión (son registros con resolución); solo los cambios relevantes.
+5. Los registros de seguimiento, evaluaciones, incidentes/cambios y evidencia final son append-only y enlazan por colocación y revisión; cada mutación aprobada escribe auditoría en la misma transacción. Un reporte de cambio no crea versión y los incidentes no tienen resolución/escalamiento implementados.
 6. Qué cambios exigen aprobación, quién aprueba y qué ocurre mientras se espera (¿sigue activa?, ¿cambio urgente?) quedan en **OPEN-03**. Propuesta: aprobación del coordinador de programa; versión vigente rige mientras tanto.
 
 ## Alternatives considered
@@ -35,7 +35,7 @@ Reglas:
 La versión responde "¿qué rige hoy y qué regía antes?"; la auditoría responde "¿quién decidió qué y cuándo?". Son preguntas distintas con ciclos de vida distintos.
 
 ## Consequences
-Las lecturas del estado vigente hacen un *join* con la versión actual. La línea de tiempo de una colocación se arma uniendo versiones y eventos.
+Las lecturas del estado vigente hacen un *join* con la versión actual. La línea de tiempo se arma con eventos de postulación, colocación, checklist, versiones, horas, seguimiento, evaluación, incidentes/cambios y cierre. El endpoint proyecta solo fecha/acción; omite actor/sujeto internos, IDs, correlación y JSON antes/después. La interfaz traduce acciones conocidas y usa una etiqueta genérica para acciones nuevas. La E2E de esta continuación verificó los eventos `placement.completed` y `placement.closed`. La traza de publicación de oportunidad y cobertura de todas las mutaciones siguen incompletas.
 
 ## What gets worse / trade-offs
 - Más almacenamiento y más complejidad de lectura/reconciliación.

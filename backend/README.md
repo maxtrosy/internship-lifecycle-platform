@@ -23,6 +23,18 @@ docker compose up --build
 
 `GET http://localhost:8000/health` responde `{"status":"ok"}`. La migración `0001` corre al iniciar el contenedor `api`.
 
+## Autoridades institucionales configurables
+
+No se infieren responsables de aprobación a partir del nombre de un rol. Estas variables aceptan los roles internos admitidos y, si se omiten, no conceden la mutación correspondiente:
+
+```text
+OPPORTUNITY_REVIEWER_ROLES=
+OPPORTUNITY_PUBLISHER_ROLES=
+PLACEMENT_FACULTY_ASSIGNER_ROLES=
+```
+
+Las dos primeras controlan, respectivamente, la aprobación para publicar y la publicación de oportunidades (`OPEN-05`). La tercera habilita asignación/reasignación docente dentro del programa o ámbito autorizado. El harness E2E asigna valores temporales exclusivamente en su instancia PostgreSQL desechable. Debe existir una decisión institucional y configuración de despliegue antes de habilitarlas en producción.
+
 ## Migraciones y datos sintéticos (sin Docker)
 Con `DATABASE_URL` apuntando a tu PostgreSQL:
 
@@ -53,10 +65,7 @@ Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 python -m pytest -q
 ```
 
-En Docker: `docker compose -p dh05-tests -f docker-compose.test.yml run --build --rm tests`;
-después, retira el contenedor/base efímera con `docker compose -p dh05-tests -f docker-compose.test.yml down --volumes --remove-orphans`.
+La imagen Compose también es aislada y no monta volúmenes. Si se usa, conserva el nombre de proyecto `dh05-tests` para no mezclar recursos con desarrollo; no hace falta eliminar volúmenes. En esta validación Docker Engine no estaba disponible y se usó `pgserver` temporal.
 
-Python 3.12 es requerido. En el equipo auditado, el Python local es 3.14 y las extensiones de
-`.deps` son para CPython 3.12; la suite se ejecutó en un contenedor Python 3.12 con una base
-temporal `dh05_release_test`. El resultado final de esta auditoría está en
+Python 3.12 es requerido por las dependencias de `pgserver`. La ejecución del 2026-11-02 usó Python 3.12.14 y una base temporal local `pgserver`; Docker Engine no estaba disponible, por lo que no se recurrió a la imagen Compose. El detalle, tiempo y warning de la suite están en
 [`docs/evaluation-2/final-readiness-audit.md`](../docs/evaluation-2/final-readiness-audit.md).

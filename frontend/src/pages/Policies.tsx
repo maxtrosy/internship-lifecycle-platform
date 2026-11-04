@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../api";
 import type { PolicyCondition, PolicyKind, ProgramPolicies } from "../api";
 import { Alert, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
@@ -80,25 +80,36 @@ export default function Policies() {
   const [busy, setBusy] = useState<PolicyKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const reloadRequest = useRef(0);
 
-  async function reload() {
+  async function reload(preserveDraft = false) {
+    const request = ++reloadRequest.current;
     setError(null);
     try {
       const result = await api.listPolicies();
+      if (request !== reloadRequest.current) return;
+      const nextCode = result.some((program) => program.code === selectedCode)
+        ? selectedCode
+        : result[0]?.code ?? "";
+      const nextProgram = result.find((program) => program.code === nextCode);
       setPrograms(result);
-      setSelectedCode((current) => current || result[0]?.code || "");
+      setSelectedCode(nextCode);
+      // A save refreshes version metadata while the operator may still be
+      // editing a different policy. Do not discard that in-progress draft.
+      if (!preserveDraft) setDraft(draftFrom(nextProgram));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (request === reloadRequest.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     }
   }
 
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => {
+    void reload();
+    return () => { reloadRequest.current += 1; };
+  }, []);
 
   const selected = useMemo(() => programs?.find((program) => program.code === selectedCode), [programs, selectedCode]);
-
-  useEffect(() => {
-    if (selected) setDraft(draftFrom(selected));
-  }, [selected]);
 
   async function save(kind: PolicyKind) {
     const conditions = conditionsFrom(draft, kind);
@@ -116,7 +127,7 @@ export default function Policies() {
     try {
       await api.createPolicyVersion(selectedCode, kind, conditions);
       setMessage(`Nueva versión de política de ${formatDomainLabel(kind)} creada para ${selectedCode}.`);
-      await reload();
+      await reload(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -138,7 +149,11 @@ export default function Policies() {
           <BentoCard variant="content" className="policy-program" title="Programa y versiones">
             <div className="field" style={{ maxWidth: 460 }}>
               <label htmlFor="program">Programa</label>
-              <select id="program" value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)}>
+              <select id="program" value={selectedCode} onChange={(event) => {
+                const code = event.target.value;
+                setSelectedCode(code);
+                setDraft(draftFrom(programs?.find((program) => program.code === code)));
+              }}>
                 {programs.map((program) => <option key={program.code} value={program.code}>{program.name} · {program.code}</option>)}
               </select>
             </div>
@@ -153,14 +168,14 @@ export default function Policies() {
             <h2>Elegibilidad</h2>
             <p className="muted">Una postulación debe cumplir todas las condiciones de la versión vigente.</p>
             <div className="grid cols-2">
-              <div className="field"><label>Programas permitidos (códigos separados por coma)</label>
-                <input value={draft.programs} onChange={(event) => set("programs", event.target.value)} placeholder="ING-SIS, ADM" /></div>
-              <div className="field"><label>Nivel académico mínimo</label>
-                <input type="number" min="0" step="1" value={draft.minLevel} onChange={(event) => set("minLevel", event.target.value)} /></div>
-              <div className="field"><label>Créditos mínimos</label>
-                <input type="number" min="0" step="1" value={draft.minCredits} onChange={(event) => set("minCredits", event.target.value)} /></div>
-              <div className="field"><label>Prerrequisitos aprobados</label>
-                <input value={draft.prerequisites} onChange={(event) => set("prerequisites", event.target.value)} placeholder="MAT101, CS102" /></div>
+              <div className="field"><label htmlFor="eligibility-programs">Programas permitidos (códigos separados por coma)</label>
+                <input id="eligibility-programs" value={draft.programs} onChange={(event) => set("programs", event.target.value)} placeholder="ING-SIS, ADM" /></div>
+              <div className="field"><label htmlFor="eligibility-min-level">Nivel académico mínimo</label>
+                <input id="eligibility-min-level" type="number" min="0" step="1" value={draft.minLevel} onChange={(event) => set("minLevel", event.target.value)} /></div>
+              <div className="field"><label htmlFor="eligibility-min-credits">Créditos mínimos</label>
+                <input id="eligibility-min-credits" type="number" min="0" step="1" value={draft.minCredits} onChange={(event) => set("minCredits", event.target.value)} /></div>
+              <div className="field"><label htmlFor="eligibility-prerequisites">Prerrequisitos aprobados</label>
+                <input id="eligibility-prerequisites" value={draft.prerequisites} onChange={(event) => set("prerequisites", event.target.value)} placeholder="MAT101, CS102" /></div>
             </div>
             <button className="btn" style={{ marginTop: 12 }} disabled={busy !== null} onClick={() => void save("ELIGIBILITY")}>
               {busy === "ELIGIBILITY" ? <Spinner /> : "Crear versión de elegibilidad"}

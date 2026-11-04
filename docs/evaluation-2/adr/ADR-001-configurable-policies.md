@@ -18,7 +18,7 @@ El RFP exige que las reglas de elegibilidad y finalización por programa "puedan
 3. Cada tipo de condición tiene **un evaluador en código** (tabla de estrategias). **No hay expresiones, scripts ni DSL.**
 4. Al guardar, se **valida** forma y vocabulario; lo no soportado se rechaza.
 5. **Vinculación:** la postulación guarda la versión de elegibilidad usada y los datos de entrada; la colocación vincula sus políticas de activación y finalización al aprobarse académicamente. Las versiones posteriores **no alteran** colocaciones en curso salvo migración explícita (OPEN-04).
-6. La activación y el cierre no leen la política cada vez: se **materializan** como instancias (`checklist_item`, `completion_requirement`) al vincular la política (base de ADR-003).
+6. La activación y el cierre no leen la política cada vez: se **materializan** como instancias (`checklist_item`, `completion_requirement`) al vincular la política (base de ADR-003). Al decidir cierre, los datos variables se reconstruyen desde el origen: horas desde `progress_entry`, informe desde `completion_evidence` y evaluación desde `placement_evaluation`; una bandera satisfecha en caché no sustituye la evidencia.
 7. Agregar un **tipo de condición nuevo** requiere cambio de código y release. Cambiar **parámetros** de condiciones existentes no.
 
 ## Alternatives considered

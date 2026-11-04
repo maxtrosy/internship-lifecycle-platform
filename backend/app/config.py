@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+OPPORTUNITY_AUTHORITY_ROLES = {"PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR"}
+FACULTY_ASSIGNER_ROLES = {"PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR"}
 
 @dataclass(frozen=True)
 class Settings:
@@ -15,6 +17,9 @@ class Settings:
     password_reset_delivery: str
     app_role: str = "app_user"
     jwt_algorithm: str = "HS256"
+    opportunity_reviewer_roles: tuple[str, ...] = ()
+    opportunity_publisher_roles: tuple[str, ...] = ()
+    faculty_assigner_roles: tuple[str, ...] = ()
 
 
 def get_settings() -> Settings:
@@ -45,6 +50,25 @@ def get_settings() -> Settings:
     ttl = int(os.environ.get("JWT_TTL_MINUTES", "15"))
     if ttl < 1 or ttl > 24 * 60:
         raise RuntimeError("JWT_TTL_MINUTES must be between 1 and 1440")
+    def authority_roles(key: str) -> tuple[str, ...]:
+        raw = os.environ.get(key, "")
+        roles = tuple(dict.fromkeys(role.strip().upper() for role in raw.split(",") if role.strip()))
+        invalid = set(roles) - OPPORTUNITY_AUTHORITY_ROLES
+        if invalid:
+            raise RuntimeError(f"{key} contains unsupported institutional role(s): {', '.join(sorted(invalid))}")
+        return roles
+
+    faculty_assigner_roles = tuple(dict.fromkeys(
+        role.strip().upper() for role in os.environ.get("PLACEMENT_FACULTY_ASSIGNER_ROLES", "").split(",")
+        if role.strip()
+    ))
+    invalid_faculty_roles = set(faculty_assigner_roles) - FACULTY_ASSIGNER_ROLES
+    if invalid_faculty_roles:
+        raise RuntimeError(
+            "PLACEMENT_FACULTY_ASSIGNER_ROLES contains unsupported institutional role(s): "
+            + ", ".join(sorted(invalid_faculty_roles))
+        )
+
     return Settings(
         database_url=os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/postgres"),
         jwt_secret=jwt_secret,
@@ -53,6 +77,9 @@ def get_settings() -> Settings:
         allowed_origins=allowed_origins,
         password_reset_delivery=password_reset_delivery,
         app_role=os.environ.get("APP_DB_ROLE", "app_user"),
+        opportunity_reviewer_roles=authority_roles("OPPORTUNITY_REVIEWER_ROLES"),
+        opportunity_publisher_roles=authority_roles("OPPORTUNITY_PUBLISHER_ROLES"),
+        faculty_assigner_roles=faculty_assigner_roles,
     )
 
 

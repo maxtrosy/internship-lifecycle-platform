@@ -10,5 +10,7 @@ __pycache__/
 node_modules/
 dist/
 *.tsbuildinfo
+.pnpm-store/
 frontend/test-results/
 frontend/playwright-report/
+.neon

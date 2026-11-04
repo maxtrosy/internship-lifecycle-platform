@@ -1,28 +1,88 @@
 # Estado del proyecto
 
-**Fecha de corte:** 2026-10-25. **Regla:** nada se marca como completado si solo fue diseñado. El resumen y los estados actualizados de esta fecha prevalecen sobre el plan inicial que se conserva más abajo.
+**Fecha de corte:** 2026-11-03. **Regla:** nada se marca como completado si solo fue diseñado. Las validaciones del 2026-10-25/26 se conservan como históricas; esta continuación registra el código nuevo y sus límites.
 
 La matriz requisito por requisito vigente está en [functional-completeness-matrix.md](functional-completeness-matrix.md). El RFP fuente de ocho páginas ya se contrastó completo; faltan en el repositorio los originales de Evaluación 1 y documentos institucionales que definan OPEN-xx.
+
+### Notificaciones, mensajería, reportes, publicación y asignación docente — T-47, 2026-11-03
+- La migración `0010` añade notificaciones y conversaciones con canales `JOINT`/`ACADEMIC`; los eventos reales crean notificaciones en la transacción de origen, y la bandeja/read state está limitada al usuario. Los mensajes y la lectura del historial requieren rol, relación y canal autorizados.
+- La migración `0011` protege las transiciones de oportunidad; `OPPORTUNITY_REVIEWER_ROLES` y `OPPORTUNITY_PUBLISHER_ROLES` están vacías por defecto. Las listas se configuraron solo en E2E; OPEN-05 no está resuelto para producción.
+- Los reportes agregan datos persistidos y filtran por programa, organización y estados disponibles; se limita el alcance a coordinación/EC y la respuesta excluye PII y evaluaciones individuales. La UI incluye filtros, carga, error y vacío.
+- La migración `0012` mantiene historial append-only de asignación/retiro de supervisión docente. API/UI soportan consulta de opciones y reasignación solo si `PLACEMENT_FACULTY_ASSIGNER_ROLES` está configurado y el actor tiene ámbito de programa/EC. Por defecto no concede autoridad. Servicio y trigger rechazan cambios cuando la colocación está `COMPLETED`, `CLOSED`, `REJECTED` o `CANCELLED`.
+- Validación ejecutada en esta continuación: backend **84 passed, 1 warning** (122.13 s), frontend **37 passed en 14 archivos**, `npm run build` **EXIT 0** (62 módulos), migraciones `0001→0012` y `0010→0011→0012` **EXIT 0**, Playwright Chromium **7/7** (1.2 min). Se inspeccionaron ocho capturas nuevas (1280 px/390 px), incluidas las vistas de reportes. Docker daemon ausente; todas las bases fueron PostgreSQL temporales `pgserver`, limpiadas al final.
+- En reportes, Playwright verifica la recuperación tras 503, autorización denegada a empleador y ajuste de las cuatro tablas para mostrar todas las columnas sin overflow en escritorio y 390 px. Las capturas confirmaron el ajuste visual.
+- Se corrigió en UI una carrera real: al guardar una versión de política, la recarga podía descartar cambios locales pendientes de otra regla. También se corrigieron expectativas/selectores E2E sin retirar comprobaciones. El producto no se declara completo: faltan decisiones OPEN-xx, integración institucional, instrumentos de evaluación, SSO y validación de carga/usabilidad.
+
+### Estado factual de incidentes y escrituras tras cierre — T-46, 2026-11-02
+- Los reportes de incidente/cambio reciben el estado factual único `REPORTED`; una migración aislada `0001→0009` verifica el backfill de reportes existentes. No se añadieron revisión, resolución, escalamiento, sanciones ni aprobación de versiones.
+- La práctica docente `ACTIVE` asignada se recorrió desde dashboard hasta expediente; la suite E2E comprueba titular, WPS, docente asignado, coordinación y Legal, además de un acceso cruzado denegado. Tras `CLOSED`, se rechazan nuevas horas, avances, incidentes, evidencia y asignaciones al plan. El plan histórico continúa consultable.
+- Validación nueva: backend **76 passed, 1 warning** (75.00 s), frontend **34 passed en 12 archivos**, `tsc -b && vite build` **EXIT 0** (58 módulos), migraciones **`0001→0009` EXIT 0**, Playwright Chromium aislado **7/7** (55.8 s). Las pruebas usan PostgreSQL temporal; no se modificó la base local/demo.
+- Las capturas T-46 de seis imágenes se conservan como evidencia histórica. En T-47 se generaron e inspeccionaron ocho nuevas: expediente **1280×5152 / 390×6398**, dashboard estudiante **1280×720 / 390×1137**, supervisor **1280×900 / 390×844**, reportes **1280×1271 / 390×2381**. Las tablas de reporte y el expediente no presentan desbordamiento horizontal en móvil.
+- Docker CLI 29.5.3 no encontró el daemon `dockerDesktopLinuxEngine`; no se intentó reparar Docker. La suite usó `pgserver` temporal sin volúmenes compartidos. No se hizo stage, commit ni push.
+
+### Recuperación ante fallos en dashboards relacionales — T-45, 2026-11-02
+- Los dashboards de WPS, coordinación y supervisión docente reemplazan el estado de carga indefinido por un mensaje de error y reintento cuando falla `GET /placements`; vuelven a consultar con el endpoint y filtro de relación existentes, sin ampliar permisos.
+- Validación ejecutada: backend **75 passed, 1 warning** (66.49 s), frontend **34/34 en 12 archivos**, `pnpm run build` (`tsc -b && vite build`) **EXIT 0** (58 módulos, 1.23 s), E2E Chromium aislado **6/6** (59.7 s). PostgreSQL temporal `pgserver`; procesos y base limpiados.
+- Revisé seis capturas nuevas de expediente, dashboard estudiante y WPS en escritorio y móvil (1280 px/390 px); no se aprecia desbordamiento en móvil. T-45 recorre error/reintento en WPS, coordinación y docente; la lista docente queda vacía en ese E2E y no valida una práctica docente asignada ni la usabilidad QS-08.
+- Docker Engine no estuvo disponible. No se accedió a la base local/demo ni se alteraron credenciales, colocaciones sintéticas, contenedores o volúmenes. No hay cambios en backend en este bloque y no se efectuó stage/commit/push.
+
+### Revalidación del árbol y migraciones — T-44, 2026-11-02
+- Tras revisar el diff, se restituyó `SCHEMA` al estado inicial de la migración `0001`; el lock de horas permanece en `UPGRADE_0006_SQL` y en el esquema compuesto `CURRENT_SCHEMA`.
+- En PostgreSQL temporal, Alembic recorrió `0001→0007`: lock ausente en `0001`, presente al final; head `0007` y tabla `placement_work_plan_item` comprobados. La base temporal se limpió.
+- Se reejecutaron backend **75 passed, 1 warning** (111.24 s), frontend **32/32 en 11 archivos**, `tsc -b && vite build` **EXIT 0** (57 módulos, 993 ms) y Chromium **3/3** (59.5 s) con el runner aislado. Se revisaron seis capturas nuevas desktop/móvil; una aserción comprueba que la lista docente incluya solo la práctica asignada.
+- Docker cliente 29.5.3 no encontró el daemon `dockerDesktopLinuxEngine`. La validación usó solo `pgserver` temporal, sin volúmenes compartidos; no se accedió a la base local/demo ni se modificaron recursos Docker.
+
+### Orientación del estudiante y acceso de supervisión — T-43, 2026-11-02
+- El panel del estudiante presenta estado y destino derivados de la última postulación/práctica y, en documentación pendiente, de los requisitos persistidos. No convierte una condición asignada a otro rol en una instrucción para el estudiante. Prácticas activas y terminales llevan al expediente/historial.
+- Supervisores laborales/docentes y coordinadores ven las prácticas devueltas por `GET /placements`, con el filtrado relacional del backend, y pueden abrir Expedientes desde Inicio. La ejecución E2E verificó una práctica asignada a WPS; la lista docente está cubierta por el endpoint relacional, pero su vista con asignación no se recorrió en esta E2E.
+- Validación de este incremento: frontend **32/32 en 11 archivos**; `pnpm run build` (`tsc -b && vite build`) **EXIT 0**, 57 módulos; runner Chromium aislado **3/3** (1.0 min). Se probaron estado SUBMITTED, supervisor asignado, navegación y 390 px sin overflow. Se revisaron capturas nuevas: expediente desktop/móvil **1280×4695 / 390×5746**; dashboard estudiante **1280×720 / 390×1137**; dashboard WPS **1280×900 / 390×844**.
+- La suite backend **75 passed, 1 warning** y Alembic `0006→0007` EXIT 0 son la validación T-42 anterior del mismo corte; T-43 no modificó backend. Docker Engine siguió sin estar disponible; Playwright utilizó PostgreSQL temporal `pgserver`, sin volúmenes compartidos.
+- RNF-11 tiene implementación y pruebas automáticas parciales; QS-08/T-13 con participantes sigue pendiente. La reasignación académica, decisiones de cierre/evidencia y aprobación formal de cambios no se inventaron.
+
+### Plan de trabajo — código actual 2026-11-02
+- Se añadió la migración `0007` y la API `GET/POST /placements/{pid}/work-plan`. El WPS vinculado a la versión vigente puede asignar narrativas; titulares, supervisores docentes, coordinadores del programa y EC pueden leer según relación. Miembros anfitriones y legal no reciben el contenido del plan.
+- El plan se integra al expediente y al historial. Las filas son append-only y tienen revisión secuencial; no añaden vencimientos, calificaciones, estado de cumplimiento ni compuertas de elegibilidad/cierre.
+- Validación nueva: backend **75 passed, 1 warning** en PostgreSQL temporal `pgserver`; Alembic `0006→0007` **EXIT 0**; frontend **25/25** en 10 archivos; `tsc -b && vite build` **EXIT 0**, 56 módulos; Playwright Chromium **3/3** con `scripts/run_isolated_e2e.py`. Capturas nuevas de **1280×4695** y **390×5746** inspeccionadas.
+- Docker Engine no estaba disponible; se usaron bases temporales sin volúmenes compartidos. `0007` se aplicó únicamente a PostgreSQL desechable en la prueba incremental. No se accedió a la BD local/demo, no se alteraron credenciales/colocaciones allí ni recursos Docker. OPEN-02/11/14/03, mensajería, revisión/publicación y otros flujos aún no definidos siguen pendientes.
+
+### Revalidación y carrera de horas/cierre — validación anterior 2026-10-26 (histórica)
+- Revalidación nueva: backend **74 passed, 1 warning** en 67.31 s; foco T-04 **1 passed**; frontend **24/24**; `tsc -b && vite build` **EXIT 0**, 55 módulos; Chromium **3/3** en 46.0 s. Detalles y comandos en [validation-results.md](validation/validation-results.md).
+- La E2E final aplicó la migración `0006 (head)` en PostgreSQL temporal `tmpfs`, sin mounts ni volúmenes compartidos; sus capturas nuevas **1280×4426** y **390×5466** fueron inspeccionadas. El build temporal habilitó la ruta de acceso sintético que usa el test existente.
+- T-04 ahora valida concurrentemente una inserción directa de horas mientras `confirm_completion` tiene sin confirmar el `UPDATE`: la escritura espera el lock de la práctica y PostgreSQL la rechaza al quedar `COMPLETED`. Se añadió el mismo lock en `record_hours`; no se probó retiro concurrente de evidencia.
+- Docker agotó la asignación automática de subredes tras las corridas previas; se usaron redes explícitas `/24` solo para nuevos proyectos. No se retiraron contenedores, redes ni volúmenes existentes, ni se accedió a la BD local/demo persistente.
+
+### Seguimiento, evaluación y evidencia de cierre — validación anterior 2026-10-26 (histórica)
+- El expediente ahora incluye avances, evaluaciones narrativas MIDTERM/FINAL, reportes INCIDENT/CHANGE y evidencia FINAL_REPORT persistida como bytes, hash, nombre, tipo, tamaño y revisión. Los registros son append-only y generan actividad; el reporte CHANGE no crea una versión ni inicia aprobación.
+- El cierre recalcula horas y consulta documentos/evaluaciones desde las tablas de origen contra requisitos persistidos. La E2E usó únicamente una política sintética de 100 h y requisitos de informe/evaluación en PostgreSQL `tmpfs`; no se definió una regla institucional nueva.
+- La autorización por rol/relación se verificó para titular, miembro anfitrión, supervisor laboral asignado, coordinación de programa, legal y EC. El E2E registró avance/cambio, entregó el informe, recibió la evaluación FINAL, recargó, confirmó/cerró y comprobó horas e historial terminal. El estudiante no recibe capacidad de confirmar finalización.
+- Resultados finales de esta continuación: backend **73 passed**, 1 warning Starlette/httpx (115.10 s); frontend **24/24** en 10 archivos (4.88 s); `tsc -b && vite build` **EXIT 0**, 55 módulos; Playwright Chromium **3/3** (58.1 s). Capturas nuevas de **1280×4521** y **390×5601** inspeccionadas; el E2E comprobó 390 px sin overflow.
+- La primera E2E falló 2/3 por una expectativa errónea del test sobre el rol estudiante. Se corrigió la aserción para verificar permiso denegado y ausencia del botón. La revisión visual r5 también detectó un mensaje de activación inexacto en una práctica ACTIVE; se corrigió en la UI y el E2E r6 comprueba el nuevo texto, las acciones `placement.completed`/`placement.closed` y los permisos.
+- OPEN-02/11/14 y OPEN-03 siguen pendientes. En ese corte T-04 concurrente no se había ejecutado. Las evaluaciones no tienen escala, incidentes/cambios no se escalan ni resuelven automáticamente y la aprobación formal de nuevas versiones sigue sin endpoint por OPEN-03. El producto no se declara terminado.
+
+### Expediente integral y horas históricas — ejecución anterior 2026-10-26 (histórica)
+- El expediente mostró versiones de elegibilidad/activación/finalización y horas históricas desde filas persistidas; en ese corte no existía interfaz para evidencia final.
+- Resultados anteriores: backend **71/71**, frontend **22/22**, build **54 módulos**, E2E **3/3**. No representan validación del bloque de seguimiento/evidencia descrito arriba.
 
 ## Estado actual de preparación final
 
 ### Implementado y validado
 - Autenticación local y roles; matriz HTTP de rutas y relaciones con pruebas negativas: `backend/tests/test_http_authorization.py` (T-34).
-- Compuerta de activación/rechazo serializada a nivel PostgreSQL mediante migración `0004`; suite backend completa del corte final: 68 pruebas aprobadas.
-- Entorno de demostración separado, Alembic hasta `0004`, health check y seed de 14 cuentas sintéticas: [runbook](validation/demo-runbook.md).
-- Pruebas frontend del corte final: **8 aprobadas**; `tsc -b && vite build` correcto (48 módulos).
-- Flujo E2E Chromium del corte final: **3/3 pruebas**; incluye acceso rápido a cuentas sintéticas, credenciales inválidas/rutas protegidas y el recorrido de roles hasta activación, registro de 4.5 horas y persistencia tras recargar. El alcance sigue limitado a Chromium y a los flujos explícitos de `lifecycle.spec.ts`. Véase [validation-results.md](validation/validation-results.md).
+- Compuerta de activación/rechazo serializada en PostgreSQL con migración `0004`; fuentes de cierre y evidencia final en `0005`; lock de horas frente a cierre en `0006`. T-44 pasó backend **75/75** y Alembic `0001→0007` completo en `pgserver`; filtro de supervisores inactivos: 1/1 en su corte histórico.
+- El runbook de demo previamente verificado llega a `0004`; las continuaciones aplicaron `0005` y `0006` solo al iniciar APIs contra bases E2E nuevas en `tmpfs`. La base local y la demo persistente no se migraron ni modificaron.
+- Pruebas frontend: corte histórico 2026-10-25 **10 aprobadas**; expediente histórico **22/22**; T-44 **32/32 en 11 archivos** y `tsc -b && vite build` EXIT 0 (57 módulos). T-42 (25/25, 56 módulos) y T-43 son cortes previos distintos.
+- E2E Chromium históricos del 2026-10-25/26: **3/3**. La ejecución nueva del 2026-11-02 pasó **3/3** con plan de trabajo, seguimiento, evaluación, evidencia final, recarga, cierre e historial, sobre PostgreSQL temporal; capturas **1280×4695** y **390×5746** inspeccionadas. Ver [validation-results.md](validation/validation-results.md).
+- Catálogos para crear oportunidades: `GET /opportunities/catalogs` y `GET /opportunities/{oid}/workplace-supervisors`; selects nominativos sin IDs numéricos manuales. T-39 cubre autorización cruzada y filtro de supervisor inactivo. T-47 añade los estados de revisión/publicación protegidos; OPEN-05 mantiene pendientes las autoridades institucionales y no existe edición de oportunidad.
 - Rediseño responsive de las vistas existentes: **inspección visual** en escritorio para estudiante, empleador, coordinador, revisor legal y EC; comprobación automatizada de ancho sin desbordamiento en 13 rutas/vistas a 390 px y 320 px. Capturas de comprobación en `frontend/test-results/ui-redesign/` (directorio ignorado por Git); no equivale a E2E de todas las acciones.
 - Selección valida ahora que el rango de fechas no esté invertido y que cualquier supervisor laboral indicado pertenezca a la organización anfitriona; pruebas positiva y negativas en `backend/tests/test_selection.py`.
 - Estudiante titular puede registrar horas opcionales solo en prácticas `ACTIVE` y consultar su propio total e historial. El backend valida horas finitas y mayores que cero; persistencia tras recarga probada con E2E. No existe aprobación de horas; la obligatoriedad institucional queda pendiente según el RFP.
 
-### Implementado sin E2E
-- Las rutas y acciones ya implementadas fuera del recorrido de Chromium no tienen cobertura E2E exhaustiva. Las vistas/acciones de supervisión docente/laboral, actividades, aprobación de reportes, evaluaciones intermedias/finales, incidentes, comunicación y paneles agregados siguen incompletas o no implementadas; el RFP §5 declara incompleto el proceso y §9 presenta estas capacidades como posibles, no especificación definitiva.
-- Evidencia final, confirmación académica y cierre permanecen solo en backend.
-- El servicio interno para proponer/aprobar versiones tiene pruebas de servicio pero no endpoints HTTP ni vista; depende del alcance/actor de aprobación de OPEN-03.
+### Implementado parcialmente o pendiente de contrato
+- E2E cubre plan narrativo asignado, avances, evaluación narrativa, reporte de cambio, evidencia y cierre, además de mensajería contextual, notificaciones, reportes, revisión/publicación configurable y asignación docente. No hay escala/instrumento de evaluación, cumplimiento estructurado de actividades, resolución/escalamiento de incidentes, ni políticas institucionales para varios permisos. El RFP §5 deja el proceso incompleto y §9 presenta algunas funciones como capacidades posibles.
+- Los actores y tipos obligatorios del cierre siguen sujetos a OPEN-02/11/14; la política utilizada en E2E es sintética y persistida solo en la base temporal.
+- El servicio interno para proponer/aprobar versiones sigue sin endpoints HTTP ni vista y depende de OPEN-03. Un reporte CHANGE no sustituye ese proceso.
 
 ### Pendiente de decisión institucional
-- OPEN-05 (actor y proceso de revisión/publicación); OPEN-13 (cupos); OPEN-19 (prácticas simultáneas); OPEN-01/02/06/09/14/20 (reglas, campos y actores documentales/externos); duplicados tras retiro y selección alternativa.
+- OPEN-05 (autoridad y proceso institucional de revisión/publicación; flujo técnico ya implementado); OPEN-13 (cupos); OPEN-19 (prácticas simultáneas); OPEN-01/02/06/09/14/20 (reglas, campos y actores documentales/externos); OPEN-03 (cambio versionado); instrumento/visibilidad de evaluación; duplicados tras retiro y selección alternativa.
 - Para OPEN-19 siguen abiertas las opciones: bloquear cualquier segunda colocación activa, bloquear solo fechas solapadas o fijar máximo configurable. No se aplica límite automáticamente ni se modificaron registros sintéticos.
 
 ### Bloqueado por integración externa
@@ -38,7 +98,7 @@ La matriz requisito por requisito vigente está en [functional-completeness-matr
 | Backend Fase 1 (identidad, authz, auditoría, lifecycle) | `backend/`: T-20..T-31; autenticación local con Argon2id, cookie de sesión y recuperación |
 | Incremento oportunidades + postulaciones (Sprint 1) | `backend/app/modules/{opportunities,applications,policies}` + frontend React; T-24/T-25 |
 | Sprint 2: selección del empleador + aprobación académica | Selección, aprobación/rechazo, relación por programa y auditoría; pruebas T-26/T-27 |
-| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages}`; build TypeScript/Vite aprobado, 8 pruebas unitarias y E2E Chromium 3/3 en el corte final; rediseño inspeccionado visualmente en roles con vista y viewport sin desbordamiento en 13 vistas a 390/320 px. Acciones exhaustivas, supervisión y browsers adicionales siguen sin E2E |
+| Frontend UX/UI (shell, dashboard, formularios y vistas por rol) | `frontend/src/{index.css,components,pages,studentJourney.ts}`; T-43 ejecutó 32/32 pruebas en 11 archivos, build de 57 módulos, E2E Chromium 3/3 e inspección de dashboard estudiante/WPS y expediente desktop/móvil; la cobertura de comprensión humana, todas las acciones y browsers adicionales sigue pendiente |
 | Sprint 3: documentos + activación | Archivos PDF/PNG/JPG/DOCX en PostgreSQL (≤10 MB), revisiones con motivo, historial y reentrega; permisos de descarga; activación/cierre por políticas versionadas; vistas de estudiante, revisor legal y EC; T-28..T-30 |
 | Políticas EB-08 | UI de coordinación para versiones de elegibilidad, activación y cierre; validadores de vocabulario cerrado; las colocaciones fijan las versiones al aprobarse académicamente |
 
@@ -49,10 +109,10 @@ La matriz requisito por requisito vigente está en [functional-completeness-matr
 | Decidir el stack y revisar el modelo de dominio de este paquete para adoptarlo como el primero del equipo | OPEN-17; EB-03 |
 
 ## No implementado
-Revisión/publicación de oportunidades (OPEN-05); IdP/SSO institucional (OPEN-21); proveedor real de correo para recuperación; reglas institucionales exactas de documentos/evidencia y actores (OPEN-01/02); workers y notificaciones; adaptadores con fallos a pedido; supervisión, evaluaciones, incidentes, mensajes y paneles.
+Instrumento y evaluación institucional formal; autoridad de producción para revisión/publicación (OPEN-05) y asignación docente; IdP/SSO institucional (OPEN-21); proveedor real de correo para recuperación; reglas institucionales exactas de documentos/evidencia y actores (OPEN-01/02/11/14); API/UI de versión formal por OPEN-03; workers de recordatorios y adaptadores con fallos a pedido.
 
 ## No validado
-Las decisiones institucionales marcadas `OPEN`; QS-05, QS-07, QS-08; T-09..T-11 y T-13..T-15; revisión visual completa y cobertura responsive/E2E de todas las vistas, roles y browsers. T-12 sí pasó según su runbook. Los flujos E2E explícitos están validados en Chromium (T-35/T-37, 3/3 pruebas en la ejecución final). El repositorio de documentos externo y el SSO real no están integrados.
+Las decisiones institucionales `OPEN`; QS-05, QS-07, QS-08; T-09..T-11 y T-13..T-15; revisión visual completa y cobertura E2E de todas las vistas/roles/browsers; retiro concurrente de evidencia en T-04. T-12 pasó según su runbook. T-44 reejecutó backend 75/75, frontend 32/32, build de 57 módulos y Chromium 3/3; la cadena Alembic `0001→0007` fue validada en PostgreSQL temporal y las capturas nuevas desktop/móvil fueron revisadas. El runbook no se ejecutó contra demo persistente. Los límites restantes se describen arriba. El repositorio documental externo y SSO real no están integrados.
 
 ## Riesgos (priorizados)
 
@@ -67,9 +127,9 @@ Las decisiones institucionales marcadas `OPEN`; QS-05, QS-07, QS-08; T-09..T-11 
 | R-014 *(nuevo)* | El vocabulario cerrado resulta insuficiente cuando se descubren las reglas reales | Media | Alta | Validar con coordinadores; reconsiderar ADR-001 | Analista de negocio | Abierto |
 | R-015 *(actualizado)* | Documento rechazado tras la activación: hay propuesta (BR-18), pero **no está validada** con el cliente (OPEN-14) | Media | Alta | EB-10: validar la propuesta y definir plazo/excepciones | Product Owner | Abierto; propuesta probada en el PoC (2026-10-22) |
 | R-018 *(nuevo)* | SSO institucional sin proveedor ni configuración (OPEN-21); cuentas locales implementadas como alternativa | Media | Alta | EB-11 consultar a TI | Arquitecto | Abierto: datos de TI pendientes |
-| R-011 *(nuevo)* | Carreras en comandos del ciclo de vida | Media | Alta | ADR-003 | Arquitecto | T-01/T-02 y serialización de activación/rechazo verificadas con PostgreSQL; T-04 concurrente pendiente |
+| R-011 *(nuevo)* | Carreras en comandos del ciclo de vida | Media | Alta | ADR-003 | Arquitecto | T-01/T-02 y serialización de activación/rechazo verificadas con PostgreSQL; T-04 horas-vs-confirmación pasó 1/1 con `0006`; retiro concurrente de evidencia no cubierto |
 | R-012 *(nuevo)* | Un endpoint nuevo olvida la autorización | Media | Alta | Prueba de rutas con acción declarada | Líder técnico | Matriz HTTP T-34 ejecutada; mantener la cobertura en CI |
-| R-016 *(nuevo)* | La lógica del trigger diverge de la política de aplicación o se rompe en migraciones | Baja | Media | Pruebas de contrato app↔BD; revisar cada migración | Líder técnico | Migraciones hasta `0004 (head)` aplicadas en demo limpia; suite backend aprobada |
+| R-016 *(nuevo)* | La lógica del trigger diverge de la política de aplicación o se rompe en migraciones | Baja | Media | Pruebas de contrato app↔BD; revisar cada migración | Líder técnico | Cadena Alembic `0001→0007` y suite backend 75/75 validadas en PostgreSQL temporal; demo persistente se mantiene sin migrar |
 | R-001 *(sin cambio de nivel)* | Reglas por programa desconocidas o cambiantes | — | — | ADR-001 | — | Abierto |
 | R-002 *(sin cambio de nivel)* | Integración simulada oculta problemas reales | — | — | ADR-006; contratos | — | Abierto |
 
@@ -89,7 +149,7 @@ Las decisiones institucionales marcadas `OPEN`; QS-05, QS-07, QS-08; T-09..T-11 
 | EB-11 | Cerrar OPEN-01, 02, 03, 21 con interesados y TI | Alta | Analista de negocio | — | Pendiente |
 | EB-17 | Re-secuenciar sprints con habilitadores primero y reestimar | Alta | Gestor de proyecto | EB-02 | Pendiente |
 | EB-09 | Puertos y simuladores con pruebas de contrato (ADR-006) | Media | Desarrollo | EB-03 | Pendiente |
-| EB-12 | Variante concurrente de T-04 | Media | Desarrollo | EB-05 | Pendiente |
+| EB-12 | Variante concurrente de T-04 | Media | Desarrollo | EB-05 | Horas-vs-confirmación pasó 1/1 el 2026-10-26; retiro concurrente de evidencia no tiene operación vigente que probar |
 | EB-13 | Verificación de fronteras de módulo (T-15) | Media | Líder técnico | EB-03 | Pendiente |
 | EB-15 | Despliegue de demo y prueba de humo (T-12) | Media | Desarrollo | EB-05 | Ejecutado en Compose aislado: migración `0004`, `/health` OK, 14 cuentas seed; runbook reproducible |
 | EB-14 | Generador de carga y T-09 | Baja | Desarrollo | EB-05 | Pendiente |
@@ -104,5 +164,13 @@ Plan inicial por sprint (referencia histórica): Sprint 1 proponía identidad, *
 1. Resolver con producto OPEN-05 (revisión/publicación), OPEN-13 (cupos), retiro/repostulación/alternos y OPEN-19 (colocaciones activas simultáneas); no se implementarán reglas hasta su decisión.
 2. Resolver con producto/TI OPEN-01/02/06/14/20/21: reglas y actores documentales, campos externos, comportamiento tras activación, proveedor de correo e IdP/SSO.
 3. Ampliar la validación de frontend a las demás vistas/roles y tamaños responsive; el E2E actual cubre solo el camino principal Chromium descrito en T-35.
-4. Ejecutar T-04 concurrente, QS-05/QS-07/QS-08, T-09..T-15 y validaciones de carga, usabilidad e integración cuando exista el entorno y alcance correspondiente.
+4. Completar la variante pendiente de T-04 (retiro concurrente de evidencia) solo si se define una operación que permita ese retiro; ejecutar QS-05/QS-07/QS-08, T-09..T-15 y validaciones de carga, usabilidad e integración cuando exista el entorno y alcance correspondiente.
 5. Mantener EB-01/02/03/09/13/14 como tareas de evaluación/arquitectura aún abiertas; la adopción oficial del stack sigue siendo decisión del equipo.
+
+## Actualización de producto — historial visible de práctica (2026-10-25)
+
+- `GET /placements/{pid}/history` conserva autorización por rol y relación y ahora expone solo instante y acción, en vez de IDs internos, payloads JSON antes/después y correlación.
+- “Mis documentos” ofrece una actividad desplegable para la práctica: traduce acciones conocidas, trata las futuras como actualización genérica y carga/reintenta sin bloquear la vista documental.
+- T-40 (2026-10-25) validó el endpoint y la vista con eventos de colocación. T-41 (2026-10-26) pasó backend 74/74 y E2E Chromium 3/3; T-42 (2026-11-02) amplió el expediente con el plan de trabajo y pasó backend 75/75 y E2E 3/3. Cada corte y su entorno están diferenciados en [validation-results.md](validation/validation-results.md).
+- **Clasificación:** segmento de historial de práctica validado; RF-19 sigue parcial, porque no incluye publicación de oportunidad ni evaluaciones/incidentes y no representa toda la traza del RFP hasta cierre. Retención y acceso operacional amplio permanecen por definir.
+- No cambia OPEN-05, OPEN-02/11/14, ni la obligatoriedad institucional de horas. El producto aún no está listo para entrega final.

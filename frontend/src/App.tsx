@@ -14,6 +14,9 @@ import Policies from "./pages/Policies";
 import Documents from "./pages/Documents";
 import DocumentReview from "./pages/DocumentReview";
 import Activation from "./pages/Activation";
+import PracticeDossier from "./pages/PracticeDossier";
+import NotificationInbox from "./components/NotificationInbox";
+import OperationalReports from "./pages/OperationalReports";
 
 const SECTIONS: SectionId[] = [
   "home",
@@ -24,6 +27,7 @@ const SECTIONS: SectionId[] = [
   "documents",
   "docreview",
   "activation",
+  "dossier", "notifications", "reports",
 ];
 
 function sectionFromHash(): SectionId {
@@ -32,12 +36,17 @@ function sectionFromHash(): SectionId {
 }
 
 function canAccessSection(user: User, section: SectionId): boolean {
-  if (section === "home" || section === "opportunities") return true;
+  if (section === "home" || section === "opportunities" || section === "notifications") return true;
   const roles = user.roles.map((role) => role.role);
   if (section === "applications" || section === "documents") return roles.includes("STUDENT");
   if (section === "academic" || section === "policies") return roles.includes("PROGRAM_COORDINATOR");
   if (section === "docreview") return roles.includes("LEGAL_REVIEWER");
   if (section === "activation") return roles.includes("EXPERIENTIAL_COORDINATOR");
+  if (section === "dossier") return roles.some((role) => [
+    "STUDENT", "HOST_ORG_MEMBER", "WORKPLACE_SUPERVISOR", "FACULTY_SUPERVISOR",
+    "PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR", "LEGAL_REVIEWER",
+  ].includes(role));
+  if (section === "reports") return roles.includes("PROGRAM_COORDINATOR") || roles.includes("EXPERIENTIAL_COORDINATOR");
   return false;
 }
 
@@ -130,6 +139,9 @@ export default function App() {
       {visibleTab === "documents" && <Documents />}
       {visibleTab === "docreview" && <DocumentReview />}
       {visibleTab === "activation" && <Activation />}
+      {visibleTab === "dossier" && <PracticeDossier user={user} onNavigate={navigate} />}
+      {visibleTab === "notifications" && <NotificationInbox onNavigate={navigate} />}
+      {visibleTab === "reports" && <OperationalReports />}
     </Layout>
   );
 }

@@ -1,7 +1,7 @@
 # Modelo de dominio y de datos
 
 > **Aviso (OPEN-17):** el equipo **no tenía** un modelo de dominio previo (`ASM-003B` cita un `domain-model.md` que no existe, AUD-34). Este modelo, construido desde el RFP y la Evaluación 1, es la **primera versión** y es una propuesta que el equipo debe revisar y adoptar.
-> El PoC usa un esquema **simplificado** (un rol por usuario, sin `ApprovalDecision` genérico, sin tablas de mensajes ni de evaluaciones). El modelo completo es solo diseño.
+> El esquema inicial del PoC era simplificado. La migración `0005` agregó al producto registros separados de avances, evaluaciones narrativas, incidentes/cambios y evidencia final; `0007` agrega asignaciones narrativas del plan de trabajo; `0008` agrega el estado factual `REPORTED` para informes de incidente/cambio y `0009` impide nuevas asignaciones del plan tras el cierre. `ApprovalDecision` genérica, mensajes y notificaciones siguen siendo parte del modelo propuesto, no tablas actuales.
 
 | Campo | Valor |
 |---|---|
@@ -29,9 +29,12 @@ erDiagram
   CHECKLIST_ITEM ||--o{ DOCUMENT_SUBMISSION : "recibe"
   PLACEMENT ||--o{ COMPLETION_REQUIREMENT : "exige"
   PLACEMENT ||--o{ APPROVAL_DECISION : "decide"
-  PLACEMENT ||--o{ PROGRESS_ENTRY : "registra"
-  PLACEMENT ||--o{ EVALUATION : "evalúa"
-  PLACEMENT ||--o{ INCIDENT : "reporta"
+  PLACEMENT ||--o{ PROGRESS_ENTRY : "registra horas"
+  PLACEMENT ||--o{ PLACEMENT_WORK_PLAN_ITEM : "asigna actividades"
+  PLACEMENT ||--o{ PLACEMENT_PROGRESS_REPORT : "registra avances"
+  PLACEMENT ||--o{ PLACEMENT_EVALUATION : "evalúa narrativamente"
+  PLACEMENT ||--o{ PLACEMENT_INCIDENT : "reporta situación/cambio"
+  PLACEMENT ||--o{ COMPLETION_EVIDENCE : "entrega evidencia"
   PLACEMENT ||--o{ MESSAGE : "comunica"
   USER_ACCOUNT ||--o{ NOTIFICATION : "recibe"
   PLACEMENT ||--o{ AUDIT_EVENT : "traza"
@@ -64,6 +67,43 @@ erDiagram
     boolean mandatory
     boolean satisfied
   }
+  PLACEMENT_PROGRESS_REPORT {
+    int placement_id FK
+    int revision
+    string content
+    datetime created_at
+  }
+  PLACEMENT_WORK_PLAN_ITEM {
+    int placement_id FK
+    int revision
+    int assigned_by FK
+    string title
+    string description
+    datetime assigned_at
+  }
+  PLACEMENT_EVALUATION {
+    int placement_id FK
+    string kind
+    int revision
+    string narrative
+    datetime created_at
+  }
+  PLACEMENT_INCIDENT {
+    int placement_id FK
+    string kind
+    int revision
+    string summary
+    string description
+    datetime created_at
+  }
+  COMPLETION_EVIDENCE {
+    int placement_id FK
+    string kind
+    int revision
+    string original_filename
+    string sha256
+    bytes content
+  }
   AUDIT_EVENT {
     bigint id PK
     int actor_id
@@ -85,9 +125,11 @@ erDiagram
 | EligibilityRule / Policy | `Policy` + `PolicyVersion` con condiciones del vocabulario cerrado | ADR-001 |
 | RequiredDocument | **No** entidad: es una *condición* de política que se materializa en `ChecklistItem` | Una sola mecánica para activación y cierre |
 | Approval | `ApprovalDecision` genérica (sujeto, decisión, actor, instante) | Selección, aprobación académica, aprobación de versión, revisión de oportunidad comparten forma |
-| Activity / Progress / HoursRecord | `ProgressEntry` con tipo (horas, actividad, informe) | Misma vida y mismos permisos |
-| Change | **`PlacementVersion`** (con tipo de cambio) | RF-13: cambio = versión |
-| Incident | Entidad propia con resolución | No versiona la colocación (RF-14) |
+| Activity / Progress / HoursRecord | `ProgressEntry` conserva horas; `PlacementProgressReport` registra narrativas de avance | Tablas distintas por campos y autorización: estudiante escribe ambas; lecturas según relación |
+| Change | `PlacementIncident(kind=CHANGE,status=REPORTED)` conserva el reporte informativo; la modificación formal futura usa **`PlacementVersion`** | Reportar cambio no versiona ni aprueba; RF-13 sigue sujeto a OPEN-03 |
+| Incident | `PlacementIncident(kind=INCIDENT,status=REPORTED)` como reporte append-only | `REPORTED` es el único estado implementado; no tiene revisión, resolución ni escalamiento, y no inventa una transición RF-14 |
+| Evaluation | `PlacementEvaluation` narrativa MIDTERM/FINAL, sin escala numérica | WPS vigente escribe; lectura se filtra por actor/relación |
+| CompletionEvidence | `CompletionEvidence` conserva archivo y revisión/hash para requisito `FINAL_REPORT` | Bytes en PostgreSQL de demo; el almacenamiento institucional externo sigue pendiente |
 | Communication | `Message` (usuarios); `Notification` (sistema), separadas | Orígenes, permisos y reintentos distintos |
 
 ## Cardinalidades, propiedad y ciclo de vida
@@ -101,6 +143,10 @@ erDiagram
 | ChecklistItem | C-07 | Colocación 1—N | `REQUIRED → SUBMITTED → APPROVED/REJECTED` |
 | DocumentSubmission | C-07 | Ítem 1—N | Cada entrega se conserva |
 | CompletionRequirement | C-08 | Colocación 1—N | `satisfied` falso → verdadero (recalculable desde el origen) |
+| PlacementProgressReport | C-08 | Colocación 1—N | Revisiones append-only |
+| PlacementEvaluation | C-08 | Colocación 1—N, por tipo/revisión | Narrativa MIDTERM/FINAL; sin puntuación |
+| PlacementIncident | C-08 | Colocación 1—N, por tipo/revisión | Estado factual append-only `REPORTED`; sin flujo posterior de revisión/resolución |
+| CompletionEvidence | C-08 | Colocación 1—N, por requisito/revisión | Archivo append-only; descargable según permiso |
 | PolicyVersion | C-05 | Política 1—N | Inmutable |
 | AuditEvent | C-11 | Colocación 1—N | **Append-only** |
 

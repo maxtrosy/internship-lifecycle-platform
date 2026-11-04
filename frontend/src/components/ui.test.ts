@@ -6,5 +6,6 @@ describe("formatDomainLabel", () => {
     expect(formatDomainLabel("Elegible")).toBe("Elegible");
     expect(formatDomainLabel("No elegible")).toBe("No elegible");
     expect(formatDomainLabel("Estado no disponible")).toBe("Estado no disponible");
+    expect(formatDomainLabel("REPORTED")).toBe("Reportado");
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { ActivationStatus, Application, DocumentSubmission } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
+import PlacementHistory from "../components/PlacementHistory";
 import { hoursFromHistory, totalHours, type HoursEntry } from "../progress";
 
 export default function Documents() {
@@ -161,6 +162,7 @@ export default function Documents() {
                 ) : <p className="muted">Todavía no hay horas registradas.</p>}
               </section>
             )}
+            <PlacementHistory placementId={pid} />
             {status && status.items.length > 0 && (
               <div className="table-scroll" tabIndex={0} aria-label={`Requisitos documentales de ${a.title}`}><table>
                 <thead><tr><th>Requisito</th><th>Estado</th><th>Entrega actual</th><th>Revisión</th><th>Acción</th></tr></thead>

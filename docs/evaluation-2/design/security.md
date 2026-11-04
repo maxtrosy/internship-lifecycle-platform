@@ -52,15 +52,17 @@
 | Checklist y documentos | Estudiante | L, E (entregar) | Titular |
 | Checklist y documentos | Representante legal | L, A (revisar) | Institucional (OPEN-09) |
 | Checklist y documentos | Anfitrión | L (estado) | Su organización; sin archivos de otros ámbitos |
-| Horas y progreso | Estudiante | L, E | Titular y colocación `ACTIVE` |
-| Horas y progreso | Supervisor lugar de trabajo / docente | L, A (validar) | Asignado |
-| **Evaluaciones** (sensibles) | Quien evalúa | L, E | Es el evaluador asignado |
-| Evaluaciones | Estudiante | **OPEN-12** | Titular; ¿cuándo? |
-| Evaluaciones | Anfitrión (de otra colocación) | **—** | Nunca |
-| Evaluaciones | Coord. de programa / docente asignado | L | Programa / asignación |
-| Incidentes | Participantes de la colocación | L, E | Relación con la colocación; visibilidad por tipo: OPEN |
+| Horas | Estudiante | L, E | Titular; escritura solo en `ACTIVE`; historial propio sigue disponible después del cierre. No hay aprobación |
+| Avances | Estudiante | L, E | Titular y colocación `ACTIVE` |
+| Avances | WPS / supervisor docente asignado | L | Relación vigente con la colocación |
+| Evaluaciones narrativas | Supervisor laboral vigente | L, E | Asignado a la versión vigente; crea observaciones `MIDTERM` o `FINAL`, sin escala |
+| Evaluaciones narrativas | Titular / supervisor docente asignado / coordinación del programa / EC | L | Misma colocación y rol/relación; el miembro anfitrión sin asignación no accede al contenido. Visibilidad y oportunidad institucionales completas siguen OPEN-12 |
+| Evidencia final | Estudiante | L, E | Titular; carga permitida mientras la colocación está `ACTIVE` |
+| Evidencia final | Supervisor docente asignado / coordinación del programa / EC | L | Relación académica o alcance institucional; solo los roles con `read_completion_evidence` |
+| Evaluaciones | Miembro anfitrión sin asignación de supervisión | **—** | No accede al contenido sensible |
+| Incidentes y reportes de cambio | Titular / WPS / supervisor docente asignado / coordinación del programa / EC | L, E según rol | Relación con la colocación; solo informativo, sin escalamiento ni decisión automática |
 | Mensajes | Participantes de esa colocación | L, E | Participante |
-| Historial de auditoría | Roles que leen la colocación | L (filtrado) | Misma relación; **nadie** escribe ni borra por la aplicación |
+| Historial de auditoría | Roles que leen la colocación | L (filtrado) | Misma relación; API de lectura entrega fecha/acción, no actor/sujeto internos, payload antes/después ni correlación; **nadie** escribe ni borra por la aplicación |
 | Políticas | Coord. de programa | L, E (crear versión) | Su programa (US-036) |
 | Políticas | Resto | L (vigentes) o — | Según rol (OPEN-18) |
 | Paneles y reportes | Coord. de programa | L | Su programa |

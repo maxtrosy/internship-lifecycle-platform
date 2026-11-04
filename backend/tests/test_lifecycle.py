@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 import random
+import threading
+import time
 
 import psycopg
 import pytest
@@ -105,11 +107,12 @@ def test_t04_closure_integrity(env):
 
     with pytest.raises(BusinessError):
         cmd(U["pc_sys"], lc.confirm_completion, p)
-    cmd(U["s1"], lc.submit_evidence, p, "FINAL_REPORT")
+    cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "informe-final.pdf",
+        "application/pdf", b"%PDF-1.7 synthetic final report")
     with pytest.raises(BusinessError):
         cmd(U["pc_sys"], lc.confirm_completion, p)
     cmd(U["s1"], lc.record_hours, p, 40)
-    cmd(U["s1"], lc.submit_evidence, p, "FINAL_EVALUATION")
+    cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación narrativa documentada.")
     with pytest.raises(BusinessError):
         cmd(U["pc_sys"], lc.confirm_completion, p)
     with pytest.raises(BusinessError):
@@ -119,6 +122,235 @@ def test_t04_closure_integrity(env):
     cmd(U["ec1"], lc.close_placement, p)
     state = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
     assert state == "CLOSED"
+    evidence_before = env.admin.execute(
+        "SELECT count(*) AS n FROM completion_evidence WHERE placement_id=%s", (p,),
+    ).fetchone()["n"]
+    with pytest.raises(BusinessError) as closed_evidence:
+        cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "informe-final-v2.pdf",
+            "application/pdf", b"%PDF-1.7 late report")
+    assert closed_evidence.value.code == "PLACEMENT_NOT_ACTIVE"
+    with pytest.raises(BusinessError) as closed_evaluation:
+        cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación tardía.")
+    assert closed_evaluation.value.code == "PLACEMENT_NOT_ACTIVE"
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM completion_evidence WHERE placement_id=%s", (p,),
+    ).fetchone()["n"] == evidence_before
+
+
+def test_t04_persisted_sources_not_cached_flags_control_closure(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
+    p = make_active(env, U, "s1", opp)
+    raw = env.conn()
+    try:
+        raw.execute("UPDATE completion_requirement SET satisfied=true WHERE placement_id=%s", (p,))
+        raw.execute("INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,100)",
+                    (p, U["s1"]))
+        with pytest.raises(psycopg.errors.RaiseException, match="unsatisfied"):
+            raw.execute("UPDATE placement SET state='COMPLETED' WHERE id=%s", (p,))
+        assert raw.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"] == "ACTIVE"
+    finally:
+        raw.close()
+
+
+def test_t04_concurrent_hours_insert_waits_for_completion_commit(env, monkeypatch):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
+    p = make_active(env, U, "s1", opp)
+    _satisfy_closure(env, U, "s1", p, hours=100)
+
+    completion_update_reached = threading.Event()
+    release_completion = threading.Event()
+    hours_done = threading.Event()
+    outcomes = {}
+    original_audit_write = lc.audit.write
+
+    def pause_completion_audit(cur, action, *args, **kwargs):
+        if action == "placement.completed":
+            completion_update_reached.set()
+            if not release_completion.wait(timeout=5):
+                raise TimeoutError("test did not release the completion transaction")
+        return original_audit_write(cur, action, *args, **kwargs)
+
+    monkeypatch.setattr(lc.audit, "write", pause_completion_audit)
+
+    def complete():
+        try:
+            cmd(U["pc_sys"], lc.confirm_completion, p)
+            outcomes["completion"] = ("OK", None)
+        except Exception as exc:  # noqa: BLE001 - capture thread outcome for assertion
+            outcomes["completion"] = (type(exc).__name__, getattr(exc, "code", str(exc)))
+
+    def insert_hours_directly():
+        raw = env.conn()
+        try:
+            raw.execute("SET application_name = 't04-race-hours'")
+            raw.execute(
+                "INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,%s)",
+                (p, U["s1"], 1),
+            )
+            outcomes["hours"] = ("OK", None)
+        except Exception as exc:  # noqa: BLE001 - capture trigger outcome for assertion
+            outcomes["hours"] = (type(exc).__name__, str(exc))
+        finally:
+            raw.close()
+            hours_done.set()
+
+    completion_thread = threading.Thread(target=complete)
+    hours_thread = threading.Thread(target=insert_hours_directly)
+    completion_thread.start()
+    assert completion_update_reached.wait(timeout=5), "completion did not reach its persisted state update"
+    hours_thread.start()
+    try:
+        deadline = time.monotonic() + 5
+        waiting_on_row_lock = False
+        while time.monotonic() < deadline:
+            assert not hours_done.is_set(), "hours insert bypassed the placement row lock"
+            activity = env.admin.execute(
+                """SELECT wait_event_type FROM pg_stat_activity
+                   WHERE application_name='t04-race-hours' AND state='active'""",
+            ).fetchone()
+            if activity and activity["wait_event_type"] == "Lock":
+                waiting_on_row_lock = True
+                break
+            time.sleep(0.01)
+        assert waiting_on_row_lock, "hours insert did not wait for the completion transaction"
+    finally:
+        release_completion.set()
+        completion_thread.join(timeout=5)
+        hours_thread.join(timeout=5)
+
+    assert not completion_thread.is_alive()
+    assert not hours_thread.is_alive()
+    assert outcomes["completion"] == ("OK", None)
+    assert outcomes["hours"][0] == "RaiseException"
+    assert "ACTIVE placement" in outcomes["hours"][1]
+    assert env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"] == "COMPLETED"
+    assert env.admin.execute(
+        "SELECT coalesce(sum(hours),0) AS total FROM progress_entry WHERE placement_id=%s", (p,),
+    ).fetchone()["total"] == 100
+
+
+def test_lifecycle_record_database_guards_reject_unrelated_authors(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
+    p = make_active(env, U, "s1", opp)
+
+    raw = env.conn()
+    try:
+        with pytest.raises(psycopg.errors.RaiseException, match="authorized participant"):
+            raw.execute(
+                """INSERT INTO placement_incident(placement_id,kind,revision,reporter_id,summary,description)
+                   VALUES (%s,'INCIDENT',1,%s,'Intento no autorizado','Debe ser rechazado por el trigger')""",
+                (p, U["ws_alfa2"]),
+            )
+    finally:
+        raw.close()
+
+    raw = env.conn()
+    try:
+        with pytest.raises(psycopg.errors.RaiseException, match="currently assigned workplace supervisor"):
+            raw.execute(
+                """INSERT INTO placement_evaluation(placement_id,kind,revision,evaluator_id,narrative)
+                   VALUES (%s,'MIDTERM',1,%s,'No es la persona supervisora vigente')""",
+                (p, U["pc_sys"]),
+            )
+    finally:
+        raw.close()
+
+
+def test_incident_reports_keep_only_the_factual_immutable_reported_status(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
+    p = make_active(env, U, "s1", opp)
+
+    submitted = cmd(U["s1"], lc.create_incident, p, "INCIDENT", "Cambio reportado",
+                    "Se registra la situación para consulta de participantes autorizados.")
+    assert submitted["status"] == "REPORTED"
+    with db.read() as cur:
+        subject = lc.authz.subject(cur, U["s1"])
+        incident = lc.list_incidents(cur, subject, p)[0]
+    assert incident["status"] == "REPORTED"
+    assert incident["reporter"] == "Student One"
+
+    # Resolution/review statuses are deliberately not a workflow until approved.
+    with pytest.raises(psycopg.errors.RaiseException, match="append-only"):
+        env.admin.execute(
+            "UPDATE placement_incident SET status='RESOLVED' WHERE placement_id=%s", (p,),
+        )
+
+
+def test_work_plan_database_guard_enforces_assignment_revision_and_immutability(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Alfa")
+    p = make_active(env, U, "s1", opp)
+    state_before = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
+    requirements_before = env.admin.execute(
+        "SELECT kind,mandatory,satisfied,threshold FROM completion_requirement WHERE placement_id=%s ORDER BY kind",
+        (p,),
+    ).fetchall()
+    assigned = cmd(U["ws_alfa"], lc.assign_work_plan_item, p, "Preparar informe", "Recopilar observaciones.")
+    assert assigned["revision"] == 1
+    assert env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"] == state_before
+    assert env.admin.execute(
+        "SELECT kind,mandatory,satisfied,threshold FROM completion_requirement WHERE placement_id=%s ORDER BY kind",
+        (p,),
+    ).fetchall() == requirements_before
+
+    raw = env.conn()
+    try:
+        with pytest.raises(psycopg.errors.RaiseException, match="currently assigned workplace supervisor"):
+            raw.execute(
+                """INSERT INTO placement_work_plan_item(placement_id,revision,assigned_by,title,description)
+                   VALUES (%s,2,%s,'Actividad ajena','No debe persistirse')""",
+                (p, U["ws_alfa2"]),
+            )
+    finally:
+        raw.close()
+
+    raw = env.conn()
+    try:
+        with pytest.raises(psycopg.errors.RaiseException, match="revision must be sequential"):
+            raw.execute(
+                """INSERT INTO placement_work_plan_item(placement_id,revision,assigned_by,title,description)
+                   VALUES (%s,3,%s,'Salto de revisión','Debe rechazarse')""",
+                (p, U["ws_alfa"]),
+            )
+    finally:
+        raw.close()
+
+    with pytest.raises(psycopg.errors.RaiseException, match="append-only"):
+        env.admin.execute(
+            "UPDATE placement_work_plan_item SET title='Alterada' WHERE placement_id=%s", (p,),
+        )
+
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM placement_work_plan_item WHERE placement_id=%s", (p,),
+    ).fetchone()["n"] == 1
+
+    cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "final.pdf",
+        "application/pdf", b"%PDF-1.7 synthetic final report")
+    cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación narrativa sintética.")
+    cmd(U["s1"], lc.record_hours, p, 100)
+    cmd(U["pc_sys"], lc.confirm_completion, p)
+    cmd(U["ec1"], lc.close_placement, p)
+
+    with pytest.raises(BusinessError) as closed_assignment:
+        cmd(U["ws_alfa"], lc.assign_work_plan_item, p, "Actividad posterior", "No debe persistirse.")
+    assert closed_assignment.value.code == "PLACEMENT_CLOSED"
+    raw = env.conn()
+    try:
+        with pytest.raises(psycopg.errors.RaiseException, match="after placement closure"):
+            raw.execute(
+                """INSERT INTO placement_work_plan_item(placement_id,revision,assigned_by,title,description)
+                   VALUES (%s,2,%s,'Actividad posterior','No debe persistirse.')""",
+                (p, U["ws_alfa"]),
+            )
+    finally:
+        raw.close()
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM placement_work_plan_item WHERE placement_id=%s", (p,),
+    ).fetchone()["n"] == 1
 
 
 def test_t08_no_hours_before_activation(env):
@@ -139,8 +371,9 @@ def _item_id(env, pid, kind="DOC_INSURANCE"):
 
 
 def _satisfy_closure(env, U, student, p, hours=100):
-    cmd(U[student], lc.submit_evidence, p, "FINAL_REPORT")
-    cmd(U[student], lc.submit_evidence, p, "FINAL_EVALUATION")
+    cmd(U[student], lc.submit_completion_evidence, p, "FINAL_REPORT", "informe-final.pdf",
+        "application/pdf", b"%PDF-1.7 synthetic final report")
+    cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación narrativa documentada.")
     cmd(U[student], lc.record_hours, p, hours)
 
 

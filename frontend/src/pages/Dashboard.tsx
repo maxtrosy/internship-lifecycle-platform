@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { ActivationStatus, Application, EmployerApplication, Opportunity, User } from "../api";
+import type { VisiblePlacement } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, MetricCard, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 import type { SectionId } from "../components/Layout";
+import { getStudentJourney } from "../studentJourney";
+import { getRelatedPlacementsState } from "../relatedPlacements";
 
 type DashboardData = {
   opportunities: Opportunity[] | null;
@@ -12,6 +15,7 @@ type DashboardData = {
   documentQueue: Awaited<ReturnType<typeof api.listDocumentsPending>> | null;
   activationQueue: Awaited<ReturnType<typeof api.listPendingActivation>> | null;
   studentRequirements: ActivationStatus[] | null;
+  visiblePlacements: VisiblePlacement[] | null;
 };
 
 const emptyData: DashboardData = {
@@ -22,12 +26,14 @@ const emptyData: DashboardData = {
   documentQueue: null,
   activationQueue: null,
   studentRequirements: null,
+  visiblePlacements: null,
 };
 
 export default function Dashboard({ user, onNavigate }: { user: User; onNavigate: (s: SectionId) => void }) {
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [reloadAttempt, setReloadAttempt] = useState(0);
 
   const roles = user.roles.map((role) => role.role);
   const isStudent = roles.includes("STUDENT");
@@ -35,6 +41,8 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
   const isAcademic = roles.includes("PROGRAM_COORDINATOR");
   const isLegal = roles.includes("LEGAL_REVIEWER");
   const isEc = roles.includes("EXPERIENTIAL_COORDINATOR");
+  const isWorkplaceSupervisor = roles.includes("WORKPLACE_SUPERVISOR");
+  const isFacultySupervisor = roles.includes("FACULTY_SUPERVISOR");
   const dashboardVariant = isStudent ? "student" : isEmployer ? "employer" : isAcademic ? "academic" : isLegal ? "legal" : isEc ? "experiential" : "limited";
 
   useEffect(() => {
@@ -53,18 +61,22 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
         }
       };
 
-      const [opportunities, applications, academicQueue, documentQueue, activationQueue] = await Promise.all([
+      const [opportunities, applications, academicQueue, documentQueue, activationQueue, visiblePlacements] = await Promise.all([
         capture("Oportunidades", () => api.listOpportunities()),
         isStudent ? capture("Postulaciones", () => api.listApplications()) : Promise.resolve(null),
         isAcademic ? capture("Revisión académica", () => api.listPendingAcademic()) : Promise.resolve(null),
         isLegal ? capture("Revisión documental", () => api.listDocumentsPending()) : Promise.resolve(null),
         isEc ? capture("Activaciones", () => api.listPendingActivation()) : Promise.resolve(null),
+        isAcademic || isWorkplaceSupervisor || isFacultySupervisor
+          ? capture("Expedientes relacionados", () => api.listVisiblePlacements())
+          : Promise.resolve(null),
       ]);
       next.opportunities = opportunities;
       next.applications = applications;
       next.academicQueue = academicQueue;
       next.documentQueue = documentQueue;
       next.activationQueue = activationQueue;
+      next.visiblePlacements = visiblePlacements;
 
       if (isEmployer && opportunities) {
         const lists = await Promise.all(opportunities.map((opportunity) =>
@@ -90,43 +102,21 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
     }
     void load();
     return () => { cancelled = true; };
-  }, [isStudent, isEmployer, isAcademic, isLegal, isEc]);
+  }, [isStudent, isEmployer, isAcademic, isLegal, isEc, isWorkplaceSupervisor, isFacultySupervisor, reloadAttempt]);
 
   const latestApplication = data.applications?.[0];
   const pendingDecisions = data.employerApplications?.filter((application) => application.state === "SUBMITTED").length ?? null;
   const selectedCandidates = data.employerApplications?.filter((application) => application.placement_id !== null).length ?? null;
   const studentUnmet = data.studentRequirements?.reduce((total, status) => total + status.unmet.length, 0) ?? null;
+  const relatedPlacementsFailed = errors.some((error) => error.startsWith("Expedientes relacionados:"));
+  const relatedPlacementsState = getRelatedPlacementsState(data.visiblePlacements, loading, relatedPlacementsFailed);
 
-  let studentHeadline = "Encuentra una oportunidad para tu práctica";
-  let studentDescription = "Explora el catálogo y revisa las condiciones de elegibilidad antes de postularte.";
-  let studentAction: SectionId = "opportunities";
-  let studentActionLabel = "Explorar oportunidades";
-  if (latestApplication?.placement_state === "ACTIVE") {
-    studentHeadline = "Tu práctica está activa";
-    studentDescription = "Consulta el estado de tus documentos y los requisitos asociados a tu colocación.";
-    studentAction = "documents";
-    studentActionLabel = "Consultar documentos";
-  } else if (latestApplication?.placement_state === "DOCUMENTATION_PENDING") {
-    studentHeadline = "Completa la documentación de tu práctica";
-    studentDescription = "La activación depende de que se aprueben los requisitos obligatorios.";
-    studentAction = "documents";
-    studentActionLabel = "Revisar requisitos";
-  } else if (latestApplication?.placement_state === "PENDING_ACADEMIC_APPROVAL") {
-    studentHeadline = "Tu selección está en revisión académica";
-    studentDescription = "La coordinación del programa debe aprobar la selección antes de iniciar la etapa documental.";
-    studentAction = "applications";
-    studentActionLabel = "Ver mi postulación";
-  } else if (latestApplication?.state === "SELECTED") {
-    studentHeadline = "Has sido seleccionado";
-    studentDescription = "Consulta el estado de la postulación mientras se registra la práctica resultante.";
-    studentAction = "applications";
-    studentActionLabel = "Ver mi postulación";
-  } else if (data.applications?.length) {
-    studentHeadline = "Sigue el estado de tus postulaciones";
-    studentDescription = "Las decisiones y el estado de cada práctica aparecen en tu historial.";
-    studentAction = "applications";
-    studentActionLabel = "Ver mis postulaciones";
-  }
+  const studentJourney = getStudentJourney(
+    latestApplication,
+    latestApplication?.placement_id ? data.studentRequirements?.find((status) => status.placement_id === latestApplication.placement_id) : undefined,
+    loading,
+    data.applications !== null,
+  );
 
   return (
     <div className="page-stack">
@@ -136,20 +126,20 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
         description="Un espacio de trabajo con el estado de tus procesos y las acciones disponibles para tu rol."
       />
 
-      {errors.map((error) => <Alert kind="error" key={error}>{error}</Alert>)}
+      {errors.map((error) => <Alert kind="error" key={error}>{error} <button className="btn link" type="button" onClick={() => setReloadAttempt((attempt) => attempt + 1)}>Reintentar carga</button></Alert>)}
       {loading && <div className="loading-line"><Spinner /> Actualizando tu espacio de trabajo…</div>}
 
       <div className={`bento-grid dashboard-grid dashboard-grid--${dashboardVariant}`}>
         {isStudent && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" title="Siguiente paso" description={studentDescription}>
+            <BentoCard variant="hero" className="dashboard-hero" title="Siguiente paso" description={studentJourney.description}>
               <div className="hero-content">
                 <div>
-                  <h2>{studentHeadline}</h2>
+                  <h2>{studentJourney.title}</h2>
                   {latestApplication && <p className="hero-record">Proceso más reciente · {latestApplication.title}</p>}
-                  {latestApplication?.placement_state && <Badge>{latestApplication.placement_state}</Badge>}
+                  {studentJourney.state && <Badge>{studentJourney.state}</Badge>}
                 </div>
-                <button className="btn" type="button" onClick={() => onNavigate(studentAction)}>{studentActionLabel}<span aria-hidden="true">→</span></button>
+                <button className="btn" type="button" disabled={studentJourney.disabled} onClick={() => onNavigate(studentJourney.action)}>{studentJourney.actionLabel}<span aria-hidden="true">→</span></button>
               </div>
             </BentoCard>
             <MetricCard label="Mis postulaciones" value={data.applications?.length ?? null} detail="En el historial de tu cuenta" />
@@ -204,6 +194,42 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
             <BentoCard variant="action" className="dashboard-opportunities" title="Políticas de programa" description="Consulta y crea versiones de las condiciones soportadas por el sistema.">
               <button className="btn secondary" type="button" onClick={() => onNavigate("policies")}>Administrar políticas</button>
             </BentoCard>
+            <BentoCard variant="activity" className="dashboard-related-placements" title="Expedientes del programa" description="La lista incluye solo prácticas vinculadas al programa de tu cuenta.">
+              {relatedPlacementsState === "ready" ? (
+                <ul className="activity-list">
+                  {data.visiblePlacements!.slice(0, 4).map((placement) => (
+                    <li key={placement.id}>
+                      <span className="activity-copy"><strong>{placement.opportunity_title}</strong><small>{placement.program_code} · {formatDomainLabel(placement.state)}</small></span>
+                      <Badge>{placement.state}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : relatedPlacementsState === "empty" ? <EmptyState message="No hay prácticas relacionadas para mostrar." />
+                : relatedPlacementsState === "error" ? <p role="status" className="muted">No se pudo cargar la lista. Usa «Reintentar carga» en el aviso para volver a consultar.</p>
+                  : null}
+              <button className="btn secondary" type="button" onClick={() => onNavigate("dossier")}>Abrir expedientes</button>
+            </BentoCard>
+          </>
+        )}
+
+        {(isWorkplaceSupervisor || isFacultySupervisor) && (
+          <>
+            <MetricCard label="Prácticas vinculadas" value={data.visiblePlacements?.length ?? null} detail="Según las relaciones de supervisión" />
+            <BentoCard variant="activity" className="dashboard-related-placements" title="Prácticas vinculadas" description="Los expedientes aparecen según las relaciones de supervisión registradas para tu cuenta.">
+              {relatedPlacementsState === "ready" ? (
+                <ul className="activity-list">
+                  {data.visiblePlacements!.slice(0, 5).map((placement) => (
+                    <li key={placement.id}>
+                      <span className="activity-copy"><strong>{placement.opportunity_title}</strong><small>{placement.program_code} · {formatDomainLabel(placement.state)}</small></span>
+                      <Badge>{placement.state}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : relatedPlacementsState === "empty" ? <EmptyState message="No hay prácticas vinculadas actualmente." />
+                : relatedPlacementsState === "error" ? <p role="status" className="muted">No se pudo cargar la lista. Usa «Reintentar carga» en el aviso para volver a consultar.</p>
+                  : <div className="loading-line"><Spinner /> Consultando relaciones…</div>}
+              <button className="btn secondary" type="button" onClick={() => onNavigate("dossier")}>Abrir expedientes</button>
+            </BentoCard>
           </>
         )}
 
@@ -225,7 +251,7 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
           </>
         )}
 
-        {!isStudent && !isEmployer && !isAcademic && !isLegal && !isEc && (
+        {!isStudent && !isEmployer && !isAcademic && !isLegal && !isEc && !isWorkplaceSupervisor && !isFacultySupervisor && (
           <BentoCard variant="hero" className="dashboard-hero" title="Acceso de solo lectura" description="Tu cuenta no tiene una vista de gestión asignada en la interfaz actual.">
             <div className="hero-content"><div><h2>Espacio de trabajo</h2><p className="hero-record">Las capacidades de supervisión y reportes no están implementadas en esta versión.</p></div></div>
           </BentoCard>

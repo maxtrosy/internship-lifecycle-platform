@@ -12,7 +12,7 @@ Una **defensa en capas** con una regla común: *las condiciones obligatorias son
 2. **Orden de bloqueo fijo:** primero la colocación, luego sus dependientes (ítems, requisitos). Rechazar/aprobar un documento también toma primero el bloqueo de la colocación.
 3. **Instancias materializadas** desde la política vinculada (ADR-001): `checklist_item` (activación) y `completion_requirement` (cierre).
 4. **Recalcular desde el origen** lo que depende de otros datos: p. ej. `MIN_HOURS` se recalcula sumando horas antes de decidir; la bandera guardada no es fuente de verdad.
-5. **Red de seguridad en BD (triggers)** sobre transiciones a `ACTIVE`, `COMPLETED` y `CLOSED`: origen válido, ítems de activación obligatorios `APPROVED` (también al completar y cerrar, BR-18) y requisitos de cierre obligatorios satisfechos; y sobre la inserción de horas/progreso (BR-02).
+5. **Red de seguridad en BD (triggers)** sobre transiciones a `ACTIVE`, `COMPLETED` y `CLOSED`: origen válido, ítems de activación obligatorios `APPROVED` (también al completar y cerrar, BR-18) y requisitos de cierre satisfechos. La migración `0005` recalcula `MIN_HOURS` desde `progress_entry`, exige una fila `FINAL_REPORT` en `completion_evidence` y una evaluación `FINAL` en `placement_evaluation`. La migración `0006` bloquea la fila de colocación desde la guarda de inserción de horas, serializando esa escritura con la confirmación; el comando `record_hours` también toma el mismo lock (BR-02). Los flags materializados no bastan para cumplir las condiciones.
 6. **Errores de negocio tipados** (`ACTIVATION_CONDITIONS_UNMET`, `COMPLETION_EVIDENCE_MISSING`, `INVALID_TRANSITION`, `GATE_VIOLATION`). Un comando denegado no escribe auditoría de negocio; se registra como evento operativo.
 7. **No conformidad de activación posterior (OPEN-14, propuesta pendiente de validar con el cliente):**
    - La colocación **sigue `ACTIVE`**; no se suspende automáticamente.
@@ -49,8 +49,9 @@ La política se evalúa al vincular y se materializa; la UI puede mostrar "listo
 - **T-02 (corrida 2026-10-22):** rechazo de documento concurrente con activación. Variante A: 100 ensayos, **0** prohibidos, **55 activación primero / 45 rechazo primero**. Control B: **25/40** prohibidos. Variante C: **0/40** (21 `GATE_VIOLATION`). *Los conteos de orden varían entre corridas.*
 - **T-16a..e (corrida 2026-10-22):** **14 PASS**. T-16a rechaza directamente un ítem `APPROVED` con la colocación `ACTIVE` y registra `checklist_item.rejected_after_activation`; T-16b..e verifican la compuerta de cierre y la revisión desde `REQUIRED`.
 - **T-02b:** `UPDATE` directo rechazado por la BD; un comando denegado no agrega filas de auditoría.
-- **T-04, T-08:** ver resultados.
-- **NOT EXECUTED:** concurrencia de cierre; migración de datos que deje instancias inconsistentes; comportamiento con otra BD.
+- **T-04 (primera suite de seguimiento, 2026-10-26):** fuentes persistidas de evidencia/horas controlan el cierre; entrega y evaluación posteriores a estado terminal se deniegan. Esa corrida pasó 73/73; la carrera horas-vs-confirmación se incorporó en una revalidación posterior.
+- **T-04 concurrente (2026-10-26, migración 0006):** 1/1 prueba sincronizada; un `INSERT` directo de horas espera el lock mientras `confirm_completion` tiene el `UPDATE` sin confirmar y PostgreSQL lo rechaza después del commit terminal. Suite actual: 74/74.
+- **NOT EXECUTED:** retiro concurrente de evidencia durante la confirmación (no hay operación de retiro en la API); migración de datos que deje instancias inconsistentes; comportamiento con otra BD.
 
 ## Reconsider when
 Las condiciones dejan de ser "instancias obligatorias" (p. ej. reglas con dependencias complejas entre requisitos); el volumen genera contención medible; se cambia de motor de BD.

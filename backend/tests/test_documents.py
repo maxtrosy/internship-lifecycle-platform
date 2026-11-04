@@ -12,7 +12,7 @@ from app.modules.applications import service as apps
 from app.modules.lifecycle import service as lifecycle
 from app.modules.opportunities import service as opps
 from app.modules.policies import service as policies
-from tests.conftest import TEST_PASSWORD, seed_base
+from tests.conftest import TEST_PASSWORD, publish_test_opportunity, seed_base
 
 
 def _setup(env, kinds=("DOC_INSURANCE",)):
@@ -21,6 +21,7 @@ def _setup(env, kinds=("DOC_INSURANCE",)):
         policies.create_policy_version(ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}])
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
+    publish_test_opportunity(env, oid)
     with db.command(U["s1"]) as ctx:
         apps.submit_application(ctx, oid)
     aid = env.admin.execute("SELECT id FROM application WHERE opportunity_id=%s", (oid,)).fetchone()["id"]
@@ -119,6 +120,7 @@ def test_t28_activation_policy_derives_requirements(env):
                                        kind="ACTIVATION")
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
+    publish_test_opportunity(env, oid)
     with db.command(U["s1"]) as ctx:
         apps.submit_application(ctx, oid)
     aid = env.admin.execute("SELECT id FROM application WHERE opportunity_id=%s", (oid,)).fetchone()["id"]

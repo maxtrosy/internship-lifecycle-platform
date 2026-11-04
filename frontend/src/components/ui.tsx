@@ -7,6 +7,7 @@ const DOMAIN_LABELS: Record<string, string> = {
   CLOSED: "Cerrada",
   COMPLETED: "Completada",
   DOCUMENTATION_PENDING: "Documentación pendiente",
+  DRAFT: "Borrador",
   ELIGIBLE: "Elegible",
   INELIGIBLE: "No elegible",
   NOT_ELIGIBLE: "No elegible",
@@ -14,8 +15,10 @@ const DOMAIN_LABELS: Record<string, string> = {
   "No elegible": "No elegible",
   "Estado no disponible": "Estado no disponible",
   PENDING_ACADEMIC_APPROVAL: "Pendiente de aprobación académica",
+  IN_REVIEW: "En revisión",
   PUBLISHED: "Publicada",
   REJECTED: "Rechazado",
+  REPORTED: "Reportado",
   REQUIRED: "Pendiente",
   SELECTED: "Seleccionada",
   SUBMITTED: "Enviada",
@@ -33,6 +36,10 @@ const DOMAIN_LABELS: Record<string, string> = {
   COND_SUPERVISOR_ASSIGNED: "Supervisor asignado",
   FINAL_REPORT: "Informe final",
   FINAL_EVALUATION: "Evaluación final",
+  MIDTERM: "Evaluación intermedia",
+  FINAL: "Evaluación final",
+  INCIDENT: "Situación o problema",
+  CHANGE: "Cambio reportado",
   MIN_HOURS: "Horas mínimas",
   SUPERVISORS_ASSIGNED: "Supervisores asignados",
   STUDENT: "Estudiante",
@@ -68,7 +75,7 @@ export function statusTone(state: string | null | undefined): string {
   }
 }
 
-export type IconName = "home" | "briefcase" | "clipboard" | "document" | "academic" | "settings" | "review" | "check" | "logout" | "arrow";
+export type IconName = "home" | "briefcase" | "clipboard" | "document" | "academic" | "settings" | "review" | "check" | "logout" | "arrow" | "bell";
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   home: <><path d="m3.5 10 8.5-7 8.5 7" /><path d="M5.5 9v11h13V9M9 20v-6h6v6" /></>,
@@ -81,6 +88,7 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
   check: <><path d="m5 12 4 4L19 6" /></>,
   logout: <><path d="M10 17l5-5-5-5M15 12H3" /><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></>,
   arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
+  bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
 };
 
 export function Icon({ name, className = "" }: { name: IconName; className?: string }) {
@@ -150,10 +158,10 @@ export function MetricCard({ label, value, detail }: { label: string; value: num
   );
 }
 
-export function Badge({ children, state }: { children: ReactNode; state?: string }) {
+export function Badge({ children, state, label }: { children: ReactNode; state?: string; label?: ReactNode }) {
   const rawState = state ?? String(children);
-  const label = typeof children === "string" ? formatDomainLabel(children) : children;
-  return <span className={`badge ${statusTone(rawState)}`}>{label}</span>;
+  const displayLabel = label ?? (typeof children === "string" ? formatDomainLabel(children) : children);
+  return <span className={`badge ${statusTone(rawState)}`}>{displayLabel}</span>;
 }
 
 export function Spinner() {

@@ -35,6 +35,8 @@ def _ctx(cur: psycopg.Cursor, subj: dict, pid: int) -> dict | None:
                   o.host_org_id,
                   EXISTS (SELECT 1 FROM placement_version v WHERE v.placement_id = p.id
                           AND v.workplace_supervisor_id = %(u)s) AS is_workplace_sup,
+                  EXISTS (SELECT 1 FROM placement_version v WHERE v.id = p.current_version_id
+                          AND v.workplace_supervisor_id = %(u)s) AS is_current_workplace_sup,
                   EXISTS (SELECT 1 FROM supervisor_assignment sa WHERE sa.placement_id = p.id
                           AND sa.user_id = %(u)s AND sa.kind = 'FACULTY') AS is_faculty_sup
            FROM placement p JOIN application a ON a.id = p.application_id
@@ -67,9 +69,27 @@ def can_read(cur: psycopg.Cursor, subj: dict, pid: int) -> bool:
     return any(_role_read(r, c, subj) for r in subj["roles"])
 
 
+def can_perform(cur: psycopg.Cursor, subj: dict, action: str, pid: int) -> bool:
+    """Return whether an already authenticated subject may perform an action.
+
+    This is used only to shape optional sections/capabilities in a read projection;
+    mutations and resource endpoints still call ``authorize`` independently.
+    """
+    c = _ctx(cur, subj, pid)
+    return bool(
+        c is not None
+        and any(_role_read(r, c, subj) for r in subj["roles"])
+        and any(_role_action(r, c, subj, action) for r in subj["roles"])
+    )
+
+
 def _role_action(role: dict, c: dict, subj: dict, action: str) -> bool:
     r = role["role"]
     own_program = r == "PROGRAM_COORDINATOR" and c["student_program"] == role["program_id"]
+    student_owner = r == "STUDENT" and c["student_id"] == subj["id"]
+    workplace_supervisor = r == "WORKPLACE_SUPERVISOR" and c["is_workplace_sup"]
+    current_workplace_supervisor = r == "WORKPLACE_SUPERVISOR" and c["is_current_workplace_sup"]
+    faculty_supervisor = r == "FACULTY_SUPERVISOR" and c["is_faculty_sup"]
     return {
         "placement:read": True,
         "placement:approve_academic": own_program,
@@ -85,8 +105,32 @@ def _role_action(role: dict, c: dict, subj: dict, action: str) -> bool:
                                      or (r == "WORKPLACE_SUPERVISOR" and c["is_workplace_sup"]),
         "progress:create": r == "STUDENT" and c["student_id"] == subj["id"],
         "progress:read": r == "STUDENT" and c["student_id"] == subj["id"],
-        "evidence:submit": r == "STUDENT" and c["student_id"] == subj["id"],
+        "progress_report:create": student_owner,
+        "progress_report:read": student_owner or workplace_supervisor or faculty_supervisor
+                                or own_program or r == "EXPERIENTIAL_COORDINATOR",
+        "evaluation:create": workplace_supervisor,
+        "evaluation:read": student_owner or workplace_supervisor or faculty_supervisor
+                           or own_program or r == "EXPERIENTIAL_COORDINATOR",
+        "incident:create": student_owner or workplace_supervisor or faculty_supervisor
+                          or own_program or r == "EXPERIENTIAL_COORDINATOR",
+        "incident:read": student_owner or workplace_supervisor or faculty_supervisor
+                         or own_program or r == "EXPERIENTIAL_COORDINATOR",
+        "evidence:read": student_owner or faculty_supervisor or own_program
+                         or r == "EXPERIENTIAL_COORDINATOR",
+        "evidence:submit": student_owner,
         "document:submit": r == "STUDENT" and c["student_id"] == subj["id"],
+        "work_plan:read": student_owner or workplace_supervisor or faculty_supervisor or own_program
+                          or r == "EXPERIENTIAL_COORDINATOR",
+        "work_plan:assign": r == "WORKPLACE_SUPERVISOR" and c["is_current_workplace_sup"],
+        "faculty_assignment:manage": own_program or r == "EXPERIENTIAL_COORDINATOR",
+        "faculty_assignment:read_history": student_owner or faculty_supervisor or own_program
+                                             or r == "EXPERIENTIAL_COORDINATOR",
+        # Contextual messaging separates joint practice communication from
+        # academic-only discussion. Host-organization members never enter either.
+        "message:joint:read": student_owner or current_workplace_supervisor or faculty_supervisor or own_program
+                               or r == "EXPERIENTIAL_COORDINATOR",
+        "message:academic:read": student_owner or faculty_supervisor or own_program
+                                  or r == "EXPERIENTIAL_COORDINATOR",
     }[action]
 
 

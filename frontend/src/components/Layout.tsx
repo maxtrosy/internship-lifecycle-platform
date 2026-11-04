@@ -10,7 +10,10 @@ export type SectionId =
   | "policies"
   | "documents"
   | "docreview"
-  | "activation";
+  | "activation"
+  | "dossier"
+  | "notifications"
+  | "reports";
 
 type Props = {
   user: User;
@@ -29,6 +32,9 @@ const SECTION_TITLES: Record<SectionId, string> = {
   documents: "Mis documentos",
   docreview: "Revisión documental",
   activation: "Activación de prácticas",
+  dossier: "Expediente de práctica",
+  notifications: "Notificaciones",
+  reports: "Reportes operativos",
 };
 
 type NavItem = { id: SectionId; label: string; icon: IconName };
@@ -42,8 +48,17 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
     { label: "Principal", items: [
       { id: "home", label: "Inicio", icon: "home" },
       { id: "opportunities", label: "Oportunidades", icon: "briefcase" },
+      { id: "notifications", label: "Notificaciones", icon: "bell" },
     ] },
   ];
+  if (roles.some((role) => [
+    "STUDENT", "HOST_ORG_MEMBER", "WORKPLACE_SUPERVISOR", "FACULTY_SUPERVISOR",
+    "PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR", "LEGAL_REVIEWER",
+  ].includes(role))) {
+    groups.push({ label: "Ciclo de vida", items: [
+      { id: "dossier", label: "Expedientes", icon: "clipboard" },
+    ] });
+  }
   if (roles.includes("STUDENT")) {
     groups.push({ label: "Mi práctica", items: [
       { id: "applications", label: "Mis postulaciones", icon: "clipboard" },
@@ -54,13 +69,17 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
     groups.push({ label: "Coordinación", items: [
       { id: "academic", label: "Revisión académica", icon: "academic" },
       { id: "policies", label: "Políticas", icon: "settings" },
+      { id: "reports", label: "Reportes operativos", icon: "review" },
     ] });
   }
   if (roles.includes("LEGAL_REVIEWER")) {
     groups.push({ label: "Revisión", items: [{ id: "docreview", label: "Revisión documental", icon: "review" }] });
   }
   if (roles.includes("EXPERIENTIAL_COORDINATOR")) {
-    groups.push({ label: "Operación", items: [{ id: "activation", label: "Activación", icon: "check" }] });
+    groups.push({ label: "Operación", items: [
+      { id: "activation", label: "Activación", icon: "check" },
+      { id: "reports", label: "Reportes operativos", icon: "review" },
+    ] });
   }
 
   const initial = (user.display_name || "?").trim().charAt(0).toLocaleUpperCase("es");

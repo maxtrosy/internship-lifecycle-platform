@@ -84,8 +84,8 @@ def env():
 
 _TABLES = (
     "academic_program, host_org, auth_password_reset, auth_session, user_account, role_assignment, invitation, policy_version, "
-    "opportunity, application, placement, placement_version, supervisor_assignment, "
-    "checklist_item, completion_requirement, progress_entry, audit_event"
+    "placement_message, placement_conversation, user_notification, opportunity, application, placement, placement_version, supervisor_assignment, "
+    "checklist_item, completion_requirement, progress_entry, placement_work_plan_item, audit_event"
 )
 
 
@@ -151,9 +151,15 @@ def seed_base(env: DbEnv) -> dict:
 
 def make_opportunity(env, org, program_id, title="Synthetic opportunity"):
     return env.admin.execute(
-        "INSERT INTO opportunity(host_org_id,program_id,title) VALUES (%s,%s,%s) RETURNING id",
+        "INSERT INTO opportunity(host_org_id,program_id,title,state) VALUES (%s,%s,%s,'PUBLISHED') RETURNING id",
         (org, program_id, title),
     ).fetchone()["id"]
+
+
+def publish_test_opportunity(env, opportunity_id: int) -> None:
+    """Advance a synthetic fixture through the guarded state sequence."""
+    for state in ("IN_REVIEW", "APPROVED", "PUBLISHED"):
+        env.admin.execute("UPDATE opportunity SET state=%s WHERE id=%s", (state, opportunity_id))
 
 
 def make_placement(env, student_id, opp_id, supervisor_id=None, faculty_id=None):

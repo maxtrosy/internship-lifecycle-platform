@@ -12,6 +12,8 @@ from app.modules.identity.router import router as identity_router
 from app.modules.lifecycle.router import router as lifecycle_router
 from app.modules.opportunities.router import router as opportunities_router
 from app.modules.policies.router import router as policies_router
+from app.modules.notifications.router import router as notifications_router
+from app.modules.reports.router import router as reports_router
 
 app = FastAPI(title="DH-05 Placement API", version="0.1.0")
 
@@ -29,6 +31,8 @@ app.include_router(lifecycle_router)
 app.include_router(opportunities_router)
 app.include_router(applications_router)
 app.include_router(policies_router)
+app.include_router(notifications_router)
+app.include_router(reports_router)
 
 
 @app.get("/health")

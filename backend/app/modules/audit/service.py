@@ -7,6 +7,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from app.db import current_command
+from app.modules.notifications import service as notifications
 
 
 def write(
@@ -25,9 +26,9 @@ def write(
     ctx = current_command()
     if ctx is None or cur is not ctx.cur:
         raise RuntimeError("audit.write is only allowed inside command()")
-    cur.execute(
+    event = cur.execute(
         """INSERT INTO audit_event(actor_id, action, subject_type, subject_id, before_state, after_state, correlation_id)
-           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, occurred_at""",
         (
             ctx.actor_id,
             action,
@@ -38,18 +39,24 @@ def write(
             ctx.correlation_id,
         ),
     )
+    event_row = event.fetchone()
+    notifications.enqueue_from_audit(
+        cur, event_row["id"], action, subject_type, subject_id, after, event_row["occurred_at"]
+    )
     ctx.audited = True
 
 
 def list_history(cur: psycopg.Cursor, placement_id: int) -> list[dict[str, Any]]:
     return cur.execute(
-        """SELECT id, occurred_at, actor_id, action, subject_type, subject_id, before_state, after_state, correlation_id
+        """SELECT occurred_at, action
            FROM audit_event
            WHERE (subject_type = 'placement' AND subject_id = %s)
+              OR (subject_type = 'application' AND subject_id =
+                    (SELECT application_id FROM placement WHERE id = %s))
               OR (subject_type = 'checklist_item' AND subject_id IN
                     (SELECT id FROM checklist_item WHERE placement_id = %s))
               OR (subject_type = 'placement_version' AND subject_id IN
                     (SELECT id FROM placement_version WHERE placement_id = %s))
-           ORDER BY id""",
-        (placement_id, placement_id, placement_id),
+           ORDER BY occurred_at, id""",
+        (placement_id, placement_id, placement_id, placement_id),
     ).fetchall()

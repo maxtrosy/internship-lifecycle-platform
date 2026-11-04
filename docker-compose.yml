@@ -5,16 +5,18 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-    ports:
-      - "5432:5432"
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   api:
     build: ./backend
+    working_dir: /app
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
       APP_ENV: ${APP_ENV:-development}
@@ -22,20 +24,38 @@ services:
       JWT_TTL_MINUTES: "15"
       APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       PASSWORD_RESET_DELIVERY: ${PASSWORD_RESET_DELIVERY:-development-token}
-      DEMO_PASSWORD: "${DEMO_PASSWORD:-Demo-Only-2026!}"
+      WATCHFILES_FORCE_POLLING: "true"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_DEMO_LOGIN_ENABLED: "true"
-        VITE_DEMO_LOGIN_PASSWORD: "${DEMO_PASSWORD:-Demo-Only-2026!}"
+    image: node:22-alpine
+    working_dir: /app
+    command:
+      - sh
+      - -c
+      - corepack enable && corepack prepare pnpm@11.28.5 --activate && pnpm install --frozen-lockfile && pnpm dev --host 0.0.0.0
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+      VITE_USE_POLLING: "true"
+      PNPM_STORE_DIR: /pnpm-store
     ports:
-      - "5173:80"
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_pnpm_store:/pnpm-store
     depends_on:
       - api
+
+volumes:
+  dev_postgres_data:
+    external: true
+    name: ${DEV_POSTGRES_VOLUME:?Set DEV_POSTGRES_VOLUME to the existing local development database volume}
+  frontend_node_modules:
+  frontend_pnpm_store:
