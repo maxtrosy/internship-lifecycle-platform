@@ -1,6 +1,6 @@
 # Matriz de completitud funcional DH-05
 
-**Corte:** 2026-11-04 · **Commit base:** `3bad4a7` · RFP fuente contrastado completo (8 páginas) y matriz contrastada con routers/servicios/modelos/pruebas del código actual. T-47 valida las capacidades funcionales en migraciones `0001→0012`; T-49 valida la migración de permisos `0013` y el rol runtime dedicado, pero no crea un despliegue público. SYN-01 añade una fixture sintética conectada y validación poblada solo sobre PostgreSQL temporal; no altera esos cortes históricos ni los datos persistentes. Véase [`validation-results.md`](validation/validation-results.md).
+**Corte:** 2026-11-05 · **Commit base:** `3bad4a7` · RFP fuente contrastado completo (8 páginas) y matriz contrastada con routers/servicios/modelos/pruebas del código actual. T-47 valida las capacidades funcionales en migraciones `0001→0012`; T-49 valida la migración de permisos `0013` y el rol runtime dedicado, pero no crea un despliegue público. SYN-01 añade una fixture conectada y validación poblada solo sobre PostgreSQL temporal; T-52 agrega el modo de carga parcial, sin aplicarlo a Neon. Ninguno altera cortes históricos ni datos persistentes. Véase [`validation-results.md`](validation/validation-results.md).
 
 ## Límite de fuentes
 
@@ -54,6 +54,10 @@ RFP fuente consultado: `C:\Users\maxtr\Downloads\Project 5 Request for Proposal 
 | RNF-12 · disponibilidad en picos | Sin medición operacional | **Implementado sin validación suficiente**; QS-05/T-09. |
 
 ## Decisiones/bloqueos y siguiente incremento
+
+### Aprovisionamiento sintético SYN-01 — T-52
+
+El cargador ofrece `partial` para 10 organizaciones sintéticas, hasta 47 cuentas y 16 oportunidades restringidas a `DRAFT`/`IN_REVIEW`. En PostgreSQL aislado agregó 8 organizaciones, 47 cuentas, 47 asignaciones, 16 oportunidades, 24 eventos de auditoría y 8 notificaciones; la segunda pasada insertó cero. No crea políticas, postulaciones, prácticas ni cierre. El servicio de oportunidades crea/envía a revisión; el bootstrap directo se limita al catálogo/identidad que no tiene API de aprovisionamiento. La prueba verifica que el ACL efectivo siga la allowlist y que un grant extra detenga el proceso. El dry-run Neon confirmó 14 cuentas base, 2 organizaciones, 4 políticas activation/completion, cero oportunidades/ciclo, TLS y destino autorizado; no ejecutó escritura. Full sigue bloqueado por políticas/autoridades institucionales ausentes; partial sigue bloqueado por falta de snapshot, rol/credencial `app_bootstrap` y 47 contraseñas únicas. No se declara cargado el dataset.
 
 - **OPEN-05:** definir autoridad y proceso institucional de revisión/publicación. El flujo técnico existe, pero queda protegido por listas de roles vacías por defecto; el E2E configura actores solo en PostgreSQL temporal. Edición y criterios de aprobación siguen sin especificación.
 - **OPEN-13:** definir cupo, concurrencia y cuándo se consume/libera; no hay límite impuesto.

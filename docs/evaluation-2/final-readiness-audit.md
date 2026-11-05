@@ -1,12 +1,21 @@
 # Auditoría de preparación para versión final
 
-**Fecha de corte:** 2026-11-04
+**Fecha de corte:** 2026-11-05
 **Alcance:** código del backend y frontend, migraciones, Docker Compose, pruebas y artefactos de `docs/evaluation-2/`.  
 **Fuentes:** RFP de ocho páginas, entregado en `C:\Users\maxtr\Downloads\Project 5 Request for Proposal (2).pdf`, leído completo. Los originales de Evaluación 1 no están en el repositorio; permanecen limitados los mapeos RF↔US y las decisiones que solo constan en resúmenes secundarios.
 
 La auditoría requisito por requisito, incluyendo vistas, endpoints, servicios, permisos, pruebas y acción, se mantiene en [functional-completeness-matrix.md](functional-completeness-matrix.md). La implementación nueva no modifica reglas institucionales pendientes ni datos locales.
 
 Los estados describen el comportamiento inspeccionado y la evidencia ejecutada. Compilar por sí solo no cuenta como validación funcional.
+
+## Carga parcial segura de SYN-01 — T-52, revalidación 2026-11-05
+
+- `populate_synthetic_partial` y `--mode partial` separan catálogo/cuentas/oportunidades pendientes del flujo integral. La prueba temporal insertó 8 de las 10 organizaciones (las dos base ya existían), 47 cuentas con 47 roles relacionales, 16 oportunidades (8 `DRAFT`, 8 `IN_REVIEW`), 24 eventos de auditoría y 8 notificaciones para el EC relacionado. Repetir la operación insertó cero filas. Se comprobó preservación de una cuenta existente, rollback total, ausencia de postulaciones/prácticas/políticas `ELIGIBILITY`, relaciones y estados, y rechazo de publicación sin autoridad relacionada.
+- `app_bootstrap` es una credencial separada: no hereda, no tiene membresías ni flags administrativos; no puede escribir programas/políticas/postulaciones/prácticas, borrar o crear esquema, y no lee hashes. El preflight compara permisos efectivos de todas las columnas/tablas/secuencias/esquemas con la allowlist y la prueba rechaza un grant extra. `app_runtime` no fue modificado. La evidencia automatizada usa el rol restringido de la base temporal; el ACL remoto permanece sin verificar hasta provisionar y almacenar la credencial.
+- El fallback de 1 hora se eliminó. El `allow_test_only_synthetic_evidence` queda desactivado en el cargador persistente: no genera horas, evaluación/evidencia final ni cierre sintético. `partial` tampoco crea requisitos, políticas, postulaciones, prácticas, aprobaciones ni publicaciones. Los eventos ficticios del flujo `full` solo se habilitan detrás de sus propios bloqueos de política/autoridad/credencial y se escriben mediante servicios de dominio.
+- El reporte anterior de T-52 (**94 passed**) queda histórico. Revalidación del 2026-11-05: backend **97 passed, 1 warning (135.30 s)**; prueba focal **9/9 (39.85 s)**; E2E poblado Chromium **4/4 (25.8 s)** con PostgreSQL temporal, `TEMPORARY_POSTGRES_CLEANED=true`; ambos dry-runs Neon terminaron **EXIT 2** y `write_performed=false`. `compileall` EXIT 0. No se aplicó `--apply` ni hubo cambios en Neon o Credential Manager.
+- El dry-run de partial verificó `long-truth-39527618/main`, `app_runtime`, TLS, marcador de esquema, 14 cuentas, 2 organizaciones, 2 programas, 4 políticas activation/completion, 9 eventos de auditoría y cero oportunidades/postulaciones/prácticas. Aún no se pudo verificar el ACL real de bootstrap porque no existe la credencial `app_bootstrap` en Credential Manager. Tampoco hay snapshot hijo reciente y faltan 47 contraseñas únicas para las cuentas nuevas; el flag que permitiría escribirlas no se utilizó. El rol completo de Alembic no es legible para `app_runtime`; `0013` fue comprobado históricamente en T-49, no en este corte.
+- El full dry-run también bloquea porque no hay políticas `ELIGIBILITY`, faltan autoridades `OPPORTUNITY_REVIEWER_ROLES`, `OPPORTUNITY_PUBLISHER_ROLES`, `PLACEMENT_FACULTY_ASSIGNER_ROLES`, no hay `app_dataset_full` ni snapshot. OPEN-05 y las políticas institucionales permanecen sin resolver. La funcionalidad de carga parcial está validada en PostgreSQL temporal, pero **no está cargada en producción**.
 
 ## Fixture institucional sintética y recorridos poblados — SYN-01, 2026-11-04
 

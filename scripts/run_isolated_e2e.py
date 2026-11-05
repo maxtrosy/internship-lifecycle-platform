@@ -154,6 +154,7 @@ def main() -> int:
 
                 generated = populate_synthetic_dataset(
                     conn.cursor(), include_test_policy=True, allow_test_password=True,
+                    allow_test_only_synthetic_evidence=True,
                 )
                 summary = {key: value for key, value in generated.items() if key != "placement_scenarios"}
                 summary.pop("scenario_students", None)

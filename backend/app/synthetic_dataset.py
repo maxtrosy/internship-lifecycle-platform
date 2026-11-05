@@ -29,6 +29,10 @@ PROGRAMS = {
     "ING-SIS": "Systems Engineering (synthetic)",
     "ADM": "Business Admin (synthetic)",
 }
+BASE_ORGANIZATIONS = (
+    "Org Alfa (synthetic)",
+    "Org Beta (synthetic)",
+)
 ORGANIZATIONS = (
     "Cooperativa Río Claro (synthetic)",
     "Centro Horizonte de Investigación (synthetic)",
@@ -39,6 +43,7 @@ ORGANIZATIONS = (
     "Taller Urbano de Innovación (synthetic)",
     "Unidad Universitaria de Extensión (synthetic)",
 )
+ALL_SYNTHETIC_ORGANIZATIONS = BASE_ORGANIZATIONS + ORGANIZATIONS
 
 # Scenario labels correspond only to persisted states and record types in this schema.
 PLACEMENT_SCENARIOS = (
@@ -81,6 +86,13 @@ def _ensure_program(cur, code: str) -> int:
         "INSERT INTO academic_program(code,name) VALUES (%s,%s) RETURNING id",
         (code, PROGRAMS[code]),
     ).fetchone()["id"]
+
+
+def _require_program(cur, code: str) -> int:
+    row = _one(cur, "SELECT id,name FROM academic_program WHERE code=%s", (code,))
+    if row is None or row["name"] != PROGRAMS[code]:
+        raise RuntimeError(f"Required synthetic program {code} is absent or differs; no rows were changed.")
+    return row["id"]
 
 
 def _ensure_organization(cur, name: str) -> int:
@@ -318,7 +330,13 @@ def _ensure_work_plan(cur, placement_id: int, supervisor_id: int) -> None:
 
 
 def _ensure_completion(cur, *, placement_id: int, student_id: int, supervisor_id: int,
-                       coordinator_id: int, ec_id: int, close: bool) -> None:
+                       coordinator_id: int, ec_id: int,
+                       allow_test_only_synthetic_evidence: bool = False, close: bool) -> None:
+    if not allow_test_only_synthetic_evidence:
+        # Final reports, evaluations, evidence, and hours must come from persisted
+        # requirements and real domain activity in production. Only isolated test
+        # fixtures explicitly opt into these fictional completion records.
+        return
     placement = _one(cur, "SELECT state FROM placement WHERE id=%s", (placement_id,))
     if placement["state"] == "ACTIVE":
         _ensure_work_plan(cur, placement_id, supervisor_id)
@@ -329,30 +347,33 @@ def _ensure_completion(cur, *, placement_id: int, student_id: int, supervisor_id
             _command(student_id, lifecycle.create_progress_report, placement_id,
                      "Avance sintético: se documentaron actividades realizadas y aprendizajes del periodo.")
 
-    final_evaluation = _one(
-        cur,
-        "SELECT id FROM placement_evaluation WHERE placement_id=%s AND kind='FINAL' ORDER BY id",
-        (placement_id,),
-    )
-    if final_evaluation is None:
-        _command(supervisor_id, lifecycle.create_evaluation, placement_id, "FINAL",
-                 "Evaluación narrativa sintética del cierre de actividades y evidencias entregadas.")
-    evidence = _one(
-        cur,
-        "SELECT id FROM completion_evidence WHERE placement_id=%s AND kind='FINAL_REPORT' ORDER BY id",
-        (placement_id,),
-    )
-    if evidence is None:
-        _command(student_id, lifecycle.submit_completion_evidence, placement_id, "FINAL_REPORT",
-                 "informe-final-sintetico.pdf", "application/pdf", _PDF)
+    if allow_test_only_synthetic_evidence:
+        final_evaluation = _one(
+            cur,
+            "SELECT id FROM placement_evaluation WHERE placement_id=%s AND kind='FINAL' ORDER BY id",
+            (placement_id,),
+        )
+        if final_evaluation is None:
+            _command(supervisor_id, lifecycle.create_evaluation, placement_id, "FINAL",
+                     "Evaluación narrativa sintética del cierre de actividades y evidencias entregadas.")
+        evidence = _one(
+            cur,
+            "SELECT id FROM completion_evidence WHERE placement_id=%s AND kind='FINAL_REPORT' ORDER BY id",
+            (placement_id,),
+        )
+        if evidence is None:
+            _command(student_id, lifecycle.submit_completion_evidence, placement_id, "FINAL_REPORT",
+                     "informe-final-sintetico.pdf", "application/pdf", _PDF)
     threshold = cur.execute(
         "SELECT threshold FROM completion_requirement WHERE placement_id=%s AND kind='MIN_HOURS'",
         (placement_id,),
     ).fetchone()
-    min_hours = float(threshold["threshold"]) if threshold and threshold["threshold"] is not None else 1.0
-    _ensure_hours(cur, placement_id, student_id, min_hours)
+    # Never synthesize an hour requirement. Test fixtures may explicitly create
+    # evidence; production data loads only record hours against a persisted rule.
+    if threshold and threshold["threshold"] is not None and allow_test_only_synthetic_evidence:
+        _ensure_hours(cur, placement_id, student_id, float(threshold["threshold"]))
     placement = _one(cur, "SELECT state FROM placement WHERE id=%s", (placement_id,))
-    if placement["state"] == "ACTIVE":
+    if placement["state"] == "ACTIVE" and allow_test_only_synthetic_evidence:
         _command(coordinator_id, lifecycle.confirm_completion, placement_id)
         placement = {"state": "COMPLETED"}
     if close and placement["state"] == "COMPLETED":
@@ -371,7 +392,8 @@ def _ensure_message(cur, placement_id: int, actor_id: int, audience: str, text: 
 
 def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
                                password_hash_for: Callable[[str], str] | None = None,
-                               allow_test_password: bool = False) -> dict:
+                               allow_test_password: bool = False,
+                               allow_test_only_synthetic_evidence: bool = False) -> dict:
     """Add/reuse 30 students, 10 organizations, 16 opportunities, 24 applications and 12 placements.
 
     On isolated E2E paths callers explicitly opt into the test-only eligibility
@@ -566,14 +588,15 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
                 cur, placement_id=placement_id, student_id=student_id,
                 supervisor_id=workplace_supervisors[opportunity["host_org_id"]],
                 coordinator_id=coordinators[opportunity["program_code"]], ec_id=ec_id,
+                allow_test_only_synthetic_evidence=allow_test_only_synthetic_evidence,
                 close=index == 0,
             )
             # Scenario 1 stops after completion; scenario 0 is closed.
             if index in {0, 1}:
                 continue
-        elif index in {2, 3, 4}:
+        elif index in {2, 3, 4} and allow_test_only_synthetic_evidence:
             _ensure_hours(cur, placement_id, student_id, 12.0 + index)
-        elif index == 5:
+        elif index == 5 and allow_test_only_synthetic_evidence:
             _ensure_hours(cur, placement_id, student_id, 8.0)
             _ensure_message(cur, placement_id, student_id, "JOINT",
                             "Seguimiento sintético compartido sobre las actividades realizadas.")
@@ -643,3 +666,182 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
     counts["organizations_created_or_reused"] = len(organization_ids)
     counts["opportunities_created_or_reused"] = len(opportunity_ids)
     return counts
+
+
+def _partial_opportunity_title(index: int) -> str:
+    code = "ING-SIS" if index % 2 == 0 else "ADM"
+    if index < len(PLACEMENT_SCENARIOS):
+        return f"Práctica sintética {index + 1:02d} · {PLACEMENT_SCENARIOS[index][0]}"
+    return f"Oportunidad sintética {index + 1:02d} · {code}"
+
+
+def _partial_account_specs(program_ids: dict[str, int], organization_ids: dict[str, int]):
+    for n in range(4, 31):
+        index = n - 4
+        code = "ING-SIS" if index < 14 else "ADM"
+        credit_values = (78, 92, 100, 108, 118, 132)
+        level_values = (4, 5, 6, 7, 8)
+        yield {
+            "username": f"demo_student_{n:02d}",
+            "display_name": f"Estudiante Demo {n:02d}",
+            "role": "STUDENT", "program_id": program_ids[code], "host_org_id": None,
+            "credits": credit_values[index % len(credit_values)],
+            "level": level_values[(index * 2 + 1) % len(level_values)],
+            "courses": ("SYS-101",) if code == "ING-SIS" and index % 2 == 0
+                       else (("ADM-101",) if code == "ADM" and index % 2 == 0 else ()),
+        }
+    for org_index, org_name in enumerate(ORGANIZATIONS, start=1):
+        org_id = organization_ids[org_name]
+        yield {
+            "username": f"demo_host_{org_index:02d}",
+            "display_name": f"Representante Demo {org_index:02d}",
+            "role": "HOST_ORG_MEMBER", "program_id": None, "host_org_id": org_id,
+            "credits": None, "level": None, "courses": (),
+        }
+        yield {
+            "username": f"demo_supervisor_{org_index:02d}",
+            "display_name": f"Supervisor Laboral Demo {org_index:02d}",
+            "role": "WORKPLACE_SUPERVISOR", "program_id": None, "host_org_id": org_id,
+            "credits": None, "level": None, "courses": (),
+        }
+    for n in range(2, 6):
+        yield {
+            "username": f"demo_faculty_{n:02d}",
+            "display_name": f"Supervisor Académico Demo {n:02d}",
+            "role": "FACULTY_SUPERVISOR", "program_id": None, "host_org_id": None,
+            "credits": None, "level": None, "courses": (),
+        }
+
+
+def populate_synthetic_partial(cur, *, password_hash_for: Callable[[str], str]) -> dict:
+    """Create only synthetic organizations, accounts, relationships, and pending opportunities.
+
+    This bootstrap path intentionally has no access to application, placement, or
+    policy creation. Opportunity state changes still go through domain services.
+    """
+    if password_hash_for is None:
+        raise RuntimeError("A unique per-account password provider is required for the partial dataset.")
+
+    if cur.connection.info.transaction_status.name == "IDLE":
+        raise RuntimeError("The partial dataset must run inside one caller-owned transaction.")
+    tracked = ("host_org", "user_account", "role_assignment", "opportunity", "audit_event")
+    inserted = {table: 0 for table in tracked}
+    # Programs are existing institutional catalogs. The partial loader never creates or updates them.
+    program_ids = {code: _require_program(cur, code) for code in PROGRAMS}
+    organization_ids = {}
+    for name in ALL_SYNTHETIC_ORGANIZATIONS:
+        existing_orgs = cur.execute(
+            "SELECT id FROM host_org WHERE name=%s ORDER BY id", (name,),
+        ).fetchall()
+        if len(existing_orgs) > 1:
+            raise RuntimeError(f"Synthetic organization {name!r} is duplicated; preserved.")
+        if existing_orgs:
+            organization_ids[name] = existing_orgs[0]["id"]
+        else:
+            organization_ids[name] = _ensure_organization(cur, name)
+            inserted["host_org"] += 1
+
+    accounts: dict[str, int] = {}
+    specs = list(_partial_account_specs(program_ids, organization_ids))
+    for spec in specs:
+        existing_account = _one(
+            cur, "SELECT id FROM user_account WHERE username=%s", (spec["username"],),
+        )
+        user_id = _ensure_account(cur, password_hash_for=password_hash_for, **spec)
+        if existing_account is None:
+            inserted["user_account"] += 1
+            inserted["role_assignment"] += 1
+        assigned = cur.execute(
+            "SELECT role,program_id,host_org_id FROM role_assignment WHERE user_id=%s ORDER BY role,program_id,host_org_id",
+            (user_id,),
+        ).fetchall()
+        expected_assignment = {
+            "role": spec["role"], "program_id": spec["program_id"], "host_org_id": spec["host_org_id"],
+        }
+        if assigned != [expected_assignment]:
+            raise RuntimeError(f"Synthetic account {spec['username']} has unexpected role relations; preserved.")
+        accounts[spec["username"]] = user_id
+
+    # The two base host accounts belong to the pre-existing synthetic seed.
+    base_hosts = {}
+    for username, org_name in (("hm_alfa", BASE_ORGANIZATIONS[0]), ("hm_beta", BASE_ORGANIZATIONS[1])):
+        row = _one(
+            cur,
+            """SELECT u.id FROM user_account u JOIN role_assignment r ON r.user_id=u.id
+               WHERE u.username=%s AND r.role='HOST_ORG_MEMBER' AND r.host_org_id=%s""",
+            (username, organization_ids[org_name]),
+        )
+        if row is None:
+            raise RuntimeError(f"Required base organization relationship for {username} is missing; preserved.")
+        base_hosts[organization_ids[org_name]] = row["id"]
+
+    orgs_ordered = list(ALL_SYNTHETIC_ORGANIZATIONS)
+    creators = {
+        organization_ids[BASE_ORGANIZATIONS[0]]: base_hosts[organization_ids[BASE_ORGANIZATIONS[0]]],
+        organization_ids[BASE_ORGANIZATIONS[1]]: base_hosts[organization_ids[BASE_ORGANIZATIONS[1]]],
+    }
+    for org_index, org_name in enumerate(ORGANIZATIONS, start=1):
+        creators[organization_ids[org_name]] = accounts[f"demo_host_{org_index:02d}"]
+
+    opportunity_ids: list[int] = []
+    for index in range(16):
+        code = "ING-SIS" if index % 2 == 0 else "ADM"
+        org_id = organization_ids[orgs_ordered[index % len(orgs_ordered)]]
+        creator_id = creators[org_id]
+        title = _partial_opportunity_title(index)
+        target = "IN_REVIEW" if index % 2 else "DRAFT"
+        existing_rows = cur.execute(
+            "SELECT id,host_org_id,program_id,state FROM opportunity WHERE title=%s ORDER BY id",
+            (title,),
+        ).fetchall()
+        if len(existing_rows) > 1:
+            raise RuntimeError(f"Synthetic opportunity {title!r} is duplicated; preserved.")
+        existing = existing_rows[0] if existing_rows else None
+        if existing:
+            if (existing["host_org_id"], existing["program_id"]) != (org_id, program_ids[code]):
+                raise RuntimeError(f"Synthetic opportunity {title!r} has different relations; preserved.")
+            if existing["state"] not in {"DRAFT", "IN_REVIEW"}:
+                raise RuntimeError(f"Synthetic opportunity {title!r} is outside pending states; preserved.")
+            opportunity_id = existing["id"]
+        else:
+            opportunity_id = _command(
+                creator_id, opportunities.create_opportunity, org_id, program_ids[code], title,
+            )
+            inserted["opportunity"] += 1
+            inserted["audit_event"] += 1
+        state = cur.execute("SELECT state FROM opportunity WHERE id=%s", (opportunity_id,)).fetchone()["state"]
+        if target == "IN_REVIEW" and state == "DRAFT":
+            _command(creator_id, opportunities.submit_for_review, opportunity_id)
+            inserted["audit_event"] += 1
+        opportunity_ids.append(opportunity_id)
+
+    # This function has no application, placement, or policy write path. The
+    # isolated database tests and read-only production preflight verify those
+    # tables independently; the bootstrap role receives no access to them.
+    final_states = cur.execute(
+        "SELECT state,count(*) AS n FROM opportunity WHERE id=ANY(%s) GROUP BY state ORDER BY state",
+        (opportunity_ids,),
+    ).fetchall()
+    if any(row["state"] not in {"DRAFT", "IN_REVIEW"} for row in final_states):
+        raise RuntimeError("Partial opportunities must remain in DRAFT or IN_REVIEW.")
+
+    totals = {table: cur.execute(f"SELECT count(*) AS n FROM {table}").fetchone()["n"]
+              for table in tracked}
+    omitted = {
+        "organizations_reused": len(ALL_SYNTHETIC_ORGANIZATIONS) - inserted["host_org"],
+        "accounts_reused": len(specs) - inserted["user_account"],
+        "role_relations_reused": len(specs) - inserted["role_assignment"],
+        "opportunities_reused": len(opportunity_ids) - inserted["opportunity"],
+        "applications_by_partial_scope": 24,
+        "placements_by_partial_scope": 12,
+        "published_opportunities_by_partial_scope": 12,
+        "policy_writes": 0,
+    }
+    return {
+        "mode": "partial", "totals": totals, "inserted": inserted, "omitted": omitted,
+        "opportunity_states": {row["state"]: row["n"] for row in final_states},
+        "synthetic_accounts_expected": len(specs), "synthetic_organizations_expected": 10,
+        "synthetic_opportunities_expected": 16, "applications_created": 0,
+        "placements_created": 0, "policies_created": 0,
+        "notifications": "generated transactionally by domain audit rules; total is reported by read-only postflight",
+    }

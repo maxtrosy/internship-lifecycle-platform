@@ -17,7 +17,14 @@ GLOBAL_ROLES = {"EXPERIENTIAL_COORDINATOR", "LEGAL_REVIEWER"}
 
 
 def subject(cur: psycopg.Cursor, user_id: int) -> dict | None:
-    u = cur.execute("SELECT * FROM user_account WHERE id = %s", (user_id,)).fetchone()
+    # Password hashes are never needed by authorization or response projections.
+    # Naming the columns also lets the isolated catalog bootstrap role omit access
+    # to credential material while still using the normal opportunity services.
+    u = cur.execute(
+        """SELECT id, username, email, is_active, display_name, credits, academic_level
+           FROM user_account WHERE id = %s""",
+        (user_id,),
+    ).fetchone()
     if u is None:
         return None
     u["roles"] = cur.execute(
