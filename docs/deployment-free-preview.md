@@ -1,10 +1,10 @@
 # Despliegue público gratuito de DH-05
 
-**Estado al 2026-11-04: migraciones 0001–0013 aplicadas a Neon `long-truth-39527618/main`; Render y Vercel aún no creados.** El postcheck confirmó 28 tablas de aplicación y cero filas, sin cuentas sembradas. El login de ejecución `app_runtime` ya puede ejecutar `SET ROLE app_user`; su secreto se conserva localmente en Windows Credential Manager y todavía no está configurado en Render. La readiness se comprobó contra Neon con HTTP 200. Este runbook describe una demostración con datos sintéticos; no declara el sistema listo para producción institucional.
+**Estado actualizado por T-51 (2026-11-04):** Neon `long-truth-39527618/main` conserva el esquema `0013` y 28 tablas de aplicación. El preflight read-only encontró 14 cuentas base, 2 programas, 2 organizaciones sintéticas, 4 políticas de activación/finalización y 7 eventos de login/logout. No hay oportunidades, postulaciones ni prácticas, y falta política de elegibilidad; no se cargó el dataset poblado. El servicio público Render respondió HTTP 200 en `/health` y `/ready` en T-50. La URL de frontend Vercel no se verificó. Este runbook describe una demostración con datos sintéticos; no declara el sistema listo para producción institucional.
 
 ## Estado comprobado de Neon
 
-El preflight T-48 del 2026-11-03 es histórico: antes de migrar confirmó el proyecto/branch autorizados, PostgreSQL 18.6, TLS, cero objetos de aplicación y permisos para el bootstrap. Tras autorización explícita, Neon se migró a `0012`; luego el T-49 del 2026-11-04 aplicó `0013` por la conexión administrativa separada. El postcheck actual de solo lectura confirmó `alembic_version=0013`, 28 tablas de aplicación, cero filas y ninguna cuenta sembrada. No se imprimió ninguna URI.
+El preflight T-48 del 2026-11-03 es histórico: antes de migrar confirmó el proyecto/branch autorizados, PostgreSQL 18.6, TLS, cero objetos de aplicación y permisos para el bootstrap. Tras autorización explícita, Neon se migró a `0012`; luego el T-49 del 2026-11-04 aplicó `0013` por la conexión administrativa separada. T-50 verificó el endpoint runtime con `app_runtime`, TLS requerido y `SET ROLE app_user`, además de los conteos actuales de tablas y registros descritos arriba. El login de runtime no tiene permiso de lectura del ledger Alembic; `/ready` responde HTTP 200 y no consulta ese ledger. No se imprimió ninguna URI.
 
 En T-49 se auditó el rol `app_user` y se revocaron concesiones históricas amplias. `app_user` permanece `NOLOGIN`, sin flags administrativos, sin `CREATE` de esquema/base, y cuenta con una lista específica de 69 pares de privilegios de tabla y 23 grants `USAGE` de secuencia. Se creó `app_runtime` como `LOGIN` sin flags administrativos, sin grants directos de tabla y con membresía `app_user` configurada `SET TRUE`, `INHERIT FALSE`, `ADMIN FALSE`. La conexión runtime con TLS ejecutó `SET ROLE app_user`; `GET /ready` respondió HTTP 200. El rol `neondb_owner` no se usa en el servicio. El secreto aleatorio reside en Windows Credential Manager, destino `InternshipLifecyclePlatform/Neon/main/app_runtime/DATABASE_URL`; Render todavía no lo tiene. El permiso predeterminado `PUBLIC TEMP` se conserva y queda documentado como residual.
 
@@ -12,7 +12,7 @@ La migración remota de `main` ya se ejecutó tras autorización explícita y pr
 
 ## Render Free — API
 
-La definición está en [`render.yaml`](../render.yaml). Valores resueltos desde el repositorio:
+La definición está en [`render.yaml`](../render.yaml). El servicio `internship-lifecycle-api-62997789` responde ahora HTTP 200 en `/health` y `/ready`. Valores de configuración resueltos desde el repositorio:
 
 | Campo | Configuración |
 |---|---|
@@ -40,7 +40,7 @@ Configura estas variables desde Render, nunca en un archivo versionado:
 
 Deja sin configurar `OPPORTUNITY_REVIEWER_ROLES`, `OPPORTUNITY_PUBLISHER_ROLES` y `PLACEMENT_FACULTY_ASSIGNER_ROLES` hasta que exista una decisión institucional. No habilites autoridades por inferencia.
 
-No hay archivos de documentos en el disco efímero de Render: los documentos y la evidencia final se guardan en PostgreSQL. La base nueva estará vacía y la aplicación no tiene registro público; no habrá cuentas para iniciar sesión hasta que un operador autorizado aprovisione cuentas reales por un procedimiento aprobado. No publiques credenciales sintéticas de prueba.
+No hay archivos de documentos en el disco efímero de Render: los documentos y la evidencia final se guardan en PostgreSQL. No hay registro público. El preflight T-50 encontró 14 cuentas sintéticas base activas, pero no probó inicio de sesión ni roles en el navegador; no publiques credenciales sintéticas de prueba. La aplicación aún no tiene oportunidades ni prácticas para una demostración poblada.
 
 ## Neon Free — PostgreSQL
 
@@ -57,6 +57,27 @@ Remove-Item Env:DATABASE_URL
 ```
 
 La asignación captura la URI sin imprimirla. `neon status` debe mostrar el proyecto esperado y la rama autorizada para esa ejecución. La salida final debe indicar `0013 (head)` en el código actual. Si hay tablas, datos o una revisión existente inesperada en un destino aún no autorizado, detente y no ejecutes `upgrade`. No uses `alembic downgrade`: las migraciones actuales son intencionalmente irreversibles.
+
+## Dataset sintético persistente — preflight T-51
+
+El cargador está en [`scripts/persist_synthetic_dataset.py`](../scripts/persist_synthetic_dataset.py). Su comando por defecto es de solo lectura y usa la credencial runtime desde Windows Credential Manager:
+
+```powershell
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+python scripts/persist_synthetic_dataset.py
+```
+
+La aplicación del lote no está autorizada por el estado actual del preflight. No se puede habilitar mientras falte una política de elegibilidad persistida para cada programa, estén sin decidir las autoridades institucionales de revisión/publicación/supervisión docente, no exista un snapshot hijo de `main` creado en las últimas 24 horas y no esté provisionada una credencial puntual de escritura separada. El login `app_runtime` no recibe grants adicionales. El ejecutable tampoco lee la política temporal de `100 créditos/nivel 6` ni establece roles de autoridad por cuenta propia.
+
+Una vez resueltos y comprobados esos requisitos, la herramienta valida de nuevo el destino y pide confirmación interactiva antes de escribir:
+
+```powershell
+python scripts/persist_synthetic_dataset.py --apply `
+  --confirm-target long-truth-39527618/main `
+  --backup-branch-id <id-de-la-rama-snapshot-reciente>
+```
+
+El escritor de una sola operación se obtiene únicamente de Windows Credential Manager, destino `InternshipLifecyclePlatform/Neon/main/synthetic_loader/DATABASE_URL`; no se configura en Render. Las contraseñas nuevas son independientes y se guardan en Credential Manager, nunca se imprimen. `--apply` aún requiere verificación controlada después de que los prerrequisitos estén completos; no se ejecutó en T-51.
 
 ## Vercel Hobby — frontend
 
@@ -77,13 +98,12 @@ No configures `VITE_DEMO_LOGIN_ENABLED` ni `VITE_DEMO_LOGIN_PASSWORD`. La vista 
 
 ## Orden de publicación y comprobaciones
 
-No se han creado servicios Render/Vercel ni se ha iniciado una publicación. La configuración nueva aún necesita llegar a la rama Git importable después de la revisión y aprobación expresa del diff; no se hizo `git add`, commit o push. Aunque el rol Neon está listo, no se debe desplegar una revisión local que aún no fue aprobada y publicada a GitHub.
+El servicio API de Render está público y sus rutas `/health` y `/ready` respondieron HTTP 200 en T-50. No se verificó una URL de frontend Vercel ni flujos funcionales públicos. El código T-51 del cargador está solo en el árbol local; no se hizo `git add`, commit o push. No se debe desplegar ese cambio antes de revisar y aprobar el diff.
 
-1. Revisa el diff T-49 completo y aprueba expresamente antes de llevarlo a GitHub. Por ahora sigue local y sin stage/commit/push.
-2. Después de que la revisión aprobada llegue a la rama Git importable, crea el Blueprint Render Free. Proporciona el secreto `DATABASE_URL` pooler de `app_runtime` desde el almacén protegido y el origen final de Vercel; Render genera `JWT_SECRET`.
-3. Confirma la URL real del servicio Render y corrige el destino del proxy Vercel si difiere del esperado.
-4. Crea el proyecto Vercel Hobby con Root Directory `frontend` y la configuración anterior. No declares publicado hasta disponer de URLs reales y validar las respuestas.
-5. Smoke checks públicos pendientes: `GET /health` debe devolver `{"status":"ok"}` y `GET /ready` `{"status":"ready"}`. La última prueba `/ready` fue contra Neon mediante TestClient, no contra una URL pública. Desde la app, comprueba login solo con una cuenta autorizada aprovisionada; sesión, permisos, oportunidades, expediente, documentos, horas, plan de trabajo, notificaciones, mensajería, reportes y persistencia tras recarga. Neon está migrado pero vacío, así que esos flujos no están validados públicamente.
+1. Revisa el diff actual; cualquier publicación del cargador requiere aprobación y un commit/push autorizados por separado.
+2. Cuando la revisión aprobada llegue a la rama Git importable, actualiza el servicio Render existente o confirma su Blueprint, con `DATABASE_URL` runtime desde el almacén protegido, origen Vercel y `JWT_SECRET` generado.
+3. Crea o verifica el proyecto Vercel Hobby (`frontend`), configura la reescritura al dominio real de Render y comprueba ambos extremos.
+4. T-50 comprobó públicamente `GET /health` y `GET /ready`: HTTP 200 en ambos. Siguen pendientes los flujos públicos de login, permisos, oportunidades, expediente, documentos, horas, plan de trabajo, notificaciones, mensajería, reportes y persistencia tras recargar. Neon conserva las cuentas/políticas base, pero no tiene oportunidades, postulaciones, prácticas ni elegibilidad configurada.
 
 ## Rollback y límites del plan gratuito
 

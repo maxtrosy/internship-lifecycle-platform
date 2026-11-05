@@ -152,7 +152,9 @@ def main() -> int:
             if args.populated:
                 from app.synthetic_dataset import populate_synthetic_dataset
 
-                generated = populate_synthetic_dataset(conn.cursor(), include_test_policy=True)
+                generated = populate_synthetic_dataset(
+                    conn.cursor(), include_test_policy=True, allow_test_password=True,
+                )
                 summary = {key: value for key, value in generated.items() if key != "placement_scenarios"}
                 summary.pop("scenario_students", None)
                 print(f"POPULATED_SYNTHETIC_FIXTURE={summary}", flush=True)

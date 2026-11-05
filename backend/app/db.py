@@ -23,8 +23,12 @@ from .errors import BusinessError
 _current_command: contextvars.ContextVar["CommandContext | None"] = contextvars.ContextVar(
     "current_command", default=None
 )
+_shared_command_connection: contextvars.ContextVar[tuple[psycopg.Connection, str | None] | None] = contextvars.ContextVar(
+    "shared_command_connection", default=None
+)
 
 _DML_KEYWORDS = {"insert", "update", "delete"}
+_CONFIGURED_ROLE = object()
 
 
 def _is_dml(sql: str) -> bool:
@@ -74,6 +78,33 @@ def command(actor_id: int | None) -> Iterator[CommandContext]:
 
     ``actor_id`` is None only for system-internal commands; business commands pass a real id.
     """
+    shared = _shared_command_connection.get()
+    if shared is not None:
+        shared_conn, required_role = shared
+        # Used by explicitly scoped batch operations that must remain atomic. The
+        # caller opens the outer transaction and has already selected app_role.
+        # Each command gets a savepoint so a failed domain operation cannot leave
+        # partial work in the enclosing batch.
+        with shared_conn.transaction():
+            cur = shared_conn.cursor()
+            active_role = cur.execute("SELECT current_user AS role").fetchone()["role"]
+            if required_role is not None and active_role != required_role:
+                raise RuntimeError("Shared command connection must already run as the application role.")
+            cur.execute("SELECT set_config('dh05.actor_id', %s, true)",
+                        (str(actor_id) if actor_id is not None else "",))
+            ctx = CommandContext(shared_conn, cur, actor_id, str(uuid.uuid4()))
+            token = _current_command.set(ctx)
+            try:
+                yield ctx
+            except BaseException:
+                raise
+            else:
+                if ctx.dirty and not ctx.audited:
+                    raise BusinessError("AUDIT_MISSING", "accepted mutation without audit event")
+            finally:
+                _current_command.reset(token)
+        return
+
     with _connect() as conn:
         with conn.transaction():
             cur = conn.cursor()
@@ -90,6 +121,28 @@ def command(actor_id: int | None) -> Iterator[CommandContext]:
                     raise BusinessError("AUDIT_MISSING", "accepted mutation without audit event")
             finally:
                 _current_command.reset(token)
+
+
+@contextmanager
+def shared_command_connection(conn: psycopg.Connection, *,
+                              required_role: str | None | object = _CONFIGURED_ROLE) -> Iterator[None]:
+    """Route nested ``command()`` calls through an existing atomic batch transaction.
+
+    The owner must open the outer transaction before entering this scope. When
+    ``required_role`` is set, the connection must already be running as that role.
+    ``None`` is reserved for trusted one-off loaders using a separately verified
+    writer connection; HTTP requests continue using independent command transactions.
+    """
+    if _shared_command_connection.get() is not None:
+        raise RuntimeError("A shared command connection is already active in this context.")
+    if not conn.info.transaction_status:
+        raise RuntimeError("Shared command connection requires an open outer transaction.")
+    active_role = get_settings().app_role if required_role is _CONFIGURED_ROLE else required_role
+    token = _shared_command_connection.set((conn, active_role))
+    try:
+        yield
+    finally:
+        _shared_command_connection.reset(token)
 
 
 @contextmanager

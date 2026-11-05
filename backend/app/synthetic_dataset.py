@@ -93,7 +93,8 @@ def _ensure_organization(cur, name: str) -> int:
 def _ensure_account(cur, *, username: str, display_name: str, role: str,
                     program_id: int | None = None, host_org_id: int | None = None,
                     credits: int | None = None, level: int | None = None,
-                    courses: tuple[str, ...] = (), password_hash: str) -> int:
+                    courses: tuple[str, ...] = (),
+                    password_hash_for: Callable[[str], str]) -> int:
     row = _one(
         cur,
         """SELECT id,email,display_name,credits,academic_level,completed_courses,is_active
@@ -102,6 +103,9 @@ def _ensure_account(cur, *, username: str, display_name: str, role: str,
     )
     email = f"{username}@horizon.example.test"
     if row is None:
+        password_hash = password_hash_for(username)
+        if not isinstance(password_hash, str) or not password_hash:
+            raise RuntimeError("Synthetic account password provider returned an invalid hash.")
         user_id = cur.execute(
             """INSERT INTO user_account(username,email,password_hash,is_active,display_name,
                        credits,academic_level,completed_courses)
@@ -365,13 +369,21 @@ def _ensure_message(cur, placement_id: int, actor_id: int, audience: str, text: 
         _command(actor_id, messaging.create_message, placement_id, audience, text)
 
 
-def populate_synthetic_dataset(cur, *, include_test_policy: bool = False) -> dict:
+def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
+                               password_hash_for: Callable[[str], str] | None = None,
+                               allow_test_password: bool = False) -> dict:
     """Add/reuse 30 students, 10 organizations, 16 opportunities, 24 applications and 12 placements.
 
-    On the isolated E2E path callers opt into the existing test-only eligibility
-    conditions and set reviewer/publisher/faculty-assignment authorities in that
-    temporary process. No persistent database is selected or opened by this helper.
+    On isolated E2E paths callers explicitly opt into the test-only eligibility
+    conditions and password. Persistent loaders must provide a unique credential
+    hash for each newly created account; existing users are never re-hashed.
     """
+    if password_hash_for is None:
+        if not allow_test_password:
+            raise RuntimeError("A per-account password provider is required outside isolated tests.")
+        test_password_hash = security.hash_password(DEMO_PASSWORD)
+        password_hash_for = lambda _username: test_password_hash
+
     programs = {code: _ensure_program(cur, code) for code in PROGRAMS}
     organizations = {name: _ensure_organization(cur, name) for name in ORGANIZATIONS}
     organization_ids = {
@@ -380,7 +392,6 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False) -> dic
         **organizations,
     }
 
-    password_hash = security.hash_password(DEMO_PASSWORD)
     students: dict[str, int] = {}
     for username, code, name, credits, level, courses in (
         ("s1", "ING-SIS", "Student One", 105, 7, ("MAT101",)),
@@ -405,7 +416,7 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False) -> dic
             role="STUDENT", program_id=programs[code], credits=credits, level=level,
             courses=("SYS-101",) if code == "ING-SIS" and index % 2 == 0
                     else (("ADM-101",) if code == "ADM" and index % 2 == 0 else ()),
-            password_hash=password_hash,
+            password_hash_for=password_hash_for,
         )
 
     host_members: dict[int, int] = {}
@@ -428,11 +439,11 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False) -> dic
         suffix = org_index - 1
         host_members[org_id] = _ensure_account(
             cur, username=f"demo_host_{suffix:02d}", display_name=f"Representante Demo {suffix:02d}",
-            role="HOST_ORG_MEMBER", host_org_id=org_id, password_hash=password_hash,
+            role="HOST_ORG_MEMBER", host_org_id=org_id, password_hash_for=password_hash_for,
         )
         workplace_supervisors[org_id] = _ensure_account(
             cur, username=f"demo_supervisor_{suffix:02d}", display_name=f"Supervisor Laboral Demo {suffix:02d}",
-            role="WORKPLACE_SUPERVISOR", host_org_id=org_id, password_hash=password_hash,
+            role="WORKPLACE_SUPERVISOR", host_org_id=org_id, password_hash_for=password_hash_for,
         )
 
     coordinators = {
@@ -453,7 +464,7 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False) -> dic
     for n in range(2, 6):
         user_id = _ensure_account(
             cur, username=f"demo_faculty_{n:02d}", display_name=f"Supervisor Académico Demo {n:02d}",
-            role="FACULTY_SUPERVISOR", password_hash=password_hash,
+            role="FACULTY_SUPERVISOR", password_hash_for=password_hash_for,
         )
         if user_id not in faculty:
             faculty.append(user_id)

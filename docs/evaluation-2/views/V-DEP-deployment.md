@@ -1,6 +1,6 @@
 # V-DEP — Supuestos de despliegue
 
-> **Estado al 2026-11-04:** Neon `long-truth-39527618/main` está migrado hasta `0013`, con 28 tablas de aplicación y cero filas. `app_runtime` puede cambiar a `app_user` con `SET ROLE` y `/ready` respondió HTTP 200 en la comprobación T-49. La credencial de runtime solo está en Windows Credential Manager; no se ha configurado Render. Render/Vercel todavía no tienen servicios ni URL pública. Véase [`deployment-free-preview.md`](../../deployment-free-preview.md); esto no representa un despliegue.
+> **Estado T-51, 2026-11-04:** El preflight read-only de `long-truth-39527618/main` confirmó `app_runtime`+TLS+`SET ROLE app_user`, 14 cuentas base, 2 programas, 2 organizaciones y 4 políticas de activación/finalización, sin ciclos ni políticas de elegibilidad. El cargador SYN-01 quedó implementado, pero la ejecución `--apply` no se realizó: faltan reglas de elegibilidad, autoridades OPEN-05, snapshot y credencial puntual de escritura. El HTTP 200 de Render `/health` y `/ready` procede del T-50 anterior; Vercel no se verificó. Véase [`validation-results.md`](../validation/validation-results.md); no hay dataset poblado en Neon.
 
 > El diagrama siguiente conserva el supuesto original de arquitectura; no representa recursos ya aprovisionados.
 
