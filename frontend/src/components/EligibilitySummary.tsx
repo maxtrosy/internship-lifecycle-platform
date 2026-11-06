@@ -8,7 +8,7 @@ export default function EligibilitySummary({ value, showCriteria = true }: { val
   const hasDetails = criteria.length > 0 || eligibility.reasons.length > 0;
   return (
     <div className="eligibility-cell">
-      <Badge state={eligibility.state === "unknown" ? "UNKNOWN" : eligibility.state === "eligible" ? "ELIGIBLE" : "INELIGIBLE"}>
+      <Badge state={eligibility.state === "unknown" ? "UNKNOWN" : eligibility.state === "eligible" ? "ELIGIBLE" : eligibility.state === "ineligible" ? "INELIGIBLE" : "PENDING_ELIGIBILITY_REVIEW"}>
         {eligibility.label}
       </Badge>
       {hasDetails && (

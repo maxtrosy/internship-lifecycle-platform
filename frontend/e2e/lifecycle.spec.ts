@@ -228,9 +228,11 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   const minimumCredits = eligibilityCard.getByLabel("Créditos mínimos");
   await minimumCredits.fill("100");
   await expect(minimumCredits).toHaveValue("100");
+  await page.getByLabel("Motivo", { exact: false }).fill("Política de demostración sintética para el recorrido E2E aislado.");
   await page.getByRole("button", { name: "Crear versión de elegibilidad" }).click();
   await expect(page.locator(".alert.success")).toContainText("versión de política de Elegibilidad creada");
   await page.getByLabel("Exigir supervisor del lugar asignado").uncheck();
+  await page.getByLabel("Motivo", { exact: false }).fill("Política de activación sintética para el recorrido E2E aislado.");
   await page.getByRole("button", { name: "Crear versión de activación" }).click();
   await expect(page.locator(".alert.success")).toContainText("versión de política de Activación creada");
   await logout(page);

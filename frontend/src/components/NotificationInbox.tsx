@@ -11,6 +11,7 @@ export function notificationTitle(category: UserNotification["category"]): strin
   const labels: Record<UserNotification["category"], string> = {
     APPLICATION_SUBMITTED: "Nueva postulación en una oportunidad relacionada",
     APPLICATION_SELECTED: "Se actualizó una selección de práctica",
+    ELIGIBILITY_REVIEW: "Una postulación requiere o recibió revisión académica",
     DOCUMENT_ACTIVITY: "Cambió el estado de un documento",
     PLACEMENT_ACTIVATED: "La práctica fue activada",
     PROGRESS_REPORTED: "Se registró un avance de práctica",

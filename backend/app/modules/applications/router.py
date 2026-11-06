@@ -22,11 +22,30 @@ class SelectBody(BaseModel):
     responsibilities: str
 
 
+class EligibilityReviewBody(BaseModel):
+    decision: str
+    rationale: str
+
+
 @router.get("/applications")
 def list_my_applications(subject_id: int = Depends(requires("application:list"))) -> list[dict]:
     with db.read() as cur:
         subj = authz.subject(cur, subject_id)
         return applications.list_my_applications(cur, subj)
+
+
+@router.get("/applications/pending-eligibility-review")
+def list_pending_eligibility(subject_id: int = Depends(requires("application:eligibility_review"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return applications.list_pending_eligibility(cur, subj)
+
+
+@router.post("/applications/{aid}/eligibility-review")
+def review_eligibility(aid: int, body: EligibilityReviewBody,
+                       subject_id: int = Depends(requires("application:eligibility_review"))) -> dict:
+    with db.command(subject_id) as ctx:
+        return applications.review_eligibility(ctx, aid, body.decision, body.rationale)
 
 
 @router.post("/opportunities/{oid}/apply", status_code=201)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import db
 from app.deps import requires
@@ -15,6 +15,7 @@ class PolicyBody(BaseModel):
     program_code: str
     conditions: list[dict]
     kind: str = "ELIGIBILITY"
+    reason: str = Field(min_length=1, max_length=500)
 
 
 @router.get("/policies")
@@ -30,5 +31,7 @@ def list_policies(subject_id: int = Depends(requires("policy:list"))) -> list[di
 def create_policy(body: PolicyBody,
                   subject_id: int = Depends(requires("policy:create"))) -> dict:
     with db.command(subject_id) as ctx:
-        pv = policies.create_policy_version(ctx, body.program_code, body.conditions, body.kind)
+        pv = policies.create_policy_version(
+            ctx, body.program_code, body.conditions, body.kind, reason=body.reason,
+        )
     return {"id": pv}

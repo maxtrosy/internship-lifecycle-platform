@@ -18,7 +18,10 @@ from tests.conftest import publish_test_opportunity, seed_base
 def _setup(env):
     U = seed_base(env)
     with db.command(U["pc_sys"]) as ctx:
-        policies.create_policy_version(ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}])
+        policies.create_policy_version(
+            ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}],
+            reason="Fixture policy for selection tests.",
+        )
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
     publish_test_opportunity(env, oid)

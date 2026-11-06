@@ -153,8 +153,8 @@ def main() -> int:
                 from app.synthetic_dataset import populate_synthetic_dataset
 
                 generated = populate_synthetic_dataset(
-                    conn.cursor(), include_test_policy=True, allow_test_password=True,
-                    allow_test_only_synthetic_evidence=True,
+                    conn.cursor(), include_demo_eligibility_policy=True, allow_test_password=True,
+                    allow_demo_lifecycle_records=True,
                 )
                 summary = {key: value for key, value in generated.items() if key != "placement_scenarios"}
                 summary.pop("scenario_students", None)

@@ -17,6 +17,7 @@ VOCABULARY = {
         "ACADEMIC_LEVEL_MIN": int,
         "CREDITS_MIN": int,
         "PREREQUISITE_COMPLETED": list,
+        "MANUAL_REVIEW": bool,
     },
     "ACTIVATION": {
         "REQUIRE_DOCUMENTS": list,
@@ -63,21 +64,43 @@ def validate(conditions, kind: str = "ELIGIBILITY") -> None:
 
 def evaluate(profile, program_code: str, conditions) -> dict:
     reasons = []
+    manual_review = False
     for c in conditions:
         t, v = c["type"], c["value"]
         if t == "PROGRAM_IN" and program_code not in v:
             reasons.append(f"program {program_code} not in {v}")
-        elif t == "ACADEMIC_LEVEL_MIN" and (profile["academic_level"] or 0) < v:
-            reasons.append(f"academic_level {profile['academic_level']} < {v}")
-        elif t == "CREDITS_MIN" and (profile["credits"] or 0) < v:
-            reasons.append(f"credits {profile['credits']} < {v}")
-        elif t == "PREREQUISITE_COMPLETED" and not set(v) <= set(profile["completed_courses"] or []):
-            reasons.append(f"missing prerequisites {sorted(set(v) - set(profile['completed_courses'] or []))}")
-    return {"result": "NOT_ELIGIBLE" if reasons else "ELIGIBLE", "reasons": reasons}
+        elif t == "ACADEMIC_LEVEL_MIN":
+            if profile["academic_level"] is None:
+                manual_review = True
+            elif profile["academic_level"] < v:
+                reasons.append(f"academic_level {profile['academic_level']} < {v}")
+        elif t == "CREDITS_MIN":
+            if profile["credits"] is None:
+                manual_review = True
+            elif profile["credits"] < v:
+                reasons.append(f"credits {profile['credits']} < {v}")
+        elif t == "PREREQUISITE_COMPLETED":
+            if profile["completed_courses"] is None:
+                manual_review = True
+            elif not set(v) <= set(profile["completed_courses"]):
+                reasons.append(f"missing prerequisites {sorted(set(v) - set(profile['completed_courses']))}")
+        elif t == "MANUAL_REVIEW" and v:
+            manual_review = True
+    result = "NOT_ELIGIBLE" if reasons else "REQUIRES_REVIEW" if manual_review else "ELIGIBLE"
+    return {"result": result, "reasons": reasons}
 
 
-def create_policy_version(ctx: CommandContext, program_code: str, conditions, kind: str = "ELIGIBILITY") -> int:
+def create_policy_version(
+    ctx: CommandContext,
+    program_code: str,
+    conditions,
+    kind: str = "ELIGIBILITY",
+    reason: str | None = None,
+) -> int:
     validate(conditions, kind)
+    reason = reason.strip() if isinstance(reason, str) else ""
+    if not reason or len(reason) > 500:
+        raise PolicyValidationError("reason must contain 1 to 500 non-whitespace characters")
     subj = subject(ctx.cur, ctx.actor_id)
     prog = ctx.execute("SELECT * FROM academic_program WHERE code=%s", (program_code,)).fetchone()
     if prog is None:
@@ -93,7 +116,7 @@ def create_policy_version(ctx: CommandContext, program_code: str, conditions, ki
         (key, n, Jsonb(conditions), ctx.actor_id),
     ).fetchone()
     audit.write(ctx.cur, "policy.version_created", "policy_version", pv["id"],
-                None, {"key": key, "version_no": n, "conditions": conditions})
+                None, {"key": key, "version_no": n, "conditions": conditions, "reason": reason})
     return pv["id"]
 
 
@@ -149,8 +172,16 @@ def policies_for_subject(cur, subj: dict) -> list[dict]:
     ).fetchall()
     versions = cur.execute(
         """SELECT DISTINCT ON (pv.policy_key) pv.id, pv.policy_key, pv.version_no,
-                  pv.conditions, pv.effective_from
+                  pv.conditions, pv.effective_from,
+                  ae.after_state->>'reason' AS created_reason, author.display_name AS created_by_name
            FROM policy_version pv
+           LEFT JOIN LATERAL (
+             SELECT e.actor_id, e.after_state FROM audit_event e
+             WHERE e.subject_type='policy_version' AND e.subject_id=pv.id
+               AND e.action='policy.version_created'
+             ORDER BY e.id DESC LIMIT 1
+           ) ae ON true
+           LEFT JOIN user_account author ON author.id=ae.actor_id
            WHERE pv.effective_from <= now()
              AND pv.policy_key = ANY(%s)
            ORDER BY pv.policy_key, pv.effective_from DESC, pv.version_no DESC""",
@@ -163,5 +194,7 @@ def policies_for_subject(cur, subj: dict) -> list[dict]:
             by_program[code][kind] = {
                 "id": version["id"], "version_no": version["version_no"],
                 "conditions": version["conditions"], "effective_from": version["effective_from"],
+                "created_reason": version["created_reason"],
+                "created_by_name": version["created_by_name"],
             }
     return [{**p, "policies": by_program[p["code"]]} for p in programs]

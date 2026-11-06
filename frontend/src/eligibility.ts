@@ -1,8 +1,8 @@
-export type EligibilityState = "eligible" | "ineligible" | "unknown";
+export type EligibilityState = "eligible" | "ineligible" | "review" | "unknown";
 
 export type EligibilityPresentation = {
   state: EligibilityState;
-  label: "Elegible" | "No elegible" | "Estado no disponible";
+  label: "Elegible" | "No elegible" | "Revisión académica pendiente" | "Estado no disponible";
   criteria: { label: string; value: number }[];
   reasons: string[];
   hasDetails: boolean;
@@ -58,6 +58,8 @@ export function presentEligibility(value: unknown): EligibilityPresentation {
     ? "eligible"
     : result === "INELIGIBLE" || result === "NOT_ELIGIBLE"
       ? "ineligible"
+      : result === "REQUIRES_REVIEW"
+        ? "review"
       : "unknown";
 
   const inputs = isRecord(value.inputs) ? value.inputs : {};
@@ -74,9 +76,14 @@ export function presentEligibility(value: unknown): EligibilityPresentation {
       .map(presentReason)
     : [];
 
+  if (isRecord(value.manual_review) && typeof value.manual_review.rationale === "string") {
+    reasons.push(`Decisión académica: ${value.manual_review.rationale}`);
+  }
+
   const labels = {
     eligible: "Elegible",
     ineligible: "No elegible",
+    review: "Revisión académica pendiente",
     unknown: "Estado no disponible",
   } as const;
   return { state, label: labels[state], criteria, reasons, hasDetails: criteria.length > 0 || reasons.length > 0 };

@@ -47,6 +47,11 @@ FULL_BOOTSTRAP_CREDENTIAL = "InternshipLifecyclePlatform/Neon/main/synthetic_loa
 BOOTSTRAP_ROLE = "app_bootstrap"
 FULL_BOOTSTRAP_ROLE = "app_dataset_full"
 PASSWORD_TARGET_PREFIX = "InternshipLifecyclePlatform/SyntheticDataset/long-truth-39527618/main"
+DEMO_POLICY_REASON = (
+    "DH-05 synthetic demonstration assumption only: uses the fixture thresholds of 100 credits and "
+    "academic level 6 within the named program. Not institutionally approved; replace with validated "
+    "institutional criteria before operational use."
+)
 EXPECTED_USERS = {
     *(f"demo_student_{n:02d}" for n in range(4, 31)),
     *(f"demo_host_{n:02d}" for n in range(1, 9)),
@@ -89,6 +94,7 @@ APPLICATION_TABLES = (
     "placement_progress_report", "placement_evaluation", "placement_incident", "completion_evidence",
     "user_notification", "placement_conversation", "placement_message", "audit_event",
 )
+DEMO_POLICY_INSERT_COLUMNS = ("policy_key", "version_no", "conditions", "created_by")
 
 
 class _FileTime(ctypes.Structure):
@@ -296,7 +302,22 @@ def _counts(cur, tables: tuple[str, ...] = APPLICATION_TABLES) -> dict[str, int]
             for table in tables}
 
 
-def _inspect_database(url: str, *, set_application_role: bool, mode: str = "partial") -> dict[str, Any]:
+def _demo_eligibility_policy_plan(persisted_keys: set[str], *, enabled: bool) -> dict[str, Any]:
+    required = {f"ELIGIBILITY:{code}" for code in PROGRAMS}
+    present = sorted(required & persisted_keys)
+    missing = sorted(required - persisted_keys)
+    return {
+        "present": present,
+        "missing": missing,
+        "to_create": missing if enabled else [],
+        "opt_in_required": bool(missing and not enabled),
+        "assumption_reason": DEMO_POLICY_REASON if enabled and missing else None,
+    }
+
+
+def _inspect_database(url: str, *, set_application_role: bool, mode: str = "partial",
+                      allow_demo_eligibility_policy: bool = False,
+                      allow_demo_lifecycle_records: bool = False) -> dict[str, Any]:
     details = _connection_details(
         url, require_direct=not set_application_role,
         expected_user="app_runtime" if set_application_role else (
@@ -320,6 +341,13 @@ def _inspect_database(url: str, *, set_application_role: bool, mode: str = "part
         "counts": {},
         "collisions": {},
         "eligibility_policies": [],
+        "demo_eligibility_policy": {"enabled": allow_demo_eligibility_policy, "planned_keys": []},
+        "demo_lifecycle_records": {
+            "enabled": allow_demo_lifecycle_records,
+            "classification": "explicit DH-05 synthetic records; never institutional evidence",
+            "hours_source": "persisted placement requirement; no threshold is invented",
+            "evidence_filename": "informe-final-sintetico.pdf",
+        },
         "authority_variables_configured": {},
         "planned_insertions": {},
         "blockers": [],
@@ -511,21 +539,49 @@ def _inspect_database(url: str, *, set_application_role: bool, mode: str = "part
                 policies = conn.execute(
                     "SELECT policy_key FROM policy_version WHERE policy_key IN "
                     "('ELIGIBILITY:ING-SIS','ELIGIBILITY:ADM','ACTIVATION:ING-SIS','ACTIVATION:ADM',"
-                    "'COMPLETION:ING-SIS','COMPLETION:ADM') GROUP BY policy_key ORDER BY policy_key"
+                    "'COMPLETION:ING-SIS','COMPLETION:ADM') AND effective_from <= now() "
+                    "GROUP BY policy_key ORDER BY policy_key"
                 ).fetchall()
                 persisted = {row["policy_key"] for row in policies}
                 report["persisted_policies"] = sorted(persisted)
                 report["eligibility_policies"] = sorted(
                     key for key in persisted if key.startswith("ELIGIBILITY:")
                 )
-                required_full_policies = {
-                    f"{kind}:{code}" for kind in ("ELIGIBILITY", "ACTIVATION", "COMPLETION")
-                    for code in PROGRAMS
+                required_lifecycle_policies = {
+                    f"{kind}:{code}" for kind in ("ACTIVATION", "COMPLETION") for code in PROGRAMS
                 }
-                if mode == "full" and not required_full_policies.issubset(persisted):
+                missing_lifecycle_policies = sorted(required_lifecycle_policies - persisted)
+                if mode == "full" and missing_lifecycle_policies:
                     report["blockers"].append(
-                        "Full mode requires persisted eligibility, activation, and completion policies for each program."
+                        "Full mode requires existing activation and completion policies for each program."
                     )
+                demo_policy_plan = _demo_eligibility_policy_plan(
+                    persisted, enabled=allow_demo_eligibility_policy,
+                )
+                report["demo_eligibility_policy"] = {
+                    "enabled": allow_demo_eligibility_policy,
+                    "present_keys": demo_policy_plan["present"],
+                    "planned_keys": demo_policy_plan["to_create"],
+                    "conditions_per_key": [
+                        {"type": "PROGRAM_IN", "value": "the corresponding program code"},
+                        {"type": "CREDITS_MIN", "value": 100},
+                        {"type": "ACADEMIC_LEVEL_MIN", "value": 6},
+                    ] if demo_policy_plan["to_create"] else [],
+                    "reason": demo_policy_plan["assumption_reason"],
+                    "classification": "replaceable DH-05 synthetic demo assumption; not institutional policy",
+                }
+                if mode == "full" and demo_policy_plan["opt_in_required"]:
+                    report["blockers"].append(
+                        "Full mode is missing eligibility policies; pass --allow-demo-eligibility-policy "
+                        "to append the explicitly labeled synthetic demo assumptions."
+                    )
+                report["planned_insertions"]["policy_version"] = (
+                    len(demo_policy_plan["to_create"]) if mode == "full" else 0
+                )
+                report["planned_insertions"]["policies"] = (
+                    len(demo_policy_plan["to_create"]) if mode == "full" else 0
+                )
+                report["planned_omissions"]["policy_writes"] = 0
                 for key in ("OPPORTUNITY_REVIEWER_ROLES", "OPPORTUNITY_PUBLISHER_ROLES",
                             "PLACEMENT_FACULTY_ASSIGNER_ROLES"):
                     report["authority_variables_configured"][key] = bool(os.environ.get(key, "").strip())
@@ -542,7 +598,71 @@ def _inspect_database(url: str, *, set_application_role: bool, mode: str = "part
     return report
 
 
-def _inspect_bootstrap(url: str, *, mode: str) -> dict[str, Any]:
+def _demo_policy_insert_acl(conn, *, enabled: bool) -> dict[str, Any]:
+    """Require exact column-level append-only policy rights for the full-loader login."""
+    columns = [row["attname"] for row in conn.execute(
+        """SELECT a.attname FROM pg_attribute a
+           WHERE a.attrelid='public.policy_version'::regclass
+             AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum"""
+    ).fetchall()]
+    capabilities: dict[str, Any] = {}
+    blockers: list[str] = []
+    for column in columns:
+        allowed = conn.execute(
+            "SELECT has_column_privilege(current_user,'public.policy_version',%s,'INSERT') AS allowed",
+            (column,),
+        ).fetchone()["allowed"]
+        expected = enabled and column in DEMO_POLICY_INSERT_COLUMNS
+        capabilities[f"insert_column:{column}"] = bool(allowed)
+        if bool(allowed) != expected:
+            level = "Unexpected" if allowed else "Missing"
+            blockers.append(f"{level} policy_version.{column} INSERT privilege for demo policy scope.")
+
+    table_insert = conn.execute(
+        "SELECT has_table_privilege(current_user,'public.policy_version','INSERT') AS allowed"
+    ).fetchone()["allowed"]
+    if table_insert:
+        blockers.append("Full bootstrap must use exact column INSERT grants, not table-wide policy_version INSERT.")
+    update_rights = conn.execute(
+        """SELECT has_table_privilege(current_user,'public.policy_version','UPDATE') AS table_allowed,
+                  bool_or(has_column_privilege(current_user,'public.policy_version',a.attname,'UPDATE')) AS column_allowed
+           FROM pg_attribute a WHERE a.attrelid='public.policy_version'::regclass
+             AND a.attnum > 0 AND NOT a.attisdropped"""
+    ).fetchone()
+    if update_rights["table_allowed"] or update_rights["column_allowed"]:
+        blockers.append("Full bootstrap must never update policy versions; demo policies are append-only.")
+    for action in ("DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"):
+        allowed = conn.execute(
+            "SELECT has_table_privilege(current_user,'public.policy_version',%s) AS allowed",
+            (action,),
+        ).fetchone()["allowed"]
+        if allowed:
+            blockers.append(f"Full bootstrap must not have {action} on policy_version.")
+        if action == "REFERENCES":
+            column_allowed = conn.execute(
+                """SELECT bool_or(has_column_privilege(current_user,'public.policy_version',a.attname,'REFERENCES')) AS allowed
+                   FROM pg_attribute a WHERE a.attrelid='public.policy_version'::regclass
+                     AND a.attnum > 0 AND NOT a.attisdropped"""
+            ).fetchone()["allowed"]
+            if column_allowed:
+                blockers.append("Full bootstrap must not have column-level REFERENCES on policy_version.")
+
+    sequence = "public.policy_version_id_seq"
+    for action in ("USAGE", "SELECT", "UPDATE"):
+        allowed = conn.execute(
+            "SELECT has_sequence_privilege(current_user,%s,%s) AS allowed",
+            (sequence, action),
+        ).fetchone()["allowed"]
+        expected = enabled and action == "USAGE"
+        capabilities[f"policy_sequence:{action.lower()}"] = bool(allowed)
+        if bool(allowed) != expected:
+            level = "Unexpected" if allowed else "Missing"
+            blockers.append(f"{level} {action} on policy_version_id_seq for demo policy scope.")
+    return {"capabilities": capabilities, "blockers": blockers}
+
+
+def _inspect_bootstrap(url: str, *, mode: str,
+                       allow_demo_eligibility_policy: bool = False) -> dict[str, Any]:
     role = BOOTSTRAP_ROLE if mode == "partial" else FULL_BOOTSTRAP_ROLE
     details = _connection_details(url, require_direct=True, expected_user=role)
     result: dict[str, Any] = {"role": role, "tls": False, "capabilities": {}, "blockers": []}
@@ -649,12 +769,11 @@ def _inspect_bootstrap(url: str, *, mode: str) -> dict[str, Any]:
                         result["capabilities"][f"update:{table}"] = bool(allowed)
                         if not allowed:
                             result["blockers"].append(f"Full bootstrap is missing UPDATE on {table}.")
-                    if conn.execute(
-                        "SELECT has_table_privilege(current_user,'public.policy_version','INSERT') AS allowed"
-                    ).fetchone()["allowed"] or conn.execute(
-                        "SELECT has_table_privilege(current_user,'public.policy_version','UPDATE') AS allowed"
-                    ).fetchone()["allowed"]:
-                        result["blockers"].append("Full bootstrap must not write institutional policies.")
+                    policy_acl = _demo_policy_insert_acl(
+                        conn, enabled=allow_demo_eligibility_policy,
+                    )
+                    result["capabilities"].update(policy_acl["capabilities"])
+                    result["blockers"].extend(policy_acl["blockers"])
                     for table in set(full_read) | set(full_insert) | set(full_update):
                         allowed = conn.execute(
                             "SELECT has_table_privilege(current_user,%s,'DELETE') AS allowed",
@@ -884,6 +1003,8 @@ def _table_integrity(cur) -> dict[str, int]:
 def _active_transaction_load(url: str, runtime_url: str, store: WindowsCredentialStore,
                             commit_state: dict[str, bool], *, mode: str,
                             allow_credential_store_write: bool,
+                            allow_demo_eligibility_policy: bool,
+                            allow_demo_lifecycle_records: bool,
                             known_password_fingerprints: dict[str, bytes]) -> dict[str, Any]:
     role = BOOTSTRAP_ROLE if mode == "partial" else FULL_BOOTSTRAP_ROLE
     _connection_details(url, require_direct=True, expected_user=role)
@@ -891,6 +1012,7 @@ def _active_transaction_load(url: str, runtime_url: str, store: WindowsCredentia
         store, allow_credential_store_write=allow_credential_store_write,
         known_fingerprints=known_password_fingerprints,
     )
+    synthetic_placement_states: dict[str, int] = {}
     try:
         with psycopg.connect(url, row_factory=dict_row, connect_timeout=10,
                              application_name="synthetic_dataset_loader", autocommit=True) as conn:
@@ -935,12 +1057,16 @@ def _active_transaction_load(url: str, runtime_url: str, store: WindowsCredentia
                     else:
                         before_counts = _counts(conn.cursor())
                         first = populate_synthetic_dataset(
-                            conn.cursor(), include_test_policy=False,
+                            conn.cursor(), include_demo_eligibility_policy=allow_demo_eligibility_policy,
+                            demo_eligibility_policy_reason=DEMO_POLICY_REASON,
                             password_hash_for=password_hash_for,
+                            allow_demo_lifecycle_records=allow_demo_lifecycle_records,
                         )
                         second = populate_synthetic_dataset(
-                            conn.cursor(), include_test_policy=False,
+                            conn.cursor(), include_demo_eligibility_policy=allow_demo_eligibility_policy,
+                            demo_eligibility_policy_reason=DEMO_POLICY_REASON,
                             password_hash_for=password_hash_for,
+                            allow_demo_lifecycle_records=allow_demo_lifecycle_records,
                         )
                         if first != second:
                             raise RuntimeError("The second full pass was not idempotent; transaction rolled back.")
@@ -952,6 +1078,14 @@ def _active_transaction_load(url: str, runtime_url: str, store: WindowsCredentia
                             table: final_counts[table] - before_counts[table]
                             for table in APPLICATION_TABLES
                         }
+                        scenario_ids = list(first.get("placement_scenarios", {}).values())
+                        if scenario_ids:
+                            synthetic_placement_states = {
+                                row["state"]: row["n"] for row in conn.execute(
+                                    "SELECT state,count(*) AS n FROM placement WHERE id=ANY(%s) GROUP BY state",
+                                    (scenario_ids,),
+                                ).fetchall()
+                            }
             commit_state["committed"] = True
         password_hash_for.created_targets.clear()
     except Exception:
@@ -960,7 +1094,11 @@ def _active_transaction_load(url: str, runtime_url: str, store: WindowsCredentia
         raise
 
     # Read-only runtime postflight verifies the committed projection and lifecycle tables.
-    verification = _inspect_database(runtime_url, set_application_role=True, mode=mode)
+    verification = _inspect_database(
+        runtime_url, set_application_role=True, mode=mode,
+        allow_demo_eligibility_policy=allow_demo_eligibility_policy,
+        allow_demo_lifecycle_records=allow_demo_lifecycle_records,
+    )
     verification["post_commit_integrity"] = verification.pop("integrity")
     verification["idempotent_in_same_transaction"] = (
         not any(second["inserted"].values()) if mode == "partial" else first == second
@@ -978,6 +1116,16 @@ def _active_transaction_load(url: str, runtime_url: str, store: WindowsCredentia
             "placements_created": 0,
             "policies_created": 0,
         }
+    else:
+        verification["mode_report"] = {
+            "demo_eligibility_policy_opt_in": allow_demo_eligibility_policy,
+            "demo_eligibility_policies_created": inserted_counts.get("policy_version", 0),
+            "demo_lifecycle_records_opt_in": allow_demo_lifecycle_records,
+            "synthetic_hours_created": inserted_counts.get("progress_entry", 0),
+            "synthetic_completion_evidence_created": inserted_counts.get("completion_evidence", 0),
+            "synthetic_evaluations_created": inserted_counts.get("placement_evaluation", 0),
+            "synthetic_placement_states": synthetic_placement_states,
+        }
     verification["write_performed"] = True
     return verification
 
@@ -991,6 +1139,16 @@ def main() -> int:
     parser.add_argument("--backup-branch-id", help="Recent Neon child snapshot branch id for --apply.")
     parser.add_argument("--allow-credential-store-write", action="store_true",
                         help="Allow unique generated account passwords to be stored in Windows Credential Manager.")
+    parser.add_argument(
+        "--allow-demo-eligibility-policy", action="store_true",
+        help=("For full mode only: append missing versioned eligibility policies using explicit, "
+              "replaceable DH-05 synthetic assumptions. Never changes existing policy versions."),
+    )
+    parser.add_argument(
+        "--allow-demo-lifecycle-records", action="store_true",
+        help=("For full mode only: submit clearly labeled synthetic hours/evidence/evaluations and "
+              "attempt completion using only persisted requirements. No completion threshold is created."),
+    )
     args = parser.parse_args()
 
     write_attempted = False
@@ -1000,7 +1158,15 @@ def main() -> int:
         branches = _neon_branches()
         _verify_target_branch(branches)
         runtime_url = _credential_url(store, RUNTIME_CREDENTIAL)
-        report = _inspect_database(runtime_url, set_application_role=True, mode=args.mode)
+        if args.allow_demo_eligibility_policy and args.mode != "full":
+            raise RuntimeError("--allow-demo-eligibility-policy is available only with --mode full.")
+        if args.allow_demo_lifecycle_records and args.mode != "full":
+            raise RuntimeError("--allow-demo-lifecycle-records is available only with --mode full.")
+        report = _inspect_database(
+            runtime_url, set_application_role=True, mode=args.mode,
+            allow_demo_eligibility_policy=args.allow_demo_eligibility_policy,
+            allow_demo_lifecycle_records=args.allow_demo_lifecycle_records,
+        )
         snapshot = _snapshot_summary(branches)
         report["snapshot"] = snapshot
         if not snapshot["recent_snapshot_available"]:
@@ -1012,7 +1178,10 @@ def main() -> int:
         if bootstrap_url is None:
             report["blockers"].append(f"The dedicated {expected_role} credential is not present in Credential Manager.")
         else:
-            bootstrap_report = _inspect_bootstrap(bootstrap_url, mode=args.mode)
+            bootstrap_report = _inspect_bootstrap(
+                bootstrap_url, mode=args.mode,
+                allow_demo_eligibility_policy=args.allow_demo_eligibility_policy,
+            )
             report["bootstrap"] = bootstrap_report
             report["blockers"].extend(bootstrap_report["blockers"])
         missing_account_passwords = 0
@@ -1064,7 +1233,12 @@ def main() -> int:
             raise RuntimeError("Apply requires a Neon snapshot branch created within the last 24 hours.")
         backup = _verify_recent_backup(branches, args.backup_branch_id)
         _assert_no_blockers(report)
-        expected_phrase = f"PERSIST SYN-01 {args.mode.upper()} TO {PROJECT_ID}/{BRANCH_NAME}"
+        action_label = "FULL"
+        if args.mode == "full" and args.allow_demo_eligibility_policy:
+            action_label += " WITH LABELED DEMO ELIGIBILITY POLICIES"
+        if args.mode == "full" and args.allow_demo_lifecycle_records:
+            action_label += " AND LABELED DEMO LIFECYCLE RECORDS"
+        expected_phrase = f"PERSIST SYN-01 {action_label} TO {PROJECT_ID}/{BRANCH_NAME}"
         if input(f"Type {expected_phrase} to continue: ").strip() != expected_phrase:
             print("Cancelled; no database write was performed.")
             return 3
@@ -1072,6 +1246,8 @@ def main() -> int:
         result = _active_transaction_load(
             bootstrap_url, runtime_url, store, commit_state, mode=args.mode,
             allow_credential_store_write=args.allow_credential_store_write,
+            allow_demo_eligibility_policy=args.allow_demo_eligibility_policy,
+            allow_demo_lifecycle_records=args.allow_demo_lifecycle_records,
             known_password_fingerprints=known_password_fingerprints,
         )
         result["backup"] = {"verified": True, "branch_id": backup["id"],

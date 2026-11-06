@@ -22,6 +22,7 @@ from app.modules.authz import service as authz
 from app.modules.policies import service as policies
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+SYNTHETIC_DEMO_SOURCE = "DH-05 synthetic demo; not an institutional or real internship record"
 _DOCUMENT_TYPES = {
     ".pdf": ("application/pdf", b"%PDF-"),
     ".png": ("image/png", b"\x89PNG\r\n\x1a\n"),
@@ -671,7 +672,8 @@ def get_submission(cur, subj: dict, pid: int, item_id: int, submission_id: int) 
 
 
 def submit_completion_evidence(ctx: CommandContext, pid: int, kind: str, filename: str,
-                               content_type: str, content: bytes) -> dict:
+                               content_type: str, content: bytes, *,
+                               synthetic_demo: bool = False) -> dict:
     if kind != "FINAL_REPORT":
         raise BusinessError("COMPLETION_EVIDENCE_KIND_UNSUPPORTED")
     subj = authz.subject(ctx.cur, ctx.actor_id)
@@ -701,9 +703,11 @@ def submit_completion_evidence(ctx: CommandContext, pid: int, kind: str, filenam
         (pid, kind, revision, ctx.actor_id, safe_name, normalized_type, content, len(content), digest),
     ).fetchone()
     ctx.execute("UPDATE completion_requirement SET satisfied=true WHERE id=%s", (requirement["id"],))
-    audit.write(ctx.cur, "completion_evidence.submitted", "placement", pid, None,
-                {"kind": kind, "revision": revision, "content_type": normalized_type,
-                 "byte_size": len(content), "sha256": digest})
+    audit_state = {"kind": kind, "revision": revision, "content_type": normalized_type,
+                   "byte_size": len(content), "sha256": digest}
+    if synthetic_demo:
+        audit_state["source"] = SYNTHETIC_DEMO_SOURCE
+    audit.write(ctx.cur, "completion_evidence.submitted", "placement", pid, None, audit_state)
     return {"kind": kind, "revision": revision, "submitted_at": submission["submitted_at"]}
 
 
@@ -1012,7 +1016,8 @@ def activate(ctx: CommandContext, pid: int, naive: bool = False, pause: float = 
     _gate(run)
 
 
-def record_hours(ctx: CommandContext, pid: int, hours: float) -> None:
+def record_hours(ctx: CommandContext, pid: int, hours: float, *,
+                 synthetic_demo: bool = False) -> None:
     if not math.isfinite(hours) or hours <= 0:
         raise BusinessError("INVALID_HOURS")
 
@@ -1024,7 +1029,10 @@ def record_hours(ctx: CommandContext, pid: int, hours: float) -> None:
             raise BusinessError("PLACEMENT_NOT_ACTIVE", placement["state"])
         ctx.execute("INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,%s)",
                     (pid, ctx.actor_id, hours))
-        audit.write(ctx.cur, "progress.hours_recorded", "placement", pid, None, {"hours": hours})
+        audit_state = {"hours": hours}
+        if synthetic_demo:
+            audit_state["source"] = SYNTHETIC_DEMO_SOURCE
+        audit.write(ctx.cur, "progress.hours_recorded", "placement", pid, None, audit_state)
     try:
         _gate(run)
     except BusinessError as exc:

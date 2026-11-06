@@ -62,6 +62,7 @@ test("[@populated] expediente cerrado mantiene documentos, relaciones, horas e h
   await openDossiers(page);
   const closedDossier = page.locator(".dossier-detail").filter({ hasText: titleClosed });
   await expect(closedDossier.locator(".dossier-hero")).toContainText("Cerrada");
+  await expect(closedDossier.getByText("Aún no hay mensajes en esta conversación.")).toBeVisible();
   await expect(closedDossier).toContainText("synthetic-insurance.pdf · versión 1");
   await expect(closedDossier).toContainText("Evaluación final · versión 1");
   await expect(closedDossier.locator(".dossier-hours-summary")).toContainText("100 h");
@@ -79,6 +80,7 @@ test("[@populated] expediente cerrado mantiene documentos, relaciones, horas e h
   await expect(afterReload.locator(".dossier-hero")).toContainText("Cerrada");
   await expect(afterReload).toContainText("synthetic-insurance.pdf · versión 1");
   await expect(afterReload.locator(".placement-history-list")).toContainText("Práctica cerrada");
+  await expect(afterReload.getByText("Aún no hay mensajes en esta conversación.")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByLabel("Apariencia").selectOption("light");

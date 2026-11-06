@@ -4,10 +4,12 @@ import type { PolicyCondition, PolicyKind, ProgramPolicies } from "../api";
 import { Alert, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 
 type Draft = {
+  reason: string;
   programs: string;
   minLevel: string;
   minCredits: string;
   prerequisites: string;
+  manualReview: boolean;
   documents: string;
   supervisors: boolean;
   finalReport: boolean;
@@ -16,7 +18,7 @@ type Draft = {
 };
 
 const emptyDraft: Draft = {
-  programs: "", minLevel: "", minCredits: "", prerequisites: "", documents: "",
+  reason: "", programs: "", minLevel: "", minCredits: "", prerequisites: "", manualReview: false, documents: "",
   supervisors: false, finalReport: false, finalEvaluation: false, minHours: "",
 };
 
@@ -34,11 +36,13 @@ function draftFrom(program: ProgramPolicies | undefined): Draft {
   const completion = conditions.COMPLETION ?? [];
   const value = (list: PolicyCondition[], type: string) => list.find((item) => item.type === type)?.value;
   return {
+    reason: "",
     programs: Array.isArray(value(eligibility, "PROGRAM_IN")) ? (value(eligibility, "PROGRAM_IN") as string[]).join(", ") : "",
     minLevel: value(eligibility, "ACADEMIC_LEVEL_MIN")?.toString() ?? "",
     minCredits: value(eligibility, "CREDITS_MIN")?.toString() ?? "",
     prerequisites: Array.isArray(value(eligibility, "PREREQUISITE_COMPLETED"))
       ? (value(eligibility, "PREREQUISITE_COMPLETED") as string[]).join(", ") : "",
+    manualReview: value(eligibility, "MANUAL_REVIEW") === true,
     documents: Array.isArray(value(activation, "REQUIRE_DOCUMENTS"))
       ? (value(activation, "REQUIRE_DOCUMENTS") as string[]).join(", ") : "",
     supervisors: value(activation, "SUPERVISORS_ASSIGNED") === true,
@@ -57,6 +61,7 @@ function conditionsFrom(draft: Draft, kind: PolicyKind): PolicyCondition[] {
     if (draft.minLevel.trim()) conditions.push({ type: "ACADEMIC_LEVEL_MIN", value: Number(draft.minLevel) });
     if (draft.minCredits.trim()) conditions.push({ type: "CREDITS_MIN", value: Number(draft.minCredits) });
     if (prerequisites.length) conditions.push({ type: "PREREQUISITE_COMPLETED", value: prerequisites });
+    if (draft.manualReview) conditions.push({ type: "MANUAL_REVIEW", value: true });
     return conditions;
   }
   if (kind === "ACTIVATION") {
@@ -112,6 +117,11 @@ export default function Policies() {
   const selected = useMemo(() => programs?.find((program) => program.code === selectedCode), [programs, selectedCode]);
 
   async function save(kind: PolicyKind) {
+    const reason = draft.reason.trim();
+    if (!reason || reason.length > 500) {
+      setError("Explica el motivo de esta versión (máximo 500 caracteres).");
+      return;
+    }
     const conditions = conditionsFrom(draft, kind);
     if (conditions.length === 0) {
       setError("Agrega al menos una condición para crear una versión de política.");
@@ -125,8 +135,9 @@ export default function Policies() {
     setError(null);
     setMessage(null);
     try {
-      await api.createPolicyVersion(selectedCode, kind, conditions);
+      await api.createPolicyVersion(selectedCode, kind, conditions, reason);
       setMessage(`Nueva versión de política de ${formatDomainLabel(kind)} creada para ${selectedCode}.`);
+      setDraft((current) => ({ ...current, reason: "" }));
       await reload(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -167,6 +178,7 @@ export default function Policies() {
           <BentoCard variant="content" className="policy-card">
             <h2>Elegibilidad</h2>
             <p className="muted">Una postulación debe cumplir todas las condiciones de la versión vigente.</p>
+            {selected?.policies.ELIGIBILITY && <PolicyProvenance version={selected.policies.ELIGIBILITY} />}
             <div className="grid cols-2">
               <div className="field"><label htmlFor="eligibility-programs">Programas permitidos (códigos separados por coma)</label>
                 <input id="eligibility-programs" value={draft.programs} onChange={(event) => set("programs", event.target.value)} placeholder="ING-SIS, ADM" /></div>
@@ -177,6 +189,10 @@ export default function Policies() {
               <div className="field"><label htmlFor="eligibility-prerequisites">Prerrequisitos aprobados</label>
                 <input id="eligibility-prerequisites" value={draft.prerequisites} onChange={(event) => set("prerequisites", event.target.value)} placeholder="MAT101, CS102" /></div>
             </div>
+            <label className="row" style={{ marginTop: 12 }}>
+              <input type="checkbox" checked={draft.manualReview} onChange={(event) => set("manualReview", event.target.checked)} style={{ width: "auto" }} />
+              Requiere decisión manual de coordinación antes de mostrar la postulación a la organización
+            </label>
             <button className="btn" style={{ marginTop: 12 }} disabled={busy !== null} onClick={() => void save("ELIGIBILITY")}>
               {busy === "ELIGIBILITY" ? <Spinner /> : "Crear versión de elegibilidad"}
             </button>
@@ -185,6 +201,7 @@ export default function Policies() {
           <BentoCard variant="content" className="policy-card">
             <h2>Activación</h2>
             <p className="muted">El sistema fija estas condiciones cuando se aprueba académicamente la selección.</p>
+            {selected?.policies.ACTIVATION && <PolicyProvenance version={selected.policies.ACTIVATION} />}
             <div className="field"><label>Documentos obligatorios (tipos separados por coma)</label>
               <input value={draft.documents} onChange={(event) => set("documents", event.target.value)} placeholder="DOC_INSURANCE, DOC_AGREEMENT" /></div>
             <label className="row" style={{ marginTop: 12 }}>
@@ -199,6 +216,7 @@ export default function Policies() {
           <BentoCard variant="content" className="policy-card">
             <h2>Finalización y cierre</h2>
             <p className="muted">Las horas se verifican sumando los registros de origen antes de completar la práctica.</p>
+            {selected?.policies.COMPLETION && <PolicyProvenance version={selected.policies.COMPLETION} />}
             <div className="grid cols-2">
               <label className="row"><input type="checkbox" checked={draft.finalReport}
                 onChange={(event) => set("finalReport", event.target.checked)} style={{ width: "auto" }} />Informe final obligatorio</label>
@@ -211,9 +229,29 @@ export default function Policies() {
               {busy === "COMPLETION" ? <Spinner /> : "Crear versión de cierre"}
             </button>
           </BentoCard>
+          <BentoCard variant="content" className="policy-card">
+            <h2>Motivo de la nueva versión</h2>
+            <p className="muted">El motivo se guarda en la auditoría junto con la persona autora. Indica si es una configuración de demostración; no la convierte en regla institucional aprobada.</p>
+            <div className="field">
+              <label htmlFor="policy-reason">Motivo <span aria-hidden="true">*</span></label>
+              <textarea id="policy-reason" value={draft.reason} maxLength={500}
+                onChange={(event) => set("reason", event.target.value)} required rows={3}
+                aria-describedby="policy-reason-help" />
+              <span id="policy-reason-help" className="muted">Obligatorio, hasta 500 caracteres. No incluyas datos personales.</span>
+            </div>
+          </BentoCard>
           <Alert kind="info">Cada versión nueva queda registrada y no cambia las condiciones de colocaciones ya aprobadas.</Alert>
         </>
       )}
     </div>
+  );
+}
+
+function PolicyProvenance({ version }: { version: NonNullable<ProgramPolicies["policies"][PolicyKind]> }) {
+  return (
+    <p className="muted policy-provenance">
+      Versión v{version.version_no} · {version.created_by_name ? `creada por ${version.created_by_name}` : "autor histórico no disponible"}
+      {version.created_reason ? ` · Motivo: ${version.created_reason}` : " · Motivo no registrado en versiones históricas"}
+    </p>
   );
 }

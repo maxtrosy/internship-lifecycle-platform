@@ -4,8 +4,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
+from app import db
 from app.main import app
-from tests.conftest import TEST_PASSWORD, make_active, make_doc_pending, make_opportunity, make_placement, seed_base
+from app.modules.applications import service as applications
+from app.modules.opportunities import service as opportunities
+from app.modules.policies import service as policies
+from tests.conftest import TEST_PASSWORD, make_active, make_doc_pending, make_opportunity, make_placement, publish_test_opportunity, seed_base
 
 ORIGIN = "http://localhost:5173"
 
@@ -26,6 +30,79 @@ def _item(env, placement_id: int, kind: str) -> int:
         "SELECT id FROM checklist_item WHERE placement_id=%s AND kind=%s",
         (placement_id, kind),
     ).fetchone()["id"]
+
+
+def test_manual_eligibility_review_http_relationship_permissions(env):
+    users = seed_base(env)
+    with db.command(users["pc_sys"]) as ctx:
+        policies.create_policy_version(
+            ctx, "ING-SIS", [{"type": "MANUAL_REVIEW", "value": True}],
+            reason="Synthetic policy for HTTP authorization test.",
+        )
+    with db.command(users["hm_alfa"]) as ctx:
+        oid = opportunities.create_opportunity(ctx, 1, users["P"]["ING-SIS"], "Manual review opening")
+    publish_test_opportunity(env, oid)
+    with db.command(users["s1"]) as ctx:
+        result = applications.submit_application(ctx, oid)
+    aid = result["application_id"]
+    clients = {name: _client(name) for name in ("pc_sys", "pc_adm", "s1", "hm_alfa")}
+    try:
+        queue_path = "/applications/pending-eligibility-review"
+        own_program = clients["pc_sys"].get(queue_path)
+        assert own_program.status_code == 200
+        assert [row["id"] for row in own_program.json()] == [aid]
+        own_item = own_program.json()[0]
+        assert own_item["eligibility_result"]["inputs"] == {"credits": 105, "academic_level": 7}
+        assert "policy_version_id" not in own_item
+        assert own_item["policy_version"] == env.admin.execute(
+            "SELECT version_no FROM policy_version WHERE id=(SELECT policy_version_id FROM application WHERE id=%s)",
+            (aid,),
+        ).fetchone()["version_no"]
+        assert clients["pc_adm"].get(queue_path).json() == []
+        assert clients["s1"].get(queue_path).status_code == 403
+        assert clients["hm_alfa"].get(f"/opportunities/{oid}/applications").json() == []
+        decision = clients["pc_adm"].post(
+            f"/applications/{aid}/eligibility-review",
+            json={"decision": "ELIGIBLE", "rationale": "cross-program"},
+            headers={"Origin": ORIGIN},
+        )
+        assert decision.status_code == 403
+        accepted = clients["pc_sys"].post(
+            f"/applications/{aid}/eligibility-review",
+            json={"decision": "ELIGIBLE", "rationale": "Synthetic manual review"},
+            headers={"Origin": ORIGIN},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["state"] == "SUBMITTED"
+        assert [row["id"] for row in clients["hm_alfa"].get(f"/opportunities/{oid}/applications").json()] == [aid]
+    finally:
+        for client in clients.values():
+            client.close()
+
+
+def test_policy_http_requires_reason_and_returns_creator_and_reason(env):
+    users = seed_base(env)
+    client = _client("pc_sys")
+    try:
+        payload = {
+            "program_code": "ING-SIS",
+            "kind": "ELIGIBILITY",
+            "conditions": [{"type": "MANUAL_REVIEW", "value": True}],
+        }
+        missing = client.post("/policies", json=payload, headers={"Origin": ORIGIN})
+        assert missing.status_code == 422
+
+        reason = "Demo synthetic policy; manual review only, no invented thresholds."
+        created = client.post("/policies", json={**payload, "reason": reason}, headers={"Origin": ORIGIN})
+        assert created.status_code == 201, created.text
+        listed = client.get("/policies", headers={"Origin": ORIGIN})
+        assert listed.status_code == 200
+        policy = next(row for row in listed.json() if row["code"] == "ING-SIS")["policies"]["ELIGIBILITY"]
+        assert policy["created_reason"] == reason
+        assert policy["created_by_name"] == "Coord Sys"
+        assert "created_by_id" not in policy
+    finally:
+        client.close()
 
 
 def test_http_authorization_matrix_crosses_roles_organizations_and_programs(env):

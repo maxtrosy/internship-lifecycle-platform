@@ -68,6 +68,8 @@ export function getStudentJourney(
   }
 
   switch (application.state) {
+    case "PENDING_ELIGIBILITY_REVIEW":
+      return journey("Tu postulación requiere revisión académica", "La coordinación de tu programa debe resolver la elegibilidad antes de que la organización pueda revisar tu postulación.", "applications", "Ver estado de revisión", state);
     case "SUBMITTED":
       return journey("Tu postulación fue enviada", "El resultado de elegibilidad se registró y la postulación está pendiente de decisión por la organización anfitriona.", "applications", "Ver mi postulación", state);
     case "INELIGIBLE":

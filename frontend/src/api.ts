@@ -52,6 +52,16 @@ export type EmployerApplication = {
   placement_state: string | null;
 };
 
+export type PendingEligibilityReview = {
+  id: number;
+  state: "PENDING_ELIGIBILITY_REVIEW";
+  eligibility_result: unknown;
+  policy_version: number | null;
+  display_name: string;
+  program_code: string;
+  opportunity_title: string;
+};
+
 export type PendingAcademic = {
   id: number;
   state: string;
@@ -234,6 +244,7 @@ export type PlacementDossier = {
 export type UserNotification = {
   id: number;
   category: "APPLICATION_SUBMITTED" | "APPLICATION_SELECTED" | "DOCUMENT_ACTIVITY"
+    | "ELIGIBILITY_REVIEW"
     | "PLACEMENT_ACTIVATED" | "PROGRESS_REPORTED" | "EVALUATION_SUBMITTED"
     | "INCIDENT_REPORTED" | "CHANGE_REPORTED" | "PLACEMENT_COMPLETED"
     | "PLACEMENT_CLOSED" | "MESSAGE_RECEIVED" | "OPPORTUNITY_REVIEW"
@@ -436,6 +447,19 @@ export function apply(opportunity_id: number): Promise<{
 
 export function listApplications(): Promise<Application[]> {
   return request<Application[]>("/applications");
+}
+
+export function listPendingEligibilityReviews(): Promise<PendingEligibilityReview[]> {
+  return request<PendingEligibilityReview[]>("/applications/pending-eligibility-review");
+}
+
+export function reviewEligibility(
+  applicationId: number,
+  body: { decision: "ELIGIBLE" | "INELIGIBLE"; rationale: string },
+): Promise<{ application_id: number; state: string; eligibility: unknown }> {
+  return request(`/applications/${applicationId}/eligibility-review`, {
+    method: "POST", body: JSON.stringify(body),
+  });
 }
 
 export function listApplicationsForOpportunity(oid: number): Promise<EmployerApplication[]> {
@@ -724,7 +748,13 @@ export async function listPlacementHistory(pid: number): Promise<PlacementHistor
 
 export type PolicyKind = "ELIGIBILITY" | "ACTIVATION" | "COMPLETION";
 export type PolicyCondition = { type: string; value: string[] | number | boolean };
-export type PolicyVersion = { id: number; version_no: number; conditions: PolicyCondition[] };
+export type PolicyVersion = {
+  id: number;
+  version_no: number;
+  conditions: PolicyCondition[];
+  created_reason?: string | null;
+  created_by_name?: string | null;
+};
 export type ProgramPolicies = {
   id: number;
   code: string;
@@ -740,9 +770,10 @@ export function createPolicyVersion(
   program_code: string,
   kind: PolicyKind,
   conditions: PolicyCondition[],
+  reason: string,
 ): Promise<{ id: number }> {
   return request<{ id: number }>("/policies", {
     method: "POST",
-    body: JSON.stringify({ program_code, kind, conditions }),
+    body: JSON.stringify({ program_code, kind, conditions, reason }),
   });
 }

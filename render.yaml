@@ -20,6 +20,16 @@ services:
         generateValue: true
       - key: APP_ALLOWED_ORIGINS
         sync: false
+      # DH-05 demo design assumption (not an institutional authority decision):
+      # RFP assigns opportunity management/review to experiential-learning staff.
+      - key: OPPORTUNITY_REVIEWER_ROLES
+        value: EXPERIENTIAL_COORDINATOR
+      - key: OPPORTUNITY_PUBLISHER_ROLES
+        value: EXPERIENTIAL_COORDINATOR
+      # DH-05 demo design assumption (not an institutional authority decision):
+      # program coordinators may assign faculty within their own program scope.
+      - key: PLACEMENT_FACULTY_ASSIGNER_ROLES
+        value: PROGRAM_COORDINATOR
       - key: JWT_TTL_MINUTES
         value: '15'
       - key: PASSWORD_RESET_DELIVERY

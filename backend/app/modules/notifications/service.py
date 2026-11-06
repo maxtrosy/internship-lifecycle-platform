@@ -14,6 +14,8 @@ from app.modules.audit import service as audit
 NOTICE_ACTIONS = {
     "application.submitted": "APPLICATION_SUBMITTED",
     "application.selected": "APPLICATION_SELECTED",
+    "application.eligibility_review_requested": "ELIGIBILITY_REVIEW",
+    "application.eligibility_reviewed": "ELIGIBILITY_REVIEW",
     "checklist_item.submitted": "DOCUMENT_ACTIVITY",
     "checklist_item.approved": "DOCUMENT_ACTIVITY",
     "checklist_item.rejected": "DOCUMENT_ACTIVITY",
@@ -50,7 +52,8 @@ def _placement_context(cur: psycopg.Cursor, placement_id: int) -> dict | None:
 
 def _app_context(cur: psycopg.Cursor, application_id: int) -> dict | None:
     return cur.execute(
-        """SELECT a.id AS application_id, a.student_id, o.id AS opportunity_id,
+        """SELECT a.id AS application_id, a.student_id, a.state, a.eligibility_result,
+                  o.id AS opportunity_id,
                   o.host_org_id, o.program_id, p.id AS placement_id,
                   pv.workplace_supervisor_id AS current_workplace_supervisor_id
            FROM application a JOIN opportunity o ON o.id=a.opportunity_id
@@ -158,6 +161,24 @@ def _recipients(cur: psycopg.Cursor, action: str, subject_type: str, subject_id:
                     (context["host_org_id"],),
                 ).fetchall()
             }
+        elif action == "application.eligibility_review_requested":
+            recipients = {
+                row["user_id"] for row in cur.execute(
+                    """SELECT user_id FROM role_assignment
+                       WHERE role='PROGRAM_COORDINATOR' AND program_id=%s""",
+                    (context["program_id"],),
+                ).fetchall()
+            }
+        elif action == "application.eligibility_reviewed":
+            recipients = {context["student_id"]}
+            if (after or {}).get("state") == "SUBMITTED":
+                recipients.update(
+                    row["user_id"] for row in cur.execute(
+                        """SELECT user_id FROM role_assignment
+                           WHERE role='HOST_ORG_MEMBER' AND host_org_id=%s""",
+                        (context["host_org_id"],),
+                    ).fetchall()
+                )
         else:
             if placement_id is None:
                 return None

@@ -11,6 +11,11 @@ config = context.config
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://postgres@localhost:5432/postgres"
 )
+# SQLAlchemy's PostgreSQL default is psycopg2, while this project deliberately
+# depends on psycopg 3. Accept the same standard PostgreSQL URL as the API and
+# select the installed driver explicitly for Alembic.
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL.removeprefix("postgresql://")
 
 
 def run_migrations_offline() -> None:

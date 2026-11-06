@@ -6,8 +6,8 @@ transition, document, report, hour, evaluation, message and audit event is creat
 through the same domain services used by the HTTP API.
 
 This module deliberately does not pick institutional authorities or eligibility
-rules. Callers must opt into the existing test-only eligibility policy and provide
-the temporary authority configuration when they want executable end-to-end flows.
+rules. Callers must opt into clearly labeled demo eligibility and lifecycle records,
+and provide temporary authority configuration for executable synthetic flows.
 """
 from __future__ import annotations
 
@@ -61,8 +61,41 @@ PLACEMENT_SCENARIOS = (
     ("seleccion-rechazada-academicamente", "REJECTED"),
 )
 
-_PDF = b"%PDF-1.7\nSynthetic workflow fixture; fictional data only.\n"
-_ELIGIBILITY_FIXTURE = [
+def _synthetic_demo_pdf() -> bytes:
+    content = (
+        b"BT /F1 18 Tf 72 760 Td (SYNTHETIC DEMONSTRATION ONLY) Tj ET\n"
+        b"BT /F1 11 Tf 72 736 Td (Not an institutional or real internship record.) Tj ET\n"
+    )
+    objects = (
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length %d >>\nstream\n" % len(content) + content + b"endstream",
+    )
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{number} 0 obj\n".encode("ascii"))
+        pdf.extend(body)
+        pdf.extend(b"\nendobj\n")
+    xref_offset = len(pdf)
+    pdf.extend(f"xref\n0 {len(offsets)}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    trailer = (
+        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    )
+    pdf.extend(trailer.encode("ascii"))
+    return bytes(pdf)
+
+
+_PDF = _synthetic_demo_pdf()
+_DEMO_ELIGIBILITY_POLICY = [
     {"type": "PROGRAM_IN", "value": ["__PROGRAM__"]},
     {"type": "CREDITS_MIN", "value": 100},
     {"type": "ACADEMIC_LEVEL_MIN", "value": 6},
@@ -165,14 +198,25 @@ def _command(actor_id: int, fn: Callable, *args, **kwargs):
         return fn(ctx, *args, **kwargs)
 
 
-def _ensure_eligibility_fixture(cur, code: str, coordinator_id: int, *, include_test_policy: bool) -> None:
-    if policies.latest_policy(cur, code, "ELIGIBILITY") is not None or not include_test_policy:
+def _ensure_demo_eligibility_policy(
+    cur,
+    code: str,
+    coordinator_id: int,
+    *,
+    enabled: bool,
+    reason: str,
+) -> None:
+    if policies.latest_policy(cur, code, "ELIGIBILITY") is not None or not enabled:
         return
-    # This mirrors the existing applications unit-test fixture and exists only in
-    # a disposable validation database; it is not a university policy.
+    # The values are an explicitly opted-in synthetic demonstration assumption,
+    # not an institutional rule. Creation still goes through the policy service
+    # as the coordinator scoped to this program and is audit-traced.
     conditions = [dict(condition, value=[code] if condition["type"] == "PROGRAM_IN" else condition["value"])
-                  for condition in _ELIGIBILITY_FIXTURE]
-    _command(coordinator_id, policies.create_policy_version, code, conditions, "ELIGIBILITY")
+                  for condition in _DEMO_ELIGIBILITY_POLICY]
+    _command(
+        coordinator_id, policies.create_policy_version, code, conditions, "ELIGIBILITY",
+        reason,
+    )
 
 
 def _ensure_opportunity(cur, *, title: str, host_org_id: int, program_id: int,
@@ -316,7 +360,8 @@ def _ensure_hours(cur, placement_id: int, student_id: int, amount: float) -> Non
         (placement_id,),
     ).fetchone()["n"])
     if total < amount:
-        _command(student_id, lifecycle.record_hours, placement_id, amount - total)
+        _command(student_id, lifecycle.record_hours, placement_id, amount - total,
+                 synthetic_demo=True)
 
 
 def _ensure_work_plan(cur, placement_id: int, supervisor_id: int) -> None:
@@ -331,11 +376,11 @@ def _ensure_work_plan(cur, placement_id: int, supervisor_id: int) -> None:
 
 def _ensure_completion(cur, *, placement_id: int, student_id: int, supervisor_id: int,
                        coordinator_id: int, ec_id: int,
-                       allow_test_only_synthetic_evidence: bool = False, close: bool) -> None:
-    if not allow_test_only_synthetic_evidence:
-        # Final reports, evaluations, evidence, and hours must come from persisted
-        # requirements and real domain activity in production. Only isolated test
-        # fixtures explicitly opt into these fictional completion records.
+                       allow_demo_lifecycle_records: bool = False, close: bool) -> None:
+    if not allow_demo_lifecycle_records:
+        # Persistent loads default to no invented hours, evaluations, evidence, or
+        # completion. The explicit demo opt-in writes labeled synthetic records
+        # through the same domain services and checks persisted requirements.
         return
     placement = _one(cur, "SELECT state FROM placement WHERE id=%s", (placement_id,))
     if placement["state"] == "ACTIVE":
@@ -347,7 +392,7 @@ def _ensure_completion(cur, *, placement_id: int, student_id: int, supervisor_id
             _command(student_id, lifecycle.create_progress_report, placement_id,
                      "Avance sintético: se documentaron actividades realizadas y aprendizajes del periodo.")
 
-    if allow_test_only_synthetic_evidence:
+    if allow_demo_lifecycle_records:
         final_evaluation = _one(
             cur,
             "SELECT id FROM placement_evaluation WHERE placement_id=%s AND kind='FINAL' ORDER BY id",
@@ -361,19 +406,24 @@ def _ensure_completion(cur, *, placement_id: int, student_id: int, supervisor_id
             "SELECT id FROM completion_evidence WHERE placement_id=%s AND kind='FINAL_REPORT' ORDER BY id",
             (placement_id,),
         )
-        if evidence is None:
+        requirement = cur.execute(
+            "SELECT 1 FROM completion_requirement WHERE placement_id=%s AND kind='FINAL_REPORT'",
+            (placement_id,),
+        ).fetchone()
+        if evidence is None and requirement is not None:
             _command(student_id, lifecycle.submit_completion_evidence, placement_id, "FINAL_REPORT",
-                     "informe-final-sintetico.pdf", "application/pdf", _PDF)
+                     "informe-final-sintetico.pdf", "application/pdf", _PDF,
+                     synthetic_demo=True)
     threshold = cur.execute(
         "SELECT threshold FROM completion_requirement WHERE placement_id=%s AND kind='MIN_HOURS'",
         (placement_id,),
     ).fetchone()
-    # Never synthesize an hour requirement. Test fixtures may explicitly create
-    # evidence; production data loads only record hours against a persisted rule.
-    if threshold and threshold["threshold"] is not None and allow_test_only_synthetic_evidence:
+    # Never synthesize an hour requirement. A demo may only record hours against
+    # the persisted threshold already instantiated for this placement.
+    if threshold and threshold["threshold"] is not None and allow_demo_lifecycle_records:
         _ensure_hours(cur, placement_id, student_id, float(threshold["threshold"]))
     placement = _one(cur, "SELECT state FROM placement WHERE id=%s", (placement_id,))
-    if placement["state"] == "ACTIVE" and allow_test_only_synthetic_evidence:
+    if placement["state"] == "ACTIVE" and allow_demo_lifecycle_records:
         _command(coordinator_id, lifecycle.confirm_completion, placement_id)
         placement = {"state": "COMPLETED"}
     if close and placement["state"] == "COMPLETED":
@@ -390,14 +440,15 @@ def _ensure_message(cur, placement_id: int, actor_id: int, audience: str, text: 
         _command(actor_id, messaging.create_message, placement_id, audience, text)
 
 
-def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
+def populate_synthetic_dataset(cur, *, include_demo_eligibility_policy: bool = False,
+                               demo_eligibility_policy_reason: str | None = None,
                                password_hash_for: Callable[[str], str] | None = None,
                                allow_test_password: bool = False,
-                               allow_test_only_synthetic_evidence: bool = False) -> dict:
+                               allow_demo_lifecycle_records: bool = False) -> dict:
     """Add/reuse 30 students, 10 organizations, 16 opportunities, 24 applications and 12 placements.
 
-    On isolated E2E paths callers explicitly opt into the test-only eligibility
-    conditions and password. Persistent loaders must provide a unique credential
+    Eligibility conditions are only added when callers explicitly opt into the
+    synthetic demo policy. Persistent loaders must provide a unique credential
     hash for each newly created account; existing users are never re-hashed.
     """
     if password_hash_for is None:
@@ -491,8 +542,14 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
         if user_id not in faculty:
             faculty.append(user_id)
 
+    policy_reason = (demo_eligibility_policy_reason or
+                     "Temporary synthetic eligibility policy for an isolated validation database.")
     for code, coordinator_id in coordinators.items():
-        _ensure_eligibility_fixture(cur, code, coordinator_id, include_test_policy=include_test_policy)
+        _ensure_demo_eligibility_policy(
+            cur, code, coordinator_id,
+            enabled=include_demo_eligibility_policy,
+            reason=policy_reason,
+        )
 
     opportunity_ids: list[int] = []
     main_opportunities: list[dict] = []
@@ -528,7 +585,7 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
     for code in PROGRAMS:
         eligible[code].sort()
         ineligible[code].sort()
-    if include_test_policy and sum(map(len, eligible.values())) < 12:
+    if include_demo_eligibility_policy and sum(map(len, eligible.values())) < 12:
         raise RuntimeError("The disposable eligibility fixture must yield 12 selected students.")
 
     placement_ids: dict[str, int] = {}
@@ -588,15 +645,15 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
                 cur, placement_id=placement_id, student_id=student_id,
                 supervisor_id=workplace_supervisors[opportunity["host_org_id"]],
                 coordinator_id=coordinators[opportunity["program_code"]], ec_id=ec_id,
-                allow_test_only_synthetic_evidence=allow_test_only_synthetic_evidence,
+                allow_demo_lifecycle_records=allow_demo_lifecycle_records,
                 close=index == 0,
             )
             # Scenario 1 stops after completion; scenario 0 is closed.
             if index in {0, 1}:
                 continue
-        elif index in {2, 3, 4} and allow_test_only_synthetic_evidence:
+        elif index in {2, 3, 4} and allow_demo_lifecycle_records:
             _ensure_hours(cur, placement_id, student_id, 12.0 + index)
-        elif index == 5 and allow_test_only_synthetic_evidence:
+        elif index == 5 and allow_demo_lifecycle_records:
             _ensure_hours(cur, placement_id, student_id, 8.0)
             _ensure_message(cur, placement_id, student_id, "JOINT",
                             "Seguimiento sintético compartido sobre las actividades realizadas.")
@@ -652,7 +709,7 @@ def populate_synthetic_dataset(cur, *, include_test_policy: bool = False,
                 break
         if extra_pairs == 12:
             break
-    if include_test_policy and extra_pairs != 12:
+    if include_demo_eligibility_policy and extra_pairs != 12:
         raise RuntimeError("The disposable fixture could not create 24 unique synthetic applications.")
 
     counts = {}

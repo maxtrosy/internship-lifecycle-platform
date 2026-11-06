@@ -65,4 +65,12 @@ describe("student journey guidance", () => {
       action: "applications",
     });
   });
+
+  it("keeps a manual eligibility review pending before employer review", () => {
+    expect(getStudentJourney({ state: "PENDING_ELIGIBILITY_REVIEW", placement_state: null, placement_id: null }, noActivation, true, true)).toMatchObject({
+      title: "Tu postulación requiere revisión académica",
+      action: "applications",
+      state: "PENDING_ELIGIBILITY_REVIEW",
+    });
+  });
 });

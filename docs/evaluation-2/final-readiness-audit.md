@@ -8,6 +8,36 @@ La auditoría requisito por requisito, incluyendo vistas, endpoints, servicios, 
 
 Los estados describen el comportamiento inspeccionado y la evidencia ejecutada. Compilar por sí solo no cuenta como validación funcional.
 
+## Opt-in del ciclo final de demostración — T-56, 2026-11-05
+
+- El modo `full` puede ahora simular horas, evaluación y evidencia final con `--allow-demo-lifecycle-records`. Los registros quedan identificados en auditoría/narrativa; los umbrales proceden únicamente de los requisitos ya persistidos. Los servicios de finalización validan el cierre; no se añade política de 100 horas ni se cambian versiones. Sin el opt-in no se crean esas evidencias.
+- Validación nueva: backend **105 passed/1 warning (118.14 s)**, frontend **40/14 archivos**, build **EXIT 0/64 módulos**, E2E base Chromium **18 passed/4 skipped intencionalmente**, E2E poblado **4/4 en 20.6 s**. Inspeccioné capturas nuevas desktop/móvil en claro/oscuro después de esperar la conversación vacía tras reload. El módulo backend prueba que el informe almacenado es un PDF válido y rotulado como sintético.
+- La fixture poblada es reproducible en PostgreSQL temporal y contiene el expediente cerrado y expedientes con estados pendientes. El test E2E verifica relación, documentos, horas, historial tras recarga y denegaciones. Ambas ejecuciones reportan PostgreSQL temporal limpiado.
+- Preflight Neon con ambos opt-ins salió **2**, sin escrituras; verificó proyecto/rama/TLS, cuentas/catálogo, políticas existentes, snapshot reciente y cero ciclos. Una consulta adicional `READ ONLY` mediante `app_bootstrap` confirmó que `app_dataset_full` no existe en `pg_roles`. `app_bootstrap` permanece sin atributos administrativos ni membresías y no tiene el alcance ACL de `full` (23 tablas sin SELECT, INSERT table-level requerido ausente, seis UPDATE ausentes, cinco bloqueos de política; cero permisos DELETE). Por tanto no puede usarse ni ampliarse para carga integral. Falta una operación DBA autorizada para crear `app_dataset_full` con el alcance mínimo de `docs/synthetic-dataset-bootstrap.md` y guardar su conexión TLS en Credential Manager; no se usó `neondb_owner` ni se intentó `--apply`.
+- Persisten decisiones institucionales OPEN-01/04/05 y autoridad docente. Los criterios 100 créditos/nivel 6 y autoridades de revisión/asignación siguen clasificados únicamente como supuestos de demostración. La carga completa y el producto no están terminados.
+
+## Fixture full con supuesto de elegibilidad explícito — T-55, 2026-11-05
+
+- La carga puede crear solo las versiones de elegibilidad faltantes si se solicita el opt-in de demostración. Las condiciones reusan la fixture sintética de 100 créditos/nivel 6, añaden coincidencia de programa, y guardan motivo no institucional por el servicio de políticas. No hay modificación de políticas existentes.
+- El preflight ACL del rol dedicado admite únicamente INSERT por columna en esos cuatro campos y `USAGE` de secuencia; no permite escribir el ID, actualizar o borrar políticas. Los casos del gate y los grants se probaron con roles restringidos en PostgreSQL temporal.
+- Validación ejecutada T-55: backend **105 passed, 1 warning (116.41 s)**; frontend **40 passed/14 archivos**; build **EXIT 0, 64 módulos**; E2E Chromium base **18 passed/4 skipped** y poblado **4/4**. Capturas actuales de políticas/escritorio y móvil, y expediente poblado/escritorio y móvil fueron inspeccionadas.
+- Preflight real de Neon: salida **2**, `write_performed=false`; destino autorizado/TLS y snapshot reciente verificados; no existe credencial `app_dataset_full`. Se planearon dos políticas de demo y no se escribió ninguna fila. Una vez creado el login autorizado y comprobado su ACL, el preflight debe repetirse antes de `--apply`.
+- El ciclo completo de prácticas no está persistido en Neon. Quedan sin resolver OPEN-01/04 y la autoridad institucional de revisión/publicación/asignación; las variables actuales solo representan supuestos de demo no desplegados.
+
+## Procedencia de políticas y preflight Neon — T-54, 2026-11-05
+
+- Las nuevas versiones de política requieren un motivo auditable. La UI expone motivo y autor al coordinador del ámbito; las políticas históricas sin motivo se identifican como tales. T-54 también registra `PROGRAM_COORDINATOR` como supuesto de demo para asignación docente en el Blueprint local; el cambio no se ha desplegado ni decide autoridad institucional.
+- Neon, consultado en modo lectura, contiene 61 cuentas, 10 organizaciones y 16 oportunidades sintéticas, con 4 políticas de activación/finalización; no contiene postulaciones ni prácticas. Existe un snapshot separado reciente. El preflight `full` mantiene `write_performed=false` y sale 2 por falta de políticas de elegibilidad y de `app_dataset_full`. No se alteró ningún registro/rol ni se aplicaron migraciones.
+- Resultados ejecutados T-54: backend **103 passed, 1 warning**; frontend **40/40**; `tsc -b && vite build` **EXIT 0 (64 módulos)**; E2E base **18 passed/4 skipped** y poblado **4/4** en PostgreSQL temporal. Capturas de política, revisión y expediente fueron inspeccionadas en escritorio y móvil 390 px. Los detalles y comandos exactos están en [validation-results.md](validation/validation-results.md).
+- La plataforma todavía no tiene el ciclo de prácticas persistido en Neon ni decisiones institucionales para umbrales, publicación y evaluación. No es una declaración de finalización del producto.
+
+## Revisión manual de elegibilidad — T-53, 2026-11-05
+
+- El backend conserva solicitudes con información académica insuficiente como pendientes de revisión; un coordinador solo resuelve prácticas de su programa, con fundamento obligatorio. Las pruebas verifican acceso cruzado denegado, ocultación ante el anfitrión, notificación, auditoría y persistencia.
+- La respuesta visible al estudiante no contiene ID del revisor. El actor permanece en el evento de auditoría. No se añadieron umbrales ni criterios institucionales; OPEN-01/04 siguen abiertos.
+- Validación ejecutada tras corregir la proyección: backend **101 passed, 1 warning (144.38 s)**; frontend **40/40 en 14 archivos**; build **EXIT 0, 64 módulos**. Migraciones temporales `0001→0014` y `0013→0014`: EXIT 0. E2E repetidos y revisión de capturas quedan asentados en [validation-results.md](validation/validation-results.md).
+- `render.yaml` contiene una autoridad EC para revisión/publicación clasificada como supuesto de demostración. No se desplegó. La carga de ciclo completo en Neon sigue pendiente por falta de snapshot reciente y credencial bootstrap de modo full; no se usó `app_runtime` para escribir.
+
 ## Carga parcial segura de SYN-01 — T-52, revalidación 2026-11-05
 
 - `populate_synthetic_partial` y `--mode partial` separan catálogo/cuentas/oportunidades pendientes del flujo integral. La prueba temporal insertó 8 de las 10 organizaciones (las dos base ya existían), 47 cuentas con 47 roles relacionales, 16 oportunidades (8 `DRAFT`, 8 `IN_REVIEW`), 24 eventos de auditoría y 8 notificaciones para el EC relacionado. Repetir la operación insertó cero filas. Se comprobó preservación de una cuenta existente, rollback total, ausencia de postulaciones/prácticas/políticas `ELIGIBILITY`, relaciones y estados, y rechazo de publicación sin autoridad relacionada.

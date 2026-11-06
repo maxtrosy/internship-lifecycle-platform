@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -37,14 +38,16 @@ def test_populated_synthetic_dataset_is_connected_and_idempotent(env, monkeypatc
         env.admin.execute("SET LOCAL ROLE app_user")
         with db.shared_command_connection(env.admin):
             first = populate_synthetic_dataset(
-                env.admin.cursor(), include_test_policy=True,
+                env.admin.cursor(), include_demo_eligibility_policy=True,
+                demo_eligibility_policy_reason=_LOADER.DEMO_POLICY_REASON,
                 password_hash_for=password_hash_for,
-                allow_test_only_synthetic_evidence=True,
+                allow_demo_lifecycle_records=True,
             )
             second = populate_synthetic_dataset(
-                env.admin.cursor(), include_test_policy=True,
+                env.admin.cursor(), include_demo_eligibility_policy=True,
+                demo_eligibility_policy_reason=_LOADER.DEMO_POLICY_REASON,
                 password_hash_for=password_hash_for,
-                allow_test_only_synthetic_evidence=True,
+                allow_demo_lifecycle_records=True,
             )
 
     assert first == second
@@ -68,6 +71,44 @@ def test_populated_synthetic_dataset_is_connected_and_idempotent(env, monkeypatc
     assert first["completion_evidence"] >= 2
     assert first["user_notification"] > 0
     assert first["placement_message"] > 0
+    policy_provenance = env.admin.execute(
+        """SELECT pv.policy_key, pv.conditions, ae.after_state->>'reason' AS reason
+           FROM policy_version pv JOIN audit_event ae
+             ON ae.subject_type='policy_version' AND ae.subject_id=pv.id
+            AND ae.action='policy.version_created'
+           WHERE pv.policy_key IN ('ELIGIBILITY:ING-SIS','ELIGIBILITY:ADM')
+           ORDER BY pv.policy_key"""
+    ).fetchall()
+    assert [row["policy_key"] for row in policy_provenance] == [
+        "ELIGIBILITY:ADM", "ELIGIBILITY:ING-SIS",
+    ]
+    assert all(row["reason"] == _LOADER.DEMO_POLICY_REASON for row in policy_provenance)
+    assert all({condition["type"]: condition["value"] for condition in row["conditions"]}[
+        "CREDITS_MIN"] == 100 for row in policy_provenance)
+    assert all({condition["type"]: condition["value"] for condition in row["conditions"]}[
+        "ACADEMIC_LEVEL_MIN"] == 6 for row in policy_provenance)
+    synthetic_hours = env.admin.execute(
+        """SELECT count(*) AS n FROM audit_event WHERE action='progress.hours_recorded'
+           AND after_state->>'source'=%s""",
+        ("DH-05 synthetic demo; not an institutional or real internship record",),
+    ).fetchone()["n"]
+    synthetic_evidence = env.admin.execute(
+        """SELECT count(*) AS n FROM audit_event WHERE action='completion_evidence.submitted'
+           AND after_state->>'source'=%s""",
+        ("DH-05 synthetic demo; not an institutional or real internship record",),
+    ).fetchone()["n"]
+    assert synthetic_hours > 0
+    assert synthetic_evidence >= 2
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM completion_evidence WHERE original_filename='informe-final-sintetico.pdf'"
+    ).fetchone()["n"] >= 2
+    stored_pdf = env.admin.execute(
+        "SELECT content FROM completion_evidence WHERE original_filename='informe-final-sintetico.pdf' ORDER BY id LIMIT 1"
+    ).fetchone()["content"]
+    assert stored_pdf.startswith(b"%PDF-1.4\n")
+    xref_offset = int(stored_pdf.rsplit(b"startxref\n", 1)[1].splitlines()[0])
+    assert stored_pdf[xref_offset:xref_offset + 5] == b"xref\n"
+    assert stored_pdf.endswith(b"%%EOF\n")
 
     states = env.admin.execute(
         "SELECT state,count(*) AS n FROM placement GROUP BY state"
@@ -349,7 +390,7 @@ def test_production_completion_loader_does_not_invent_evidence_or_hours():
 
     _ensure_completion(
         NoSQLAllowed(), placement_id=1, student_id=2, supervisor_id=3,
-        coordinator_id=4, ec_id=5, allow_test_only_synthetic_evidence=False, close=True,
+        coordinator_id=4, ec_id=5, allow_demo_lifecycle_records=False, close=True,
     )
 
 
@@ -365,7 +406,7 @@ def test_full_loader_without_test_evidence_opt_in_does_not_create_hours(env, mon
         env.admin.execute("SET LOCAL ROLE app_user")
         with db.shared_command_connection(env.admin):
             populate_synthetic_dataset(
-                env.admin.cursor(), include_test_policy=True,
+                env.admin.cursor(), include_demo_eligibility_policy=True,
                 password_hash_for=lambda username: security.hash_password(f"isolated-no-hours::{username}"),
             )
 
@@ -374,4 +415,62 @@ def test_full_loader_without_test_evidence_opt_in_does_not_create_hours(env, mon
     assert env.admin.execute(
         "SELECT count(*) AS n FROM placement WHERE state IN ('COMPLETED','CLOSED')"
     ).fetchone()["n"] == 0
+
+
+def test_full_loader_demo_eligibility_policy_plan_requires_explicit_opt_in():
+    required = {"ELIGIBILITY:ING-SIS", "ELIGIBILITY:ADM"}
+
+    blocked = _LOADER._demo_eligibility_policy_plan(set(), enabled=False)
+    assert blocked["missing"] == sorted(required)
+    assert blocked["to_create"] == []
+    assert blocked["opt_in_required"] is True
+    assert blocked["assumption_reason"] is None
+
+    opted_in = _LOADER._demo_eligibility_policy_plan(set(), enabled=True)
+    assert opted_in["to_create"] == sorted(required)
+    assert opted_in["opt_in_required"] is False
+    assert "not institutionally approved" in opted_in["assumption_reason"].lower()
+
+    partially_present = _LOADER._demo_eligibility_policy_plan(
+        {"ELIGIBILITY:ING-SIS"}, enabled=True,
+    )
+    assert partially_present["present"] == ["ELIGIBILITY:ING-SIS"]
+    assert partially_present["to_create"] == ["ELIGIBILITY:ADM"]
+
+
+def test_full_loader_demo_policy_acl_is_append_only_and_column_scoped(env):
+    role = f"app_dataset_full_acl_test_{uuid4().hex[:12]}"
+    env.admin.execute(f"CREATE ROLE {role} LOGIN NOINHERIT")
+    try:
+        env.admin.execute(f"GRANT SELECT ON public.policy_version TO {role}")
+        env.admin.execute(f"SET ROLE {role}")
+        try:
+            disabled = _LOADER._demo_policy_insert_acl(env.admin, enabled=False)
+            assert disabled["blockers"] == []
+        finally:
+            env.admin.execute("RESET ROLE")
+
+        env.admin.execute(
+            f"GRANT INSERT (policy_key,version_no,conditions,created_by) ON public.policy_version TO {role}"
+        )
+        env.admin.execute(f"GRANT USAGE ON SEQUENCE public.policy_version_id_seq TO {role}")
+        env.admin.execute(f"SET ROLE {role}")
+        try:
+            enabled = _LOADER._demo_policy_insert_acl(env.admin, enabled=True)
+            assert enabled["blockers"] == []
+            assert enabled["capabilities"]["insert_column:policy_key"] is True
+            assert enabled["capabilities"]["insert_column:id"] is False
+        finally:
+            env.admin.execute("RESET ROLE")
+
+        env.admin.execute(f"GRANT UPDATE (conditions) ON public.policy_version TO {role}")
+        env.admin.execute(f"SET ROLE {role}")
+        try:
+            unsafe_update = _LOADER._demo_policy_insert_acl(env.admin, enabled=True)
+            assert any("must never update" in blocker for blocker in unsafe_update["blockers"])
+        finally:
+            env.admin.execute("RESET ROLE")
+    finally:
+        env.admin.execute(f"DROP OWNED BY {role}")
+        env.admin.execute(f"DROP ROLE {role}")
 

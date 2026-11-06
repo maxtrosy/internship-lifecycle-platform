@@ -28,13 +28,18 @@ def submit_application(ctx: CommandContext, opportunity_id: int) -> dict:
         raise BusinessError("NO_POLICY_IN_EFFECT", opp["code"])
     res = evaluate(subj, opp["code"], pv["conditions"])
     res["inputs"] = {"credits": subj["credits"], "academic_level": subj["academic_level"]}
-    state = "SUBMITTED" if res["result"] == "ELIGIBLE" else "INELIGIBLE"
+    state = {
+        "ELIGIBLE": "SUBMITTED",
+        "NOT_ELIGIBLE": "INELIGIBLE",
+        "REQUIRES_REVIEW": "PENDING_ELIGIBILITY_REVIEW",
+    }[res["result"]]
     aid = ctx.execute(
         """INSERT INTO application(opportunity_id, student_id, state, policy_version_id, eligibility_result)
            VALUES (%s,%s,%s,%s,%s) RETURNING id""",
         (opportunity_id, subj["id"], state, pv["id"], Jsonb(res)),
     ).fetchone()["id"]
-    audit.write(ctx.cur, "application.submitted", "application", aid,
+    action = "application.eligibility_review_requested" if state == "PENDING_ELIGIBILITY_REVIEW" else "application.submitted"
+    audit.write(ctx.cur, action, "application", aid,
                 None, {"opportunity_id": opportunity_id, "state": state})
     return {"application_id": aid, "state": state, "eligibility": res}
 
@@ -48,6 +53,68 @@ def list_my_applications(cur: psycopg.Cursor, subj: dict) -> list[dict]:
         "WHERE a.student_id=%s ORDER BY a.id DESC",
         (subj["id"],),
     ).fetchall()
+
+
+def list_pending_eligibility(cur: psycopg.Cursor, subj: dict) -> list[dict]:
+    """Show review cases only to coordinators assigned to the student's program."""
+    program_ids = sorted({role["program_id"] for role in subj["roles"]
+                          if role["role"] == "PROGRAM_COORDINATOR" and role["program_id"] is not None})
+    if not program_ids:
+        raise Forbidden("only program coordinators may review eligibility")
+    return cur.execute(
+        """SELECT a.id, a.state, a.eligibility_result, pv.version_no AS policy_version,
+                  u.display_name, p.code AS program_code, o.title AS opportunity_title
+           FROM application a
+           JOIN opportunity o ON o.id=a.opportunity_id
+           JOIN academic_program p ON p.id=o.program_id
+           JOIN policy_version pv ON pv.id=a.policy_version_id
+           JOIN user_account u ON u.id=a.student_id
+           WHERE a.state='PENDING_ELIGIBILITY_REVIEW' AND o.program_id=ANY(%s)
+           ORDER BY a.id""",
+        (program_ids,),
+    ).fetchall()
+
+
+def review_eligibility(ctx: CommandContext, application_id: int, decision: str, rationale: str) -> dict:
+    """Record a program coordinator's explicit resolution of a manual review."""
+    if decision not in {"ELIGIBLE", "INELIGIBLE"}:
+        raise BusinessError("INVALID_ELIGIBILITY_DECISION")
+    rationale = rationale.strip()
+    if not rationale or len(rationale) > 2000:
+        raise BusinessError("ELIGIBILITY_REVIEW_RATIONALE_REQUIRED")
+
+    subj = subject(ctx.cur, ctx.actor_id)
+    app = ctx.execute(
+        """SELECT a.*, o.program_id, o.title AS opportunity_title, o.host_org_id,
+                  p.code AS program_code
+           FROM application a JOIN opportunity o ON o.id=a.opportunity_id
+           JOIN academic_program p ON p.id=o.program_id WHERE a.id=%s FOR UPDATE OF a""",
+        (application_id,),
+    ).fetchone()
+    if app is None:
+        raise NotFound()
+    if not any(role["role"] == "PROGRAM_COORDINATOR" and role["program_id"] == app["program_id"]
+               for role in subj["roles"]):
+        raise Forbidden("only the student's program coordinator may review eligibility")
+    if app["state"] != "PENDING_ELIGIBILITY_REVIEW":
+        raise BusinessError("INVALID_TRANSITION", app["state"])
+    prior = app["eligibility_result"]
+    if not isinstance(prior, dict) or prior.get("result") != "REQUIRES_REVIEW":
+        raise BusinessError("APPLICATION_NOT_REQUIRES_REVIEW")
+
+    state = "SUBMITTED" if decision == "ELIGIBLE" else "INELIGIBLE"
+    result = {**prior, "result": decision, "manual_review": {
+        "decision": decision,
+        "rationale": rationale,
+    }}
+    ctx.execute(
+        "UPDATE application SET state=%s, eligibility_result=%s WHERE id=%s",
+        (state, Jsonb(result), application_id),
+    )
+    audit.write(ctx.cur, "application.eligibility_reviewed", "application", application_id,
+                {"state": app["state"], "result": "REQUIRES_REVIEW"},
+                {"state": state, "result": decision, "opportunity_id": app["opportunity_id"]})
+    return {"application_id": application_id, "state": state, "eligibility": result}
 
 
 def _require_employer(subj: dict, host_org_id: int) -> bool:
@@ -69,7 +136,7 @@ def list_for_opportunity(cur: psycopg.Cursor, subj: dict, opportunity_id: int) -
            LEFT JOIN role_assignment ra ON ra.user_id = a.student_id AND ra.role = 'STUDENT'
            LEFT JOIN academic_program p ON p.id = ra.program_id
            LEFT JOIN placement pl ON pl.application_id = a.id
-           WHERE a.opportunity_id = %s ORDER BY a.id""",
+           WHERE a.opportunity_id = %s AND a.state <> 'PENDING_ELIGIBILITY_REVIEW' ORDER BY a.id""",
         (opportunity_id,),
     ).fetchall()
     # BR-13: employers receive only the eligibility decision, not student inputs

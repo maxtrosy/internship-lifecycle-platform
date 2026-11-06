@@ -24,6 +24,17 @@ describe("presentEligibility", () => {
     expect(presentEligibility({ result: "INELIGIBLE", reasons: [] }).state).toBe("ineligible");
   });
 
+  it("keeps an undecided manual review separate from eligible and ineligible states", () => {
+    expect(presentEligibility({ result: "REQUIRES_REVIEW", reasons: [], inputs: { credits: null, academic_level: null } }))
+      .toMatchObject({ state: "review", label: "Revisión académica pendiente" });
+  });
+
+  it("shows the coordinator's rationale only in the application owner's result", () => {
+    expect(presentEligibility({ result: "ELIGIBLE", reasons: [], manual_review: {
+      decision: "ELIGIBLE", rationale: "Validación sintética del programa",
+    } }).reasons).toEqual(["Decisión académica: Validación sintética del programa"]);
+  });
+
   it("translates known reasons without changing the reported thresholds", () => {
     expect(presentEligibility({
       result: "NOT_ELIGIBLE",

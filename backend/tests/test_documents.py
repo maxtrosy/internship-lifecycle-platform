@@ -18,7 +18,10 @@ from tests.conftest import TEST_PASSWORD, publish_test_opportunity, seed_base
 def _setup(env, kinds=("DOC_INSURANCE",)):
     U = seed_base(env)
     with db.command(U["pc_sys"]) as ctx:
-        policies.create_policy_version(ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}])
+        policies.create_policy_version(
+            ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}],
+            reason="Fixture policy for document tests.",
+        )
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
     publish_test_opportunity(env, oid)
@@ -114,10 +117,13 @@ def test_t28_activation_blocked_when_pending(env):
 def test_t28_activation_policy_derives_requirements(env):
     U = seed_base(env)
     with db.command(U["pc_sys"]) as ctx:
-        policies.create_policy_version(ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}])
+        policies.create_policy_version(
+            ctx, "ING-SIS", [{"type": "CREDITS_MIN", "value": 100}],
+            reason="Fixture policy for document revision tests.",
+        )
         policies.create_policy_version(ctx, "ING-SIS",
                                        [{"type": "REQUIRE_DOCUMENTS", "value": ["DOC_A", "DOC_B"]}],
-                                       kind="ACTIVATION")
+                                       kind="ACTIVATION", reason="Fixture activation test policy.")
     with db.command(U["hm_alfa"]) as ctx:
         oid = opps.create_opportunity(ctx, 1, U["P"]["ING-SIS"], "Alfa")
     publish_test_opportunity(env, oid)
@@ -208,11 +214,11 @@ def test_activation_and_completion_policies_are_pinned_to_approval(env):
     with db.command(U["pc_sys"]) as ctx:
         policies.create_policy_version(ctx, "ING-SIS", [
             {"type": "REQUIRE_DOCUMENTS", "value": ["DOC_NEW"]},
-        ], kind="ACTIVATION")
+        ], kind="ACTIVATION", reason="Fixture activation revision test policy.")
         policies.create_policy_version(ctx, "ING-SIS", [
             {"type": "FINAL_REPORT", "value": True},
             {"type": "MIN_HOURS", "value": 200},
-        ], kind="COMPLETION")
+        ], kind="COMPLETION", reason="Fixture completion revision test policy.")
 
     checklist_kinds = {row["kind"] for row in env.admin.execute(
         "SELECT kind FROM checklist_item WHERE placement_id=%s", (pid,)).fetchall()}
@@ -235,13 +241,13 @@ def test_policy_vocabulary_is_scoped_by_kind(env):
         with pytest.raises(BusinessError) as ei:
             policies.create_policy_version(ctx, "ING-SIS", [
                 {"type": "MIN_HOURS", "value": 40},
-            ], kind="ACTIVATION")
+            ], kind="ACTIVATION", reason="Invalid activation vocabulary test.")
     assert ei.value.code == "POLICY_INVALID"
     with db.command(U["pc_sys"]) as ctx:
         with pytest.raises(BusinessError) as ei:
             policies.create_policy_version(ctx, "ING-SIS", [
                 {"type": "REQUIRE_DOCUMENTS", "value": ["COND_SUPERVISOR_ASSIGNED"]},
-            ], kind="ACTIVATION")
+            ], kind="ACTIVATION", reason="Invalid document vocabulary test.")
     assert ei.value.code == "POLICY_INVALID"
 
     with db.read() as cur:
