@@ -1,0 +1,6 @@
+services: {}
+networks:
+  demo:
+    ipam:
+      config:
+        - subnet: "${DH05_DEMO_SUBNET:-10.255.255.0/24}"

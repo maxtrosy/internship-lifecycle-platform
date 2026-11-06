@@ -20,6 +20,8 @@ La tabla de alcance distingue **implementado**, **datos sintéticos de demostrac
 - Chromium de Playwright para E2E.
 - En Windows, PostgreSQL temporal puede requerir las herramientas/runtime de Visual C++ que requiere `pgserver`.
 
+Para grabar desde una Mac sin instalar Python/PostgreSQL local, usa la [guía Docker Compose para macOS](README-macos-demo.md). Ese stack ejecuta una base efímera aislada, sin volúmenes.
+
 ## Instalar dependencias
 
 Desde la carpeta `src/` del paquete:
@@ -72,7 +74,7 @@ corepack pnpm --dir .\frontend run build
 .\.venv\Scripts\python .\scripts\run_isolated_e2e.py --populated
 ```
 
-Resultados exactos de la ejecución del 5 de noviembre de 2026: [`evidence/test-results/2026-11-05.md`](evidence/test-results/2026-11-05.md). El reporte separa pytest (esquema SQL actual), migraciones Alembic (0001→0014 y 0010→head), E2E general y E2E con prácticas relacionadas. Capturas recién generadas y revisadas: [`evidence/screenshots/`](evidence/screenshots/).
+Resultados exactos de la ejecución del 5 de noviembre de 2026: [`evidence/test-results/2026-11-05.md`](evidence/test-results/2026-11-05.md). El reporte separa pytest (esquema SQL actual), migraciones Alembic (0001→0014 y 0010→head), E2E general y E2E con prácticas relacionadas. La validación del contenedor de demostración, realizada el 6 de noviembre, está en [`evidence/test-results/2026-11-06-container-macos.md`](evidence/test-results/2026-11-06-container-macos.md). Capturas recién generadas y revisadas: [`evidence/screenshots/`](evidence/screenshots/).
 
 ## Recorrido recomendado
 

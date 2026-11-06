@@ -2,6 +2,8 @@
 
 **Objetivo del video:** mostrar un incremento real y su arquitectura como construida, sin hacer pasar fixtures por datos reales ni decisiones pendientes por política oficial. Mantener visible que el entorno es temporal. Referencia de formato/timing: `docs/reference/Evaluacion_3.pdf`; el video no forma parte de este ZIP.
 
+**Preparación para grabar en Mac:** sigue `README-macos-demo.md`, levanta Docker Compose antes de empezar la captura y abre `http://localhost:8080`. El bootstrap debe mostrar la fixture y Alembic 0014. Usa `demo_student_07` para el expediente persistido. La cuenta tiene un expediente cerrado de solo lectura. Para mostrar transiciones, permisos y revisión manual, usa las capturas y resultados E2E citados; no inventes una acción dentro de un caso cerrado.
+
 ## 0:00–0:45 — Contexto y alcance
 
 **Pantalla:** portada del README E3 y luego diagrama de contexto.

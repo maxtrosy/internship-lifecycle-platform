@@ -1,0 +1,85 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dh05_eval3
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: eval3-local-admin-only
+      PGDATA: /var/lib/postgresql/data/pgdata
+    tmpfs:
+      - /var/lib/postgresql/data:rw,noexec,nosuid,size=512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dh05_eval3"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [demo]
+
+  bootstrap:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.eval3-demo
+    command: ["python", "/app/scripts/bootstrap_eval3_demo.py"]
+    environment:
+      APP_ENV: development
+      APP_ALLOWED_ORIGINS: http://localhost:${DH05_DEMO_PORT:-8080},http://127.0.0.1:${DH05_DEMO_PORT:-8080}
+      APP_DB_ROLE: app_user
+      DATABASE_URL: postgresql://postgres:eval3-local-admin-only@db:5432/dh05_eval3
+      DEMO_PASSWORD: Demo-Only-2026!
+      DEMO_RUNTIME_PASSWORD: eval3-local-runtime-only
+      JWT_SECRET: local-container-demo-secret-only-not-for-production-2026
+      JWT_TTL_MINUTES: "60"
+      PASSWORD_RESET_DELIVERY: disabled
+      OPPORTUNITY_REVIEWER_ROLES: EXPERIENTIAL_COORDINATOR
+      OPPORTUNITY_PUBLISHER_ROLES: EXPERIENTIAL_COORDINATOR
+      PLACEMENT_FACULTY_ASSIGNER_ROLES: PROGRAM_COORDINATOR
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [demo]
+    restart: "no"
+
+  api:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.eval3-demo
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      APP_ENV: development
+      APP_ALLOWED_ORIGINS: http://localhost:${DH05_DEMO_PORT:-8080},http://127.0.0.1:${DH05_DEMO_PORT:-8080}
+      APP_DB_ROLE: app_user
+      DATABASE_URL: postgresql://app_runtime:eval3-local-runtime-only@db:5432/dh05_eval3
+      JWT_SECRET: local-container-demo-secret-only-not-for-production-2026
+      JWT_TTL_MINUTES: "60"
+      PASSWORD_RESET_DELIVERY: disabled
+      OPPORTUNITY_REVIEWER_ROLES: EXPERIENTIAL_COORDINATOR
+      OPPORTUNITY_PUBLISHER_ROLES: EXPERIENTIAL_COORDINATOR
+      PLACEMENT_FACULTY_ASSIGNER_ROLES: PROGRAM_COORDINATOR
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [demo]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile.eval3-demo
+      args:
+        VITE_DEMO_LOGIN_ENABLED: "true"
+        VITE_DEMO_LOGIN_PASSWORD: Demo-Only-2026!
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${DH05_DEMO_PORT:-8080}:80"
+    networks: [demo]
+    restart: unless-stopped
+
+networks:
+  demo:

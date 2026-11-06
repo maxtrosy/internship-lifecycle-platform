@@ -1,6 +1,26 @@
 # Comandos para la demostración
 
-Ejecutar desde `evaluacion-3/src` con el entorno virtual ya instalado:
+## Opción recomendada para la Mac de la persona que graba
+
+Desde la carpeta `evaluacion-3` extraída, con Docker Desktop iniciado:
+
+```sh
+docker compose -p dh05-eval3-share -f compose.macos.yaml up --build -d
+docker compose -p dh05-eval3-share -f compose.macos.yaml ps -a
+docker compose -p dh05-eval3-share -f compose.macos.yaml logs bootstrap
+```
+
+Abrir `http://localhost:8080`. Si se usó el override de red por agotamiento de subredes, añadir `-f compose.macos.subnet.yaml` a cada comando. Al terminar:
+
+```sh
+docker compose -p dh05-eval3-share -f compose.macos.yaml down
+```
+
+La guía completa está en `README-macos-demo.md`.
+
+## Opción nativa sin Docker
+
+Ejecutar desde `evaluacion-3/src` con Python 3.12, dependencias instaladas y Chromium listo:
 
 ```powershell
 $env:DATABASE_URL = ''
@@ -19,4 +39,4 @@ corepack pnpm --dir .\frontend run test
 corepack pnpm --dir .\frontend run build
 ```
 
-No usar `docker compose`, no setear credenciales de Neon y no sustituir la URL temporal. El launcher genera su propio secreto temporal y no imprime la URI de PostgreSQL. La contraseña de demo que imprime solo autentica las cuentas sintéticas del clúster efímero.
+No configurar credenciales de Neon ni sustituir la URL temporal. El launcher nativo genera su propio secreto temporal y no imprime la URI de PostgreSQL. La contraseña de demo autentica únicamente cuentas sintéticas. Para la opción Docker, la base está en tmpfs y no tiene volumen persistente.

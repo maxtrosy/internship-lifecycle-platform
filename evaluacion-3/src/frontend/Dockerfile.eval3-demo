@@ -1,0 +1,18 @@
+FROM node:24-alpine AS build
+
+WORKDIR /web
+RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
+COPY package.json pnpm-lock.yaml ./
+RUN printf 'packages: []\nallowBuilds:\n  esbuild: true\n' > pnpm-workspace.yaml \
+    && pnpm install --frozen-lockfile
+COPY . ./
+ARG VITE_DEMO_LOGIN_ENABLED=true
+ARG VITE_DEMO_LOGIN_PASSWORD=Demo-Only-2026!
+ENV VITE_DEMO_LOGIN_ENABLED=${VITE_DEMO_LOGIN_ENABLED} \
+    VITE_DEMO_LOGIN_PASSWORD=${VITE_DEMO_LOGIN_PASSWORD}
+RUN pnpm run build
+
+FROM nginx:alpine
+COPY nginx.eval3-demo.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /web/dist /usr/share/nginx/html
+EXPOSE 80
