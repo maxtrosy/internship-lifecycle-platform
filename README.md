@@ -98,3 +98,7 @@ python scripts\run_isolated_e2e.py
 ```
 
 `scripts/run_isolated_e2e.py` starts a fresh temporary PostgreSQL instance, API, Vite, and Chromium run; it overrides any inherited `DATABASE_URL`, keeps screenshots/logs under `%TEMP%`, and cleans up the temporary database and processes. Install backend dev dependencies (including `pgserver`), frontend dependencies, and Playwright Chromium first. Validation results and known limitations are in [the validation report](docs/evaluation-2/validation/validation-results.md). Full browser E2E across every role, performance, external adapter, and usability scenarios remain open.
+
+## Software Design II — Evaluación 3
+
+The as-built architecture, scope, verified evidence, reproducible isolated demo, and video script prepared for the student are in [`evaluacion-3/README.md`](evaluacion-3/README.md). The package uses temporary PostgreSQL and does not target the persistent local database, Neon, or Docker volumes.

@@ -58,13 +58,13 @@ def stop(child: subprocess.Popen | None) -> None:
         child.wait(timeout=5)
 
 
-def assert_login(api_base: str) -> None:
+def assert_login(api_base: str, web_origin: str) -> None:
     cookie_jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
     request = urllib.request.Request(
         f"{api_base}/auth/login",
-        data=json.dumps({"username": "s1", "password": DEMO_PASSWORD}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        data=json.dumps({"identifier": "s1", "password": DEMO_PASSWORD}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Origin": web_origin},
         method="POST",
     )
     with opener.open(request, timeout=5) as response:
@@ -204,7 +204,7 @@ def main() -> int:
                 raise RuntimeError(f"The isolated API is not ready; see {api_log_path}.")
             if not wait_for(web_url, (api, web)):
                 raise RuntimeError(f"Vite did not start; see {vite_log_path}.")
-            assert_login(api_base)
+            assert_login(api_base, web_url)
 
             print(f"MIGRATION_HEAD={revision}")
             print("HEALTH=/health PASS; READINESS=/ready PASS; SYNTHETIC_LOGIN PASS")

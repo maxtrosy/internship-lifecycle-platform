@@ -1,4 +1,7 @@
 # DH-05 — Sistema de Gestión de Pasantías y Prácticas Profesionales
+
+> El estado como construido de la Evaluación 3 está en [`evaluacion-3/docs/architecture/README.md`](../../evaluacion-3/docs/architecture/README.md), con la revisión de implementación de los ADR en [`evaluacion-3/docs/adrs/review.md`](../../evaluacion-3/docs/adrs/review.md). Este documento conserva la propuesta histórica; no demuestra que todos sus contenedores o adaptadores se implementaran.
+
 ## Evaluación 2 — Architecture and Design Review
 
 > **Pregunta central:** ¿puede el equipo justificar cómo debe estructurarse el sistema propuesto?
