@@ -1,6 +1,5 @@
 # Evaluación 3 — Internship Lifecycle Platform
 
-Entrega de Software Design II basada en el documento de evaluación incluido en [`docs/reference/Evaluacion_3.pdf`](docs/reference/Evaluacion_3.pdf). El paquete presenta un incremento ejecutable y rastreable del ciclo de prácticas; no afirma cubrir el RFP completo. El video no se incluye: el guion y la lista de grabación están en [`video/script.md`](video/script.md) y [`video/demo-checklist.md`](video/demo-checklist.md).
 
 ## Fuente y alcance
 
