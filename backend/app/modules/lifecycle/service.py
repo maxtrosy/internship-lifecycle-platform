@@ -20,6 +20,7 @@ from app.errors import BusinessError, Forbidden, NotFound
 from app.modules.audit import service as audit
 from app.modules.authz import service as authz
 from app.modules.policies import service as policies
+from app.modules.lifecycle import segments
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 SYNTHETIC_DEMO_SOURCE = "DH-05 synthetic demo; not an institutional or real internship record"
@@ -137,9 +138,9 @@ def completion_unmet(ctx: CommandContext, pid: int) -> list[str]:
         satisfied = requirement["satisfied"]
         if kind == "MIN_HOURS":
             if hours_total is None:
+                # CR-05-BR-04: only accepted, recognized hours count (never reported/expected).
                 hours_total = ctx.execute(
-                    "SELECT coalesce(sum(hours),0) AS total FROM progress_entry WHERE placement_id=%s",
-                    (pid,),
+                    "SELECT placement_accepted_hours(%s) AS total", (pid,),
                 ).fetchone()["total"]
             satisfied = requirement["threshold"] is not None and hours_total >= requirement["threshold"]
         elif kind == "FINAL_REPORT":
@@ -161,6 +162,18 @@ def completion_unmet(ctx: CommandContext, pid: int) -> list[str]:
         (pid,),
     ).fetchall()
     return [r["kind"] for r in rows]
+
+
+def _operational_supervisor(ctx_or_cur, pid: int) -> dict | None:
+    """CR-05: supervisor of the ACTIVE segment (or of the current version before activation)."""
+    return ctx_or_cur.execute(
+        "SELECT supervisor_id, host_org_id, segment_id FROM placement_operational_supervisor(%s)", (pid,),
+    ).fetchone()
+
+
+def _active_segment_id(ctx_or_cur, pid: int) -> int | None:
+    row = segments.active_segment(ctx_or_cur, pid)
+    return row["id"] if row else None
 
 
 def _gate(fn):
@@ -202,8 +215,7 @@ def _completion_requirement_status(cur, pid: int) -> list[dict]:
                   CASE
                     WHEN cr.kind = 'MIN_HOURS' THEN
                       cr.threshold IS NOT NULL AND
-                      (SELECT coalesce(sum(pe.hours),0) FROM progress_entry pe
-                       WHERE pe.placement_id=cr.placement_id) >= cr.threshold
+                      placement_accepted_hours(cr.placement_id) >= cr.threshold
                     WHEN cr.kind = 'FINAL_REPORT' THEN EXISTS (
                       SELECT 1 FROM completion_evidence ce
                       WHERE ce.placement_id=cr.placement_id AND ce.kind='FINAL_REPORT')
@@ -269,7 +281,7 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
         ).fetchone()
 
     versions = cur.execute(
-        """SELECT v.version_no, v.start_date, v.end_date, v.location, v.responsibilities,
+        """SELECT v.id, v.version_no, v.start_date, v.end_date, v.location, v.responsibilities,
                   v.status, u.display_name AS workplace_supervisor_name
            FROM placement_version v LEFT JOIN user_account u ON u.id = v.workplace_supervisor_id
            WHERE v.placement_id = %s ORDER BY v.version_no""",
@@ -333,10 +345,11 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
         authz.can_perform(cur, subj, "progress_report:create", pid) and row["state"] == "ACTIVE"
     )
     can_read_evaluations = authz.can_perform(cur, subj, "evaluation:read", pid)
+    operational = _operational_supervisor(cur, pid)
     can_submit_evaluation = (
         authz.can_perform(cur, subj, "evaluation:create", pid)
         and row["state"] == "ACTIVE"
-        and row["current_workplace_supervisor_id"] == subj["id"]
+        and operational is not None and operational["supervisor_id"] == subj["id"]
     )
     can_read_incidents = authz.can_perform(cur, subj, "incident:read", pid)
     can_report_incident = (
@@ -358,9 +371,25 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
 
     hours = None
     hours_total = None
+    hours_summary = None
+    visible_segments = segments.visible_segment_ids(cur, subj, pid)
     if can_read_hours:
         hours = list_hours(cur, subj, pid)
         hours_total = sum((entry["hours"] for entry in hours), start=0)
+        hours_summary = segments.hours_summary(cur, pid, visible_segments)
+    segment_rows = segments.list_segments(cur, subj, pid)
+    transfers = segments.list_transfers(cur, subj, pid)
+    experience_reviews = segments.list_experience_reviews(cur, subj, pid)
+    can_manage_segments = authz.can_perform(cur, subj, "segment:manage", pid) and row["state"] == "ACTIVE"
+    can_confirm_conditions = (
+        authz.can_perform(cur, subj, "segment_condition:confirm", pid) and row["state"] == "ACTIVE"
+    )
+    can_review_hours = authz.can_perform(cur, subj, "hours:review", pid) and row["state"] == "ACTIVE"
+    can_review_experience = (
+        authz.can_perform(cur, subj, "experience:review", pid) and row["state"] == "ACTIVE"
+    )
+    segment_gate = segments.segment_gate_status(cur, pid) if (
+        visible_segments is None and can_read_completion) else None
 
     completion_requirements = None
     if can_read_completion:
@@ -428,6 +457,11 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
         "documents": documents,
         "hours": hours,
         "hours_total": hours_total,
+        "hours_summary": hours_summary,
+        "segments": segment_rows,
+        "transfers": transfers,
+        "experience_reviews": experience_reviews,
+        "segment_gate": segment_gate,
         "progress_reports": progress_reports,
         "evaluations": evaluations,
         "incidents": incidents,
@@ -462,6 +496,14 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
             "may_configure_faculty_assignments": may_configure_faculty_assignment,
             "faculty_assignment_authority_configured": faculty_assignment_authority_configured,
             "read_faculty_assignment_history": can_read_faculty_history,
+            "propose_change": authz.can_perform(cur, subj, "placement:propose_change", pid)
+                               and row["state"] == "ACTIVE",
+            "approve_change": authz.can_perform(cur, subj, "version:approve", pid),
+            "manage_segments": can_manage_segments,
+            "confirm_segment_conditions": can_confirm_conditions,
+            "review_hours": can_review_hours,
+            "review_combined_experience": can_review_experience,
+            "read_segment_internal": authz.can_perform(cur, subj, "segment:read_internal", pid),
             "read_work_plan": can_read_work_plan,
             "assign_work_plan_item": can_assign_work_plan,
             "activate": authz.can_perform(cur, subj, "placement:activate", pid) and activation_ready,
@@ -697,16 +739,18 @@ def submit_completion_evidence(ctx: CommandContext, pid: int, kind: str, filenam
     ).fetchone()["revision"]
     digest = hashlib.sha256(content).hexdigest()
     submission = ctx.execute(
-        """INSERT INTO completion_evidence(placement_id,kind,revision,submitted_by,original_filename,
-           content_type,content,byte_size,sha256) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """INSERT INTO completion_evidence(placement_id,placement_version_id,kind,revision,submitted_by,original_filename,
+           content_type,content,byte_size,sha256) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING submitted_at""",
-        (pid, kind, revision, ctx.actor_id, safe_name, normalized_type, content, len(content), digest),
+        (pid, placement["current_version_id"], kind, revision, ctx.actor_id, safe_name,
+         normalized_type, content, len(content), digest),
     ).fetchone()
     ctx.execute("UPDATE completion_requirement SET satisfied=true WHERE id=%s", (requirement["id"],))
     audit_state = {"kind": kind, "revision": revision, "content_type": normalized_type,
                    "byte_size": len(content), "sha256": digest}
     if synthetic_demo:
         audit_state["source"] = SYNTHETIC_DEMO_SOURCE
+    audit_state["placement_version_id"] = placement["current_version_id"]
     audit.write(ctx.cur, "completion_evidence.submitted", "placement", pid, None, audit_state)
     return {"kind": kind, "revision": revision, "submitted_at": submission["submitted_at"]}
 
@@ -714,9 +758,11 @@ def submit_completion_evidence(ctx: CommandContext, pid: int, kind: str, filenam
 def list_completion_evidence(cur, subj: dict, pid: int) -> list[dict]:
     authz.authorize(cur, subj, "evidence:read", pid)
     return cur.execute(
-        """SELECT ce.kind, ce.revision, ce.original_filename, ce.content_type, ce.byte_size,
+        """SELECT ce.kind, ce.revision, ce.placement_version_id, pv.version_no,
+                  ce.original_filename, ce.content_type, ce.byte_size,
                   ce.sha256, ce.submitted_at, submitter.display_name AS submitted_by
            FROM completion_evidence ce JOIN user_account submitter ON submitter.id=ce.submitted_by
+           LEFT JOIN placement_version pv ON pv.id=ce.placement_version_id
            WHERE ce.placement_id=%s ORDER BY ce.kind, ce.revision DESC""",
         (pid,),
     ).fetchall()
@@ -750,22 +796,27 @@ def create_progress_report(ctx: CommandContext, pid: int, content: str) -> dict:
         (pid,),
     ).fetchone()["revision"]
     record = ctx.execute(
-        """INSERT INTO placement_progress_report(placement_id,revision,author_id,content)
-           VALUES (%s,%s,%s,%s) RETURNING created_at""",
-        (pid, revision, ctx.actor_id, clean_content),
+        """INSERT INTO placement_progress_report(placement_id,placement_version_id,revision,author_id,content,segment_id)
+           VALUES (%s,%s,%s,%s,%s,%s) RETURNING created_at""",
+        (pid, placement["current_version_id"], revision, ctx.actor_id, clean_content, _active_segment_id(ctx, pid)),
     ).fetchone()
-    audit.write(ctx.cur, "progress.report_submitted", "placement", pid, None, {"revision": revision})
+    audit.write(ctx.cur, "progress.report_submitted", "placement", pid, None,
+                {"revision": revision, "placement_version_id": placement["current_version_id"]})
     return {"revision": revision, "created_at": record["created_at"]}
 
 
 def list_progress_reports(cur, subj: dict, pid: int) -> list[dict]:
     authz.authorize(cur, subj, "progress_report:read", pid)
-    return cur.execute(
-        """SELECT r.revision, r.content, r.created_at, author.display_name AS author
+    rows = cur.execute(
+        """SELECT r.revision, r.placement_version_id, pv.version_no, r.content, r.created_at,
+                  author.display_name AS author, r.segment_id, s.sequence_no AS segment_sequence_no
            FROM placement_progress_report r JOIN user_account author ON author.id=r.author_id
+           LEFT JOIN placement_version pv ON pv.id=r.placement_version_id
+           LEFT JOIN placement_segment s ON s.id=r.segment_id
            WHERE r.placement_id=%s ORDER BY r.revision DESC""",
         (pid,),
     ).fetchall()
+    return segments.filter_by_segment(rows, segments.visible_segment_ids(cur, subj, pid))
 
 
 def assign_work_plan_item(ctx: CommandContext, pid: int, title: str, description: str) -> dict:
@@ -780,35 +831,37 @@ def assign_work_plan_item(ctx: CommandContext, pid: int, title: str, description
         raise NotFound()
     if placement["state"] == "CLOSED":
         raise BusinessError("PLACEMENT_CLOSED", placement["state"])
-    current = ctx.execute(
-        "SELECT workplace_supervisor_id FROM placement_version WHERE id=%s",
-        (placement["current_version_id"],),
-    ).fetchone()
-    if current is None or current["workplace_supervisor_id"] != ctx.actor_id:
+    current = _operational_supervisor(ctx, pid)
+    if current is None or current["supervisor_id"] != ctx.actor_id:
         raise Forbidden("only the currently assigned workplace supervisor may assign work-plan activities")
     revision = ctx.execute(
         "SELECT coalesce(max(revision),0)+1 AS revision FROM placement_work_plan_item WHERE placement_id=%s",
         (pid,),
     ).fetchone()["revision"]
     record = ctx.execute(
-        """INSERT INTO placement_work_plan_item(placement_id,revision,assigned_by,title,description)
-           VALUES (%s,%s,%s,%s,%s) RETURNING assigned_at""",
-        (pid, revision, ctx.actor_id, clean_title, clean_description),
+        """INSERT INTO placement_work_plan_item(placement_id,placement_version_id,revision,assigned_by,title,description,segment_id)
+           VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING assigned_at""",
+        (pid, placement["current_version_id"], revision, ctx.actor_id, clean_title, clean_description,
+         current["segment_id"]),
     ).fetchone()
-    audit.write(ctx.cur, "work_plan.activity_assigned", "placement", pid, None, {"revision": revision})
+    audit.write(ctx.cur, "work_plan.activity_assigned", "placement", pid, None,
+                {"revision": revision, "placement_version_id": placement["current_version_id"]})
     return {"revision": revision, "assigned_at": record["assigned_at"]}
 
 
 def list_work_plan(cur, subj: dict, pid: int) -> list[dict]:
     authz.authorize(cur, subj, "work_plan:read", pid)
-    return cur.execute(
-        """SELECT w.revision, w.title, w.description, w.assigned_at,
-                  u.display_name AS assigned_by
+    rows = cur.execute(
+        """SELECT w.revision, w.placement_version_id, pv.version_no, w.title, w.description, w.assigned_at,
+                  u.display_name AS assigned_by, w.segment_id, s.sequence_no AS segment_sequence_no
            FROM placement_work_plan_item w
            JOIN user_account u ON u.id=w.assigned_by
+           LEFT JOIN placement_version pv ON pv.id=w.placement_version_id
+           LEFT JOIN placement_segment s ON s.id=w.segment_id
            WHERE w.placement_id=%s ORDER BY w.revision""",
         (pid,),
     ).fetchall()
+    return segments.filter_by_segment(rows, segments.visible_segment_ids(cur, subj, pid))
 
 
 def create_evaluation(ctx: CommandContext, pid: int, kind: str, narrative: str) -> dict:
@@ -824,20 +877,18 @@ def create_evaluation(ctx: CommandContext, pid: int, kind: str, narrative: str) 
         raise NotFound()
     if placement["state"] != "ACTIVE":
         raise BusinessError("PLACEMENT_NOT_ACTIVE", placement["state"])
-    current_supervisor = ctx.execute(
-        "SELECT workplace_supervisor_id FROM placement_version WHERE id=%s",
-        (placement["current_version_id"],),
-    ).fetchone()
-    if current_supervisor is None or current_supervisor["workplace_supervisor_id"] != ctx.actor_id:
+    current_supervisor = _operational_supervisor(ctx, pid)
+    if current_supervisor is None or current_supervisor["supervisor_id"] != ctx.actor_id:
         raise Forbidden("only the currently assigned workplace supervisor may submit an evaluation")
     revision = ctx.execute(
         "SELECT coalesce(max(revision),0)+1 AS revision FROM placement_evaluation WHERE placement_id=%s AND kind=%s",
         (pid, kind),
     ).fetchone()["revision"]
     record = ctx.execute(
-        """INSERT INTO placement_evaluation(placement_id,kind,revision,evaluator_id,narrative)
-           VALUES (%s,%s,%s,%s,%s) RETURNING submitted_at""",
-        (pid, kind, revision, ctx.actor_id, clean_narrative),
+        """INSERT INTO placement_evaluation(placement_id,placement_version_id,kind,revision,evaluator_id,narrative,segment_id)
+           VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING submitted_at""",
+        (pid, placement["current_version_id"], kind, revision, ctx.actor_id, clean_narrative,
+         current_supervisor["segment_id"]),
     ).fetchone()
     if kind == "FINAL":
         ctx.execute(
@@ -845,18 +896,28 @@ def create_evaluation(ctx: CommandContext, pid: int, kind: str, narrative: str) 
             (pid,),
         )
     audit.write(ctx.cur, "evaluation.submitted", "placement", pid, None,
-                {"kind": kind, "revision": revision})
-    return {"kind": kind, "revision": revision, "submitted_at": record["submitted_at"]}
+                {"kind": kind, "revision": revision,
+                 "placement_version_id": placement["current_version_id"],
+                 "segment_id": current_supervisor["segment_id"]})
+    return {"kind": kind, "revision": revision, "submitted_at": record["submitted_at"],
+            "segment_id": current_supervisor["segment_id"]}
 
 
 def list_evaluations(cur, subj: dict, pid: int) -> list[dict]:
+    """CR-05-BR-06: evaluations of former supervisors stay in the record; external
+    users only see the evaluations of their own current segment."""
     authz.authorize(cur, subj, "evaluation:read", pid)
-    return cur.execute(
-        """SELECT e.kind, e.revision, e.narrative, e.submitted_at, evaluator.display_name AS evaluator
+    rows = cur.execute(
+        """SELECT e.kind, e.revision, e.placement_version_id, pv.version_no, e.narrative,
+                  e.submitted_at, evaluator.display_name AS evaluator, e.segment_id,
+                  s.sequence_no AS segment_sequence_no
            FROM placement_evaluation e JOIN user_account evaluator ON evaluator.id=e.evaluator_id
+           LEFT JOIN placement_version pv ON pv.id=e.placement_version_id
+           LEFT JOIN placement_segment s ON s.id=e.segment_id
            WHERE e.placement_id=%s ORDER BY e.submitted_at DESC, e.revision DESC""",
         (pid,),
     ).fetchall()
+    return segments.filter_by_segment(rows, segments.visible_segment_ids(cur, subj, pid))
 
 
 def create_incident(ctx: CommandContext, pid: int, kind: str, summary: str, description: str) -> dict:
@@ -878,25 +939,32 @@ def create_incident(ctx: CommandContext, pid: int, kind: str, summary: str, desc
         (pid,),
     ).fetchone()["revision"]
     record = ctx.execute(
-        """INSERT INTO placement_incident(placement_id,kind,revision,reporter_id,summary,description)
-           VALUES (%s,%s,%s,%s,%s,%s) RETURNING status, reported_at""",
-        (pid, kind, revision, ctx.actor_id, clean_summary, clean_description),
+        """INSERT INTO placement_incident(placement_id,placement_version_id,kind,revision,reporter_id,summary,description,segment_id)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING status, reported_at""",
+        (pid, placement["current_version_id"], kind, revision, ctx.actor_id, clean_summary, clean_description,
+         _active_segment_id(ctx, pid)),
     ).fetchone()
     audit.write(ctx.cur, "placement.incident_reported" if kind == "INCIDENT" else "placement.change_reported",
-                "placement", pid, None, {"kind": kind, "revision": revision})
+                "placement", pid, None,
+                {"kind": kind, "revision": revision,
+                 "placement_version_id": placement["current_version_id"]})
     return {"kind": kind, "revision": revision, "status": record["status"],
             "reported_at": record["reported_at"]}
 
 
 def list_incidents(cur, subj: dict, pid: int) -> list[dict]:
+    """CR-05-BR-09: incident details of other segments are not shared with external supervisors."""
     authz.authorize(cur, subj, "incident:read", pid)
-    return cur.execute(
-        """SELECT i.kind, i.revision, i.status, i.summary, i.description, i.reported_at,
-                  reporter.display_name AS reporter
+    rows = cur.execute(
+        """SELECT i.kind, i.revision, i.placement_version_id, pv.version_no, i.status, i.summary, i.description, i.reported_at,
+                  reporter.display_name AS reporter, i.segment_id, s.sequence_no AS segment_sequence_no
            FROM placement_incident i JOIN user_account reporter ON reporter.id=i.reporter_id
+           LEFT JOIN placement_version pv ON pv.id=i.placement_version_id
+           LEFT JOIN placement_segment s ON s.id=i.segment_id
            WHERE i.placement_id=%s ORDER BY i.revision DESC""",
         (pid,),
     ).fetchall()
+    return segments.filter_by_segment(rows, segments.visible_segment_ids(cur, subj, pid))
 
 
 def activation_status(cur, subj: dict, pid: int) -> dict:
@@ -1017,9 +1085,13 @@ def activate(ctx: CommandContext, pid: int, naive: bool = False, pause: float = 
 
 
 def record_hours(ctx: CommandContext, pid: int, hours: float, *,
-                 synthetic_demo: bool = False) -> None:
+                 synthetic_demo: bool = False, work_date=None, description: str | None = None) -> dict:
     if not math.isfinite(hours) or hours <= 0:
         raise BusinessError("INVALID_HOURS")
+    clean_description = (description or "").strip() or None
+    if clean_description is not None and len(clean_description) > 1000:
+        raise BusinessError("HOURS_DESCRIPTION_TOO_LONG")
+    result: dict = {}
 
     def run() -> None:
         subj = authz.subject(ctx.cur, ctx.actor_id)
@@ -1027,24 +1099,58 @@ def record_hours(ctx: CommandContext, pid: int, hours: float, *,
         placement = _placement(ctx, pid)
         if placement["state"] != "ACTIVE":
             raise BusinessError("PLACEMENT_NOT_ACTIVE", placement["state"])
-        ctx.execute("INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,%s)",
-                    (pid, ctx.actor_id, hours))
-        audit_state = {"hours": hours}
+        # CR-05: hours belong to exactly one segment, the one currently ACTIVE.
+        segment = segments.active_segment(ctx.cur, pid)
+        if segment is None and segments.has_segments(ctx.cur, pid):
+            raise BusinessError("NO_ACTIVE_SEGMENT")
+        # work_date is optional: an undated entry is a period summary (E3 behaviour).
+        day = work_date
+        if segment is not None and day is not None and (
+                day < segment["start_date"] or day > segment["end_date"]):
+            raise BusinessError("HOURS_WORK_DATE_INVALID", "La fecha debe estar dentro del periodo del segmento.")
+        entry = ctx.execute(
+            """INSERT INTO progress_entry(placement_id,placement_version_id,student_id,hours,segment_id,
+                 work_date,description) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (pid, placement["current_version_id"], ctx.actor_id, hours,
+             segment["id"] if segment else None, day, clean_description),
+        ).fetchone()
+        result.update({"entry_id": entry["id"], "segment_id": segment["id"] if segment else None})
+        audit_state = {"hours": hours, "placement_version_id": placement["current_version_id"],
+                       "segment_id": segment["id"] if segment else None}
         if synthetic_demo:
             audit_state["source"] = SYNTHETIC_DEMO_SOURCE
         audit.write(ctx.cur, "progress.hours_recorded", "placement", pid, None, audit_state)
     try:
         _gate(run)
     except BusinessError as exc:
-        raise BusinessError("PLACEMENT_NOT_ACTIVE", exc.detail) from exc
+        if exc.code == "GATE_VIOLATION":
+            detail = str(exc.detail or "")
+            for code in ("HOURS_DAILY_LIMIT", "HOURS_WORK_DATE_INVALID", "SEGMENT_CONTEXT"):
+                if detail.startswith(code):
+                    raise BusinessError(code, detail) from exc
+            raise BusinessError("PLACEMENT_NOT_ACTIVE", exc.detail) from exc
+        raise
+    return result
 
 
 def list_hours(cur: psycopg.Cursor, subj: dict, pid: int) -> list[dict]:
     authz.authorize(cur, subj, "progress:read", pid)
-    return cur.execute(
-        "SELECT id, hours, created_at FROM progress_entry WHERE placement_id=%s ORDER BY id DESC",
+    rows = cur.execute(
+        """SELECT pe.id, pe.hours, pe.created_at, pe.placement_version_id, pv.version_no,
+                  pe.segment_id, s.sequence_no AS segment_sequence_no, pe.work_date, pe.description,
+                  coalesce(r.decision, 'SUBMITTED') AS review_status, r.accepted_hours,
+                  r.reason_code AS review_reason_code, r.reason AS review_reason, r.reviewed_at,
+                  reviewer.display_name AS reviewed_by
+           FROM progress_entry pe LEFT JOIN placement_version pv ON pv.id=pe.placement_version_id
+           LEFT JOIN placement_segment s ON s.id=pe.segment_id
+           LEFT JOIN LATERAL (SELECT decision, accepted_hours, reason_code, reason, reviewed_at, reviewer_id
+                              FROM progress_entry_review rv WHERE rv.entry_id=pe.id
+                              ORDER BY rv.id DESC LIMIT 1) r ON true
+           LEFT JOIN user_account reviewer ON reviewer.id=r.reviewer_id
+           WHERE pe.placement_id=%s ORDER BY pe.id DESC""",
         (pid,),
     ).fetchall()
+    return segments.filter_by_segment(rows, segments.visible_segment_ids(cur, subj, pid))
 
 
 def confirm_completion(ctx: CommandContext, pid: int) -> None:
@@ -1059,6 +1165,11 @@ def confirm_completion(ctx: CommandContext, pid: int) -> None:
         unmet = completion_unmet(ctx, pid)
         if unmet:
             raise BusinessError("COMPLETION_EVIDENCE_MISSING", unmet)
+        # CR-05-BR-07: segments, decided work and combined review, never hours alone.
+        blockers = segments.segment_blockers(ctx.cur, pid, allow_single_active=True)
+        if blockers:
+            raise BusinessError("SEGMENT_REQUIREMENTS_PENDING", blockers)
+        segments.auto_complete_single_segment(ctx, pid)
         ctx.execute("UPDATE placement SET state='COMPLETED' WHERE id=%s", (pid,))
         audit.write(ctx.cur, "placement.completed", "placement", pid,
                      {"state": "ACTIVE"}, {"state": "COMPLETED"})
@@ -1078,6 +1189,9 @@ def close_placement(ctx: CommandContext, pid: int) -> None:
         unmet = completion_unmet(ctx, pid)
         if unmet:
             raise BusinessError("COMPLETION_EVIDENCE_MISSING", unmet)
+        blockers = segments.segment_blockers(ctx.cur, pid, allow_single_active=False)
+        if blockers:
+            raise BusinessError("SEGMENT_REQUIREMENTS_PENDING", blockers)
         ctx.execute("UPDATE placement SET state='CLOSED' WHERE id=%s", (pid,))
         audit.write(ctx.cur, "placement.closed", "placement", pid,
                      {"state": "COMPLETED"}, {"state": "CLOSED"})
@@ -1088,7 +1202,13 @@ def propose_change(ctx: CommandContext, pid: int, **changes) -> int:
     subj = authz.subject(ctx.cur, ctx.actor_id)
     authz.authorize(ctx.cur, subj, "placement:propose_change", pid)
     p = _placement(ctx, pid)
+    if p is None:
+        raise NotFound()
+    if p["state"] != "ACTIVE":
+        raise BusinessError("PLACEMENT_NOT_ACTIVE", p["state"])
     cur_v = ctx.execute("SELECT * FROM placement_version WHERE id=%s", (p["current_version_id"],)).fetchone()
+    if cur_v is None:
+        raise BusinessError("CURRENT_VERSION_MISSING")
     n = ctx.execute("SELECT max(version_no)+1 AS n FROM placement_version WHERE placement_id=%s", (pid,)).fetchone()["n"]
     new = {k: cur_v[k] for k in ("workplace_supervisor_id", "start_date", "end_date", "location", "responsibilities")}
     new.update(changes)
@@ -1106,12 +1226,28 @@ def propose_change(ctx: CommandContext, pid: int, **changes) -> int:
 
 def approve_version(ctx: CommandContext, vid: int) -> None:
     v = ctx.execute("SELECT * FROM placement_version WHERE id=%s", (vid,)).fetchone()
+    if v is None:
+        raise NotFound()
     subj = authz.subject(ctx.cur, ctx.actor_id)
     authz.authorize(ctx.cur, subj, "version:approve", v["placement_id"])
     p = _placement(ctx, v["placement_id"])
+    if p is None:
+        raise NotFound()
+    # Re-read after taking the placement lock. This serializes competing
+    # approvals and prevents a stale proposal from moving the current pointer
+    # backwards after a newer version has already been approved.
+    v = ctx.execute("SELECT * FROM placement_version WHERE id=%s FOR UPDATE", (vid,)).fetchone()
+    if v is None:
+        raise NotFound()
     if v["status"] != "PROPOSED":
         raise BusinessError("INVALID_TRANSITION", v["status"])
+    if p["state"] != "ACTIVE":
+        raise BusinessError("PLACEMENT_NOT_ACTIVE", p["state"])
     old = ctx.execute("SELECT * FROM placement_version WHERE id=%s", (p["current_version_id"],)).fetchone()
+    if old is None:
+        raise BusinessError("CURRENT_VERSION_MISSING")
+    if v["version_no"] <= old["version_no"]:
+        raise BusinessError("STALE_VERSION", {"version_no": v["version_no"], "current_version_no": old["version_no"]})
     ctx.execute("UPDATE placement_version SET status='APPROVED', decided_by=%s WHERE id=%s", (ctx.actor_id, vid))
     ctx.execute("UPDATE placement SET current_version_id=%s WHERE id=%s", (vid, p["id"]))
     audit.write(ctx.cur, "placement.version_approved", "placement", p["id"],

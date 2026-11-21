@@ -1,6 +1,6 @@
 # Alcance real del incremento
 
-Fecha de corte: 2026-11-05. La clasificación refleja código y pruebas revisados en esta entrega. “Implementado” describe comportamiento del repositorio; no significa adopción institucional ni despliegue productivo.
+Fecha de corte base: 2026-11-05. La adenda de validación del 2026-11-17 incorpora los controles de monotonicidad descritos en `evidence/test-results/2026-11-17.md`. “Implementado” describe comportamiento del repositorio; no significa adopción institucional ni despliegue productivo.
 
 ## Cómo leer los estados
 
@@ -18,7 +18,7 @@ Fecha de corte: 2026-11-05. La clasificación refleja código y pruebas revisado
 | Documentos/versiones | Implementado en la aplicación | Entregas y revisiones quedan en DB, se pueden volver a enviar/descargar y aparecen en el expediente. Los bytes se almacenan en PostgreSQL; adaptador externo pendiente. |
 | Activación/cierre | Compuertas implementadas | Reglas se instancian desde política persistida y servicios de dominio/guardas DB. En el fixture sintético se activa y cierra un recorrido; no se infiere regla institucional universal de horas. |
 | Supervisión y seguimiento | Implementado | Asignaciones y su historial, plan de trabajo narrativo, actualizaciones del estudiante y evaluación narrativa; scope por rol/relación. Sin fechas límite, notas ni aprobación de horas. |
-| Incidentes/cambios | Implementado parcialmente | Registro append-only con estado factual `REPORTED` e historial; no resuelve, escala ni crea una versión formal de la práctica. OPEN-03 sigue pendiente. |
+| Incidentes/cambios | Implementado parcialmente | Registro append-only con estado factual `REPORTED` e historial; ahora una parte autorizada puede proponer una nueva versión por `POST /placements/{id}/changes` y el coordinador de programa puede aprobarla mediante `POST /placements/{id}/changes/approve` cuando la relación lo permite. No resuelve, escala ni define la autoridad institucional final de cambios; OPEN-03 sigue pendiente. |
 | Horas | Implementado | El titular registra horas cuando el estado lo permite; el expediente permite lectura histórica tras cierre. No existe aprobación de horas ni interpretación institucional de un mínimo salvo política/configuración persistida de demo. |
 | Evidencia final | Implementado | Artefacto PDF sintético almacenado con versiones; cierre valida los requisitos persistidos. No equivale a aprobación académica. |
 | Notificaciones | Implementado en bandeja interna | Persistencia, destinatarios por relación y marcar leído; no hay email/worker ni recordatorios programados. |
@@ -33,6 +33,10 @@ Fecha de corte: 2026-11-05. La clasificación refleja código y pruebas revisado
 El incremento ejecutable sigue un caso desde oportunidad y postulación hasta expediente de práctica y cierre con evidencia. Incluye el caso inválido de aplicación sin política/eligibilidad y el de cierre incompleto, además de decisiones/manual review con relación autorizada. El camino de éxito completo se ejercitó en el flujo E2E de actores; los E2E con fixture poblado comprueban lectura/recarga, registros existentes, límites de escritura tras cierre y visibilidad cruzada.
 
 El fixture de demo puede usar un valor de 100 horas y perfiles sintéticos. Eso es una entrada de prueba/requisito de política de demo, no una regla institucional. Los flujos no inventan aprobación humana en producción: los tests ejecutan la acción real bajo un usuario sintético autorizado, y la demo interactiva se identifica como temporal.
+
+## Adenda de integridad de versiones — 2026-11-17
+
+Las propuestas de cambio solo se aceptan mientras la práctica está `ACTIVE`. La aprobación bloquea la práctica, vuelve a leer la versión y rechaza una propuesta cuyo número ya no sea posterior al de la versión vigente (`STALE_VERSION`); así una aprobación concurrente no puede hacer retroceder el expediente. El historial append-only y el evento `placement.version_approved` se conservan. La autoridad institucional final de cambios continúa pendiente en OPEN-03.
 
 ## Estado Neon separado
 

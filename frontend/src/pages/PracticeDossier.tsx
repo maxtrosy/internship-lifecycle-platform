@@ -8,6 +8,9 @@ import PlacementFollowUp from "../components/PlacementFollowUp";
 import PlacementWorkPlan from "../components/PlacementWorkPlan";
 import PlacementMessages from "../components/PlacementMessages";
 import FacultyAssignmentManager from "../components/FacultyAssignmentManager";
+import PlacementSegments from "../components/PlacementSegments";
+import HoursReviewList from "../components/HoursReviewList";
+import { segmentGateBlockers } from "../segments";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 import { completionRequirementsSatisfied } from "../completion";
 import { canDisplayDossierHours } from "../dossier";
@@ -38,9 +41,12 @@ function completionBlocker(dossier: PlacementDossier): string | null {
     return `Requisitos de activación pendientes: ${dossier.placement.activation_unmet.map(formatDomainLabel).join(", ")}.`;
   }
   const unmet = dossier.completion_requirements.filter((item) => item.mandatory && !item.satisfied);
-  return unmet.length
-    ? `Requisitos de finalización pendientes: ${unmet.map((item) => formatDomainLabel(item.kind)).join(", ")}.`
-    : null;
+  if (unmet.length) {
+    return `Requisitos de finalización pendientes: ${unmet.map((item) => formatDomainLabel(item.kind)).join(", ")}.`;
+  }
+  // CR-05-BR-07: segment-level conditions (open segments, unreviewed hours, combined review).
+  const segmentBlockers = segmentGateBlockers(dossier.segment_gate, dossier.placement.state === "ACTIVE");
+  return segmentBlockers.length ? `Pendiente en segmentos: ${segmentBlockers.join("; ")}.` : null;
 }
 
 export default function PracticeDossier({ user, onNavigate }: Props) {
@@ -221,7 +227,8 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
 
                 <BentoCard variant="content" title="Progreso y finalización" description={dossier.completion_policy_version ? `Política de finalización v${dossier.completion_policy_version}` : "Condiciones fijadas para este expediente"}>
                   {showDossierHours && (
-                    <div className="dossier-hours-summary"><span>Horas registradas (sin aprobación)</span><strong>{hoursLabel(dossier.hours_total)} h</strong></div>
+                    <div className="dossier-hours-summary"><span>Horas reportadas</span><strong>{hoursLabel(dossier.hours_total)} h</strong>
+                      {dossier.hours_summary && <span className="muted"> · aceptadas {hoursLabel(dossier.hours_summary.accepted_total)} h</span>}</div>
                   )}
                   {!dossier.completion_requirements_configured && <p className="muted">La política de finalización se fija durante la aprobación académica.</p>}
                   {dossier.completion_requirements_configured && dossier.completion_requirements === null && <p className="muted">Los detalles de finalización no están disponibles para este rol.</p>}
@@ -232,13 +239,14 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
                       <Badge state={item.satisfied ? "APPROVED" : "REQUIRED"}>{item.satisfied ? "Cumplido" : "Pendiente"}</Badge>
                     </div>
                   ))}
-                  {dossier.completion_requirements_configured && dossier.completion_requirements && dossier.completion_requirements.length > 0 && <p className="muted">El registro de horas no incluye un flujo de aprobación.</p>}
+                  {dossier.completion_requirements_configured && dossier.completion_requirements && dossier.completion_requirements.length > 0 && <p className="muted">Las horas mínimas se calculan con horas aceptadas por el rol revisor configurado, no con horas reportadas.</p>}
                   {dossier.placement.state === "CLOSED" && <Alert kind="success">La práctica quedó cerrada.</Alert>}
                   {dossier.capabilities.confirm_completion && dossier.placement.state === "ACTIVE" && (() => {
                     const ready = completionRequirementsSatisfied(
                       dossier.completion_requirements_configured,
                       dossier.completion_requirements,
-                    ) && dossier.placement.activation_unmet.length === 0;
+                    ) && dossier.placement.activation_unmet.length === 0
+                      && segmentGateBlockers(dossier.segment_gate, true).length === 0;
                     const blocker = completionBlocker(dossier);
                     return (
                       <div className="dossier-completion-actions">
@@ -309,13 +317,13 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
                 </BentoCard>
 
                 {showDossierHours && (
-                  <BentoCard variant="content" className="dossier-wide" title="Registro de horas" description="Entradas guardadas por la persona titular; no representan aprobación">
-                    {!dossier.hours?.length && <EmptyState message="Todavía no hay horas registradas." />}
-                    {!!dossier.hours?.length && <ul className="dossier-hours-list">{dossier.hours.map((entry) => <li key={entry.id}><time dateTime={entry.created_at}>{formatHistoryDate(entry.created_at)}</time><strong>{hoursLabel(entry.hours)} h</strong></li>)}</ul>}
+                  <BentoCard variant="content" className="dossier-wide" title="Registro de horas" description="Horas reportadas por la persona titular y su estado de revisión por segmento">
+                    <HoursReviewList dossier={dossier} onChanged={() => setDetailAttempt((value) => value + 1)} />
                     {dossier.capabilities.record_hours && <button className="btn secondary" type="button" onClick={() => onNavigate("documents")}>Registrar horas</button>}
                   </BentoCard>
                 )}
 
+                <PlacementSegments dossier={dossier} onChanged={() => setDetailAttempt((value) => value + 1)} />
                 <PlacementWorkPlan dossier={dossier} onChanged={() => setDetailAttempt((value) => value + 1)} />
                 <PlacementFollowUp dossier={dossier} onChanged={() => setDetailAttempt((value) => value + 1)} />
                 <PlacementMessages dossier={dossier} />

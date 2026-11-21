@@ -141,6 +141,8 @@ def main() -> int:
                 "OPPORTUNITY_REVIEWER_ROLES": "EXPERIENTIAL_COORDINATOR",
                 "OPPORTUNITY_PUBLISHER_ROLES": "EXPERIENTIAL_COORDINATOR",
                 "PLACEMENT_FACULTY_ASSIGNER_ROLES": "PROGRAM_COORDINATOR",
+                "PLACEMENT_SEGMENT_MANAGER_ROLES": "EXPERIENTIAL_COORDINATOR",
+                "PLACEMENT_HOURS_REVIEWER_ROLES": "FACULTY_SUPERVISOR,PROGRAM_COORDINATOR",
                 "VITE_API_PROXY_TARGET": api_base,
             })
             # Domain services invoked by the fixture read Settings in this
@@ -182,8 +184,8 @@ def main() -> int:
                     table: conn.execute(f"SELECT count(*) AS n FROM {table}").fetchone()["n"]
                     for table in ("user_account", "host_org", "opportunity", "application", "placement")
                 }
-            if revision != "0014":
-                raise RuntimeError("The temporary database did not reach migration revision 0014.")
+            if revision != "0016":  # CR-05 schema head (Evaluación 4)
+                raise RuntimeError("The temporary database did not reach migration revision 0016.")
 
             python_path = [str(backend)]
             if child_env.get("PYTHONPATH"):

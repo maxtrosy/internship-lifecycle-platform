@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from urllib.parse import quote
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -12,6 +13,7 @@ from app.deps import requires
 from app.errors import BusinessError
 from app.modules.audit import service as audit_service
 from app.modules import authz
+from app.modules.lifecycle import segments as segment_service
 from app.modules.lifecycle import service as lifecycle
 
 router = APIRouter()
@@ -24,6 +26,59 @@ class ReviewBody(BaseModel):
 
 class HoursBody(BaseModel):
     hours: float = Field(gt=0, allow_inf_nan=False)
+    work_date: date | None = None
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class SegmentBody(BaseModel):
+    host_org_id: int = Field(ge=1)
+    unit: str = Field(min_length=1, max_length=160)
+    workplace_supervisor_id: int = Field(ge=1)
+    start_date: date
+    end_date: date
+    modality: Literal["ONSITE", "REMOTE", "HYBRID"]
+    responsibilities: str = Field(min_length=1, max_length=5000)
+    expected_hours: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+
+
+class SegmentConditionBody(BaseModel):
+    reference: str = Field(min_length=1, max_length=500)
+
+
+class SegmentCompleteBody(BaseModel):
+    ended_on: date | None = None
+
+
+class SegmentTerminateBody(BaseModel):
+    ended_on: date
+    reason_shared: str = Field(min_length=1, max_length=1000)
+    reason_internal: str | None = Field(default=None, max_length=3000)
+    work_recognition: Literal["ACCEPTED_HOURS_RECOGNIZED", "NOT_RECOGNIZED"]
+    recognition_note: str | None = Field(default=None, max_length=1000)
+
+
+class SegmentCancelBody(BaseModel):
+    reason_shared: str = Field(min_length=1, max_length=1000)
+
+
+class TransferBody(BaseModel):
+    effective_date: date
+    reason_shared: str = Field(min_length=1, max_length=1000)
+    reason_internal: str | None = Field(default=None, max_length=3000)
+    prior_work_treatment: Literal["ACCEPTED_HOURS_RECOGNIZED", "NOT_RECOGNIZED"]
+    destination: SegmentBody
+
+
+class HoursReviewBody(BaseModel):
+    decision: Literal["ACCEPTED", "REJECTED", "DISPUTED"]
+    accepted_hours: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    reason_code: Literal["DUPLICATE", "OUTSIDE_SEGMENT", "NOT_VERIFIABLE", "OTHER"] | None = None
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class ExperienceReviewBody(BaseModel):
+    decision: Literal["APPROVED", "CHANGES_REQUIRED"]
+    rationale: str = Field(min_length=1, max_length=3000)
 
 
 class RejectAcademicBody(BaseModel):
@@ -52,6 +107,18 @@ class WorkPlanItemBody(BaseModel):
 
 class FacultySupervisorBody(BaseModel):
     user_id: int = Field(ge=1)
+
+
+class PlacementChangeBody(BaseModel):
+    """Only supplied fields are copied into a new immutable proposed version."""
+    start_date: date | None = None
+    end_date: date | None = None
+    location: str | None = Field(default=None, min_length=1, max_length=240)
+    responsibilities: str | None = Field(default=None, min_length=1, max_length=5000)
+
+
+class VersionApprovalBody(BaseModel):
+    version_id: int = Field(ge=1)
 
 
 @router.get("/placements/pending-academic")
@@ -185,6 +252,29 @@ def history(pid: int, subject_id: int = Depends(requires("placement:read"))) -> 
         subj = authz.subject(cur, subject_id)
         authz.authorize(cur, subj, "placement:read", pid)
         return audit_service.list_history(cur, pid)
+
+
+@router.post("/placements/{pid}/changes", status_code=201)
+def propose_placement_change(pid: int, body: PlacementChangeBody,
+                             subject_id: int = Depends(requires("placement:read"))) -> dict:
+    changes = body.model_dump(exclude_none=True)
+    if not changes:
+        raise BusinessError("CHANGE_EMPTY", "Indica al menos un campo para proponer un cambio.")
+    with db.command(subject_id) as ctx:
+        version_id = lifecycle.propose_change(ctx, pid, **changes)
+    return {"version_id": version_id, "status": "PROPOSED"}
+
+
+@router.post("/placements/{pid}/changes/approve", status_code=204)
+def approve_placement_change(pid: int, body: VersionApprovalBody,
+                             subject_id: int = Depends(requires("placement:read"))) -> None:
+    with db.command(subject_id) as ctx:
+        version = ctx.execute(
+            "SELECT placement_id FROM placement_version WHERE id=%s", (body.version_id,)
+        ).fetchone()
+        if version is None or version["placement_id"] != pid:
+            raise BusinessError("VERSION_NOT_FOUND", "La versión no pertenece a esta práctica.")
+        lifecycle.approve_version(ctx, body.version_id)
 
 
 @router.get("/placements/{pid}/progress-reports")
@@ -332,7 +422,8 @@ def review(pid: int, item_id: int, body: ReviewBody,
 def record_hours(pid: int, body: HoursBody,
                  subject_id: int = Depends(requires("progress:create"))) -> None:
     with db.command(subject_id) as ctx:
-        lifecycle.record_hours(ctx, pid, body.hours)
+        lifecycle.record_hours(ctx, pid, body.hours, work_date=body.work_date,
+                               description=body.description)
 
 
 @router.get("/placements/{pid}/hours")
@@ -340,3 +431,107 @@ def list_hours(pid: int, subject_id: int = Depends(requires("progress:read"))) -
     with db.read() as cur:
         subj = authz.subject(cur, subject_id)
         return lifecycle.list_hours(cur, subj, pid)
+
+
+# ----------------------------------------------------------------- CR-05 segments
+
+@router.get("/placements/{pid}/segments")
+def list_segments(pid: int, subject_id: int = Depends(requires("placement:read"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return segment_service.list_segments(cur, subj, pid)
+
+
+@router.get("/placements/{pid}/segment-options")
+def segment_options(pid: int, subject_id: int = Depends(requires("segment:manage"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return segment_service.segment_options(cur, subj, pid)
+
+
+@router.post("/placements/{pid}/segments", status_code=201)
+def create_segment(pid: int, body: SegmentBody,
+                   subject_id: int = Depends(requires("segment:manage"))) -> dict:
+    with db.command(subject_id) as ctx:
+        return segment_service.create_segment(ctx, pid, body.model_dump())
+
+
+@router.post("/placements/{pid}/segments/{sid}/conditions/{condition_id}/confirm", status_code=204)
+def confirm_segment_condition(pid: int, sid: int, condition_id: int, body: SegmentConditionBody,
+                              subject_id: int = Depends(requires("segment_condition:confirm"))) -> None:
+    with db.command(subject_id) as ctx:
+        segment_service.confirm_condition(ctx, pid, sid, condition_id, body.reference)
+
+
+@router.post("/placements/{pid}/segments/{sid}/activate", status_code=204)
+def activate_segment(pid: int, sid: int, subject_id: int = Depends(requires("segment:manage"))) -> None:
+    with db.command(subject_id) as ctx:
+        segment_service.activate_segment(ctx, pid, sid)
+
+
+@router.post("/placements/{pid}/segments/{sid}/complete", status_code=204)
+def complete_segment(pid: int, sid: int, body: SegmentCompleteBody,
+                     subject_id: int = Depends(requires("segment:manage"))) -> None:
+    with db.command(subject_id) as ctx:
+        segment_service.complete_segment(ctx, pid, sid, body.ended_on)
+
+
+@router.post("/placements/{pid}/segments/{sid}/terminate", status_code=204)
+def terminate_segment(pid: int, sid: int, body: SegmentTerminateBody,
+                      subject_id: int = Depends(requires("segment:manage"))) -> None:
+    with db.command(subject_id) as ctx:
+        segment_service.terminate_segment(
+            ctx, pid, sid, ended_on=body.ended_on, reason_shared=body.reason_shared,
+            reason_internal=body.reason_internal, work_recognition=body.work_recognition,
+            recognition_note=body.recognition_note,
+        )
+
+
+@router.post("/placements/{pid}/segments/{sid}/cancel", status_code=204)
+def cancel_segment(pid: int, sid: int, body: SegmentCancelBody,
+                   subject_id: int = Depends(requires("segment:manage"))) -> None:
+    with db.command(subject_id) as ctx:
+        segment_service.cancel_segment(ctx, pid, sid, body.reason_shared)
+
+
+@router.post("/placements/{pid}/segments/{sid}/transfer", status_code=201)
+def transfer_segment(pid: int, sid: int, body: TransferBody,
+                     subject_id: int = Depends(requires("segment:manage"))) -> dict:
+    with db.command(subject_id) as ctx:
+        return segment_service.transfer(
+            ctx, pid, sid, effective_date=body.effective_date, reason_shared=body.reason_shared,
+            reason_internal=body.reason_internal, prior_work_treatment=body.prior_work_treatment,
+            destination=body.destination.model_dump(),
+        )
+
+
+@router.get("/placements/{pid}/transfers")
+def list_transfers(pid: int, subject_id: int = Depends(requires("placement:read"))) -> list[dict]:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return segment_service.list_transfers(cur, subj, pid)
+
+
+@router.get("/placements/{pid}/hours/summary")
+def hours_summary(pid: int, subject_id: int = Depends(requires("progress:read"))) -> dict:
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        authz.authorize(cur, subj, "progress:read", pid)
+        return segment_service.hours_summary(cur, pid, segment_service.visible_segment_ids(cur, subj, pid))
+
+
+@router.post("/placements/{pid}/hours/{entry_id}/review", status_code=201)
+def review_hours(pid: int, entry_id: int, body: HoursReviewBody,
+                 subject_id: int = Depends(requires("hours:review"))) -> dict:
+    with db.command(subject_id) as ctx:
+        return segment_service.review_hours(
+            ctx, pid, entry_id, decision=body.decision, accepted_hours=body.accepted_hours,
+            reason_code=body.reason_code, reason=body.reason,
+        )
+
+
+@router.post("/placements/{pid}/experience-review", status_code=201)
+def experience_review(pid: int, body: ExperienceReviewBody,
+                      subject_id: int = Depends(requires("experience:review"))) -> dict:
+    with db.command(subject_id) as ctx:
+        return segment_service.record_experience_review(ctx, pid, body.decision, body.rationale)

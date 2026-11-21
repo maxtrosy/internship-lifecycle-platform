@@ -10,7 +10,7 @@ import psycopg
 import pytest
 
 from app import db
-from app.errors import BusinessError
+from app.errors import BusinessError, NotFound
 from app.modules.lifecycle import service as lc
 from tests.conftest import make_active, make_doc_pending, make_opportunity, make_placement, race, seed_base
 
@@ -446,3 +446,77 @@ def test_t16e_review_required(env):
         cmd(U["legal1"], lc.review_document, p, item, "APPROVED", "Documento revisado.")
     assert ei.value.code == "INVALID_TRANSITION"
     assert env.admin.execute("SELECT status FROM checklist_item WHERE id=%s", (item,)).fetchone()["status"] == "REQUIRED"
+
+
+def test_change_proposal_creates_immutable_version_and_program_approval(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Versioned change")
+    p = make_active(env, U, "s1", opp)
+    current = env.admin.execute(
+        "SELECT id, version_no, location FROM placement_version WHERE placement_id=%s AND status='APPROVED'",
+        (p,),
+    ).fetchone()
+
+    proposed = cmd(U["ws_alfa"], lc.propose_change, p, location="New synthetic site")
+    version = env.admin.execute(
+        "SELECT id, version_no, status, location FROM placement_version WHERE id=%s", (proposed,)
+    ).fetchone()
+    assert version["version_no"] == current["version_no"] + 1
+    assert version["status"] == "PROPOSED"
+    assert version["location"] == "New synthetic site"
+    assert env.admin.execute("SELECT current_version_id FROM placement WHERE id=%s", (p,)).fetchone()["current_version_id"] == current["id"]
+
+    cmd(U["pc_sys"], lc.approve_version, proposed)
+    assert env.admin.execute("SELECT current_version_id FROM placement WHERE id=%s", (p,)).fetchone()["current_version_id"] == proposed
+    assert env.admin.execute("SELECT status FROM placement_version WHERE id=%s", (proposed,)).fetchone()["status"] == "APPROVED"
+    actions = [row["action"] for row in env.admin.execute(
+        "SELECT action FROM audit_event WHERE subject_id=%s ORDER BY id", (p,)
+    ).fetchall()]
+    assert "placement.version_approved" in actions
+
+
+def test_change_proposal_is_scoped_to_related_practice(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Scoped change")
+    p = make_active(env, U, "s1", opp)
+    with pytest.raises((BusinessError, NotFound)) as denied:
+        cmd(U["ws_beta"], lc.propose_change, p, location="Cross organization")
+    if isinstance(denied.value, BusinessError):
+        assert denied.value.code in {"FORBIDDEN", "NOT_FOUND"}
+
+
+def test_older_proposed_version_cannot_regress_current_history(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Monotonic versions")
+    p = make_active(env, U, "s1", opp)
+
+    first = cmd(U["ws_alfa"], lc.propose_change, p, location="First synthetic site")
+    second = cmd(U["ws_alfa"], lc.propose_change, p, location="Second synthetic site")
+    cmd(U["pc_sys"], lc.approve_version, second)
+
+    with pytest.raises(BusinessError) as stale:
+        cmd(U["pc_sys"], lc.approve_version, first)
+    assert stale.value.code == "STALE_VERSION"
+    current = env.admin.execute(
+        "SELECT pv.version_no, pv.location FROM placement p JOIN placement_version pv ON pv.id=p.current_version_id WHERE p.id=%s",
+        (p,),
+    ).fetchone()
+    assert current["location"] == "Second synthetic site"
+
+
+def test_change_proposal_is_rejected_after_completion(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "No post-completion change")
+    p = make_active(env, U, "s1", opp)
+    cmd(U["s1"], lc.record_hours, p, 100)
+    cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación final sintética.")
+    cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "informe.pdf",
+        "application/pdf", b"%PDF-1.7 synthetic final report")
+    cmd(U["pc_sys"], lc.confirm_completion, p)
+    with pytest.raises(BusinessError) as denied:
+        cmd(U["ws_alfa"], lc.propose_change, p, location="Should not persist")
+    assert denied.value.code == "PLACEMENT_NOT_ACTIVE"
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM placement_version WHERE placement_id=%s AND location=%s",
+        (p, "Should not persist"),
+    ).fetchone()["n"] == 0

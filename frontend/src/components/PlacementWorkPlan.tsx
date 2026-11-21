@@ -57,6 +57,7 @@ export default function PlacementWorkPlan({ dossier, onChanged }: Props) {
               </div>
               <p className="dossier-preserve-text">{item.description}</p>
               <span className="muted">Asignada por {item.assigned_by}</span>
+              {typeof item.version_no === "number" && <span className="muted">Versión vigente al asignar: v{item.version_no}</span>}
             </li>
           ))}
         </ol>

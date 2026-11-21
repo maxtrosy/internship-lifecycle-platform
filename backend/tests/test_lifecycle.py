@@ -10,9 +10,9 @@ import psycopg
 import pytest
 
 from app import db
-from app.errors import BusinessError
+from app.errors import BusinessError, NotFound
 from app.modules.lifecycle import service as lc
-from tests.conftest import make_active, make_doc_pending, make_opportunity, make_placement, race, seed_base
+from tests.conftest import accept_pending_hours, make_active, make_doc_pending, make_opportunity, make_placement, race, seed_base
 
 TRIALS = int(os.environ.get("POC_TRIALS", "100"))
 
@@ -117,7 +117,10 @@ def test_t04_closure_integrity(env):
         cmd(U["pc_sys"], lc.confirm_completion, p)
     with pytest.raises(BusinessError):
         cmd(U["ec1"], lc.close_placement, p)
-    cmd(U["s1"], lc.record_hours, p, 70)  # 110h total
+    cmd(U["s1"], lc.record_hours, p, 70)  # 110h reported
+    with pytest.raises(BusinessError):  # CR-05-BR-04: reported hours are not accepted hours
+        cmd(U["pc_sys"], lc.confirm_completion, p)
+    accept_pending_hours(env, U, p)
     cmd(U["pc_sys"], lc.confirm_completion, p)
     cmd(U["ec1"], lc.close_placement, p)
     state = env.admin.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"]
@@ -129,9 +132,9 @@ def test_t04_closure_integrity(env):
         cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "informe-final-v2.pdf",
             "application/pdf", b"%PDF-1.7 late report")
     assert closed_evidence.value.code == "PLACEMENT_NOT_ACTIVE"
-    with pytest.raises(BusinessError) as closed_evaluation:
+    with pytest.raises((BusinessError, NotFound)) as closed_evaluation:
         cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación tardía.")
-    assert closed_evaluation.value.code == "PLACEMENT_NOT_ACTIVE"
+    assert isinstance(closed_evaluation.value, NotFound) or closed_evaluation.value.code == "PLACEMENT_NOT_ACTIVE"
     assert env.admin.execute(
         "SELECT count(*) AS n FROM completion_evidence WHERE placement_id=%s", (p,),
     ).fetchone()["n"] == evidence_before
@@ -144,9 +147,12 @@ def test_t04_persisted_sources_not_cached_flags_control_closure(env):
     raw = env.conn()
     try:
         raw.execute("UPDATE completion_requirement SET satisfied=true WHERE placement_id=%s", (p,))
-        raw.execute("INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,100)",
-                    (p, U["s1"]))
-        with pytest.raises(psycopg.errors.RaiseException, match="unsatisfied"):
+        raw.execute(
+            """INSERT INTO progress_entry(placement_id,student_id,hours,segment_id)
+               SELECT %s,%s,100,id FROM placement_segment WHERE placement_id=%s AND status='ACTIVE'""",
+            (p, U["s1"], p))
+        with pytest.raises(psycopg.errors.RaiseException,
+                           match="unsatisfied|pending review|still planned or active"):
             raw.execute("UPDATE placement SET state='COMPLETED' WHERE id=%s", (p,))
         assert raw.execute("SELECT state FROM placement WHERE id=%s", (p,)).fetchone()["state"] == "ACTIVE"
     finally:
@@ -312,9 +318,9 @@ def test_work_plan_database_guard_enforces_assignment_revision_and_immutability(
     try:
         with pytest.raises(psycopg.errors.RaiseException, match="revision must be sequential"):
             raw.execute(
-                """INSERT INTO placement_work_plan_item(placement_id,revision,assigned_by,title,description)
-                   VALUES (%s,3,%s,'Salto de revisión','Debe rechazarse')""",
-                (p, U["ws_alfa"]),
+                """INSERT INTO placement_work_plan_item(placement_id,revision,assigned_by,title,description,segment_id)
+                   VALUES (%s,3,%s,'Salto de revisión','Debe rechazarse',(SELECT id FROM placement_segment WHERE placement_id=%s AND status='ACTIVE'))""",
+                (p, U["ws_alfa"], p),
             )
     finally:
         raw.close()
@@ -332,12 +338,13 @@ def test_work_plan_database_guard_enforces_assignment_revision_and_immutability(
         "application/pdf", b"%PDF-1.7 synthetic final report")
     cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación narrativa sintética.")
     cmd(U["s1"], lc.record_hours, p, 100)
+    accept_pending_hours(env, U, p)
     cmd(U["pc_sys"], lc.confirm_completion, p)
     cmd(U["ec1"], lc.close_placement, p)
 
-    with pytest.raises(BusinessError) as closed_assignment:
+    # CR-05-BR-06: the former supervisor's segment ended, so the relationship is gone.
+    with pytest.raises(NotFound):
         cmd(U["ws_alfa"], lc.assign_work_plan_item, p, "Actividad posterior", "No debe persistirse.")
-    assert closed_assignment.value.code == "PLACEMENT_CLOSED"
     raw = env.conn()
     try:
         with pytest.raises(psycopg.errors.RaiseException, match="after placement closure"):
@@ -375,6 +382,7 @@ def _satisfy_closure(env, U, student, p, hours=100):
         "application/pdf", b"%PDF-1.7 synthetic final report")
     cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación narrativa documentada.")
     cmd(U[student], lc.record_hours, p, hours)
+    accept_pending_hours(env, U, p)
 
 
 def test_t16a_reject_after_activation(env):
@@ -446,3 +454,119 @@ def test_t16e_review_required(env):
         cmd(U["legal1"], lc.review_document, p, item, "APPROVED", "Documento revisado.")
     assert ei.value.code == "INVALID_TRANSITION"
     assert env.admin.execute("SELECT status FROM checklist_item WHERE id=%s", (item,)).fetchone()["status"] == "REQUIRED"
+
+
+def test_change_proposal_creates_immutable_version_and_program_approval(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Versioned change")
+    p = make_active(env, U, "s1", opp)
+    current = env.admin.execute(
+        "SELECT id, version_no, location FROM placement_version WHERE placement_id=%s AND status='APPROVED'",
+        (p,),
+    ).fetchone()
+
+    proposed = cmd(U["ws_alfa"], lc.propose_change, p, location="New synthetic site")
+    version = env.admin.execute(
+        "SELECT id, version_no, status, location FROM placement_version WHERE id=%s", (proposed,)
+    ).fetchone()
+    assert version["version_no"] == current["version_no"] + 1
+    assert version["status"] == "PROPOSED"
+    assert version["location"] == "New synthetic site"
+    assert env.admin.execute("SELECT current_version_id FROM placement WHERE id=%s", (p,)).fetchone()["current_version_id"] == current["id"]
+
+    cmd(U["pc_sys"], lc.approve_version, proposed)
+    assert env.admin.execute("SELECT current_version_id FROM placement WHERE id=%s", (p,)).fetchone()["current_version_id"] == proposed
+    assert env.admin.execute("SELECT status FROM placement_version WHERE id=%s", (proposed,)).fetchone()["status"] == "APPROVED"
+    actions = [row["action"] for row in env.admin.execute(
+        "SELECT action FROM audit_event WHERE subject_id=%s ORDER BY id", (p,)
+    ).fetchall()]
+    assert "placement.version_approved" in actions
+
+
+def test_change_proposal_is_scoped_to_related_practice(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Scoped change")
+    p = make_active(env, U, "s1", opp)
+    with pytest.raises((BusinessError, NotFound)) as denied:
+        cmd(U["ws_beta"], lc.propose_change, p, location="Cross organization")
+    if isinstance(denied.value, BusinessError):
+        assert denied.value.code in {"FORBIDDEN", "NOT_FOUND"}
+
+
+def test_older_proposed_version_cannot_regress_current_history(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Monotonic versions")
+    p = make_active(env, U, "s1", opp)
+
+    first = cmd(U["ws_alfa"], lc.propose_change, p, location="First synthetic site")
+    second = cmd(U["ws_alfa"], lc.propose_change, p, location="Second synthetic site")
+    cmd(U["pc_sys"], lc.approve_version, second)
+
+    with pytest.raises(BusinessError) as stale:
+        cmd(U["pc_sys"], lc.approve_version, first)
+    assert stale.value.code == "STALE_VERSION"
+    current = env.admin.execute(
+        "SELECT pv.version_no, pv.location FROM placement p JOIN placement_version pv ON pv.id=p.current_version_id WHERE p.id=%s",
+        (p,),
+    ).fetchone()
+    assert current["location"] == "Second synthetic site"
+
+
+def test_change_proposal_is_rejected_after_completion(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "No post-completion change")
+    p = make_active(env, U, "s1", opp)
+    cmd(U["s1"], lc.record_hours, p, 100)
+    accept_pending_hours(env, U, p)
+    cmd(U["ws_alfa"], lc.create_evaluation, p, "FINAL", "Evaluación final sintética.")
+    cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "informe.pdf",
+        "application/pdf", b"%PDF-1.7 synthetic final report")
+    cmd(U["pc_sys"], lc.confirm_completion, p)
+    # CR-05-BR-06: the former supervisor lost the relationship when the segment ended.
+    with pytest.raises(NotFound):
+        cmd(U["ws_alfa"], lc.propose_change, p, location="Should not persist")
+    with pytest.raises(BusinessError) as denied:
+        cmd(U["ec1"], lc.propose_change, p, location="Should not persist")
+    assert denied.value.code == "PLACEMENT_NOT_ACTIVE"
+    assert env.admin.execute(
+        "SELECT count(*) AS n FROM placement_version WHERE placement_id=%s AND location=%s",
+        (p, "Should not persist"),
+    ).fetchone()["n"] == 0
+
+
+def test_follow_up_records_capture_the_approved_version_in_force(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Version context")
+    p = make_active(env, U, "s1", opp)
+    current = env.admin.execute(
+        "SELECT current_version_id FROM placement WHERE id=%s", (p,)
+    ).fetchone()["current_version_id"]
+
+    cmd(U["s1"], lc.record_hours, p, 2.5)
+    cmd(U["s1"], lc.create_progress_report, p, "Avance vinculado a la versión vigente.")
+    cmd(U["ws_alfa"], lc.assign_work_plan_item, p, "Actividad contextual", "Descripción contextual.")
+    cmd(U["ws_alfa"], lc.create_evaluation, p, "MIDTERM", "Observación contextual.")
+    cmd(U["s1"], lc.create_incident, p, "CHANGE", "Cambio contextual", "Descripción contextual.")
+    cmd(U["s1"], lc.submit_completion_evidence, p, "FINAL_REPORT", "contexto.pdf",
+        "application/pdf", b"%PDF-1.7 version context")
+
+    for table in (
+        "progress_entry", "placement_progress_report", "placement_work_plan_item",
+        "placement_evaluation", "placement_incident", "completion_evidence",
+    ):
+        rows = env.admin.execute(
+            f"SELECT placement_version_id FROM {table} WHERE placement_id=%s", (p,)
+        ).fetchall()
+        assert rows and all(row["placement_version_id"] == current for row in rows)
+
+
+def test_database_rejects_follow_up_records_for_a_proposed_version(env):
+    U = seed_base(env)
+    opp = make_opportunity(env, 1, U["P"]["ING-SIS"], "Version context guard")
+    p = make_active(env, U, "s1", opp)
+    proposed = cmd(U["ws_alfa"], lc.propose_change, p, location="Pending site")
+    with pytest.raises(psycopg.errors.RaiseException, match="approved current placement version"):
+        env.admin.execute(
+            "INSERT INTO progress_entry(placement_id,placement_version_id,student_id,hours) VALUES (%s,%s,%s,1)",
+            (p, proposed, U["s1"]),
+        )

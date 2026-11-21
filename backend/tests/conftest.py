@@ -78,6 +78,9 @@ def env():
     e = DbEnv()
     os.environ["DATABASE_URL"] = e.uri
     os.environ.setdefault("JWT_SECRET", "test-only-secret-long-enough-for-hs256-2026")
+    # CR-05 authorities exist only for this disposable test database (as in the E2E harness).
+    os.environ.setdefault("PLACEMENT_HOURS_REVIEWER_ROLES", "FACULTY_SUPERVISOR,PROGRAM_COORDINATOR")
+    os.environ.setdefault("PLACEMENT_SEGMENT_MANAGER_ROLES", "EXPERIENTIAL_COORDINATOR")
     yield e
     e.close()
 
@@ -239,3 +242,20 @@ def race(fn_a, fn_b, delay_a=0.0, delay_b=0.0):
     [t.start() for t in ts]
     [t.join() for t in ts]
     return out
+
+
+def accept_pending_hours(env, users, pid, reviewer="pc_sys"):
+    """CR-05-BR-04: reported hours count only after an explicit acceptance."""
+    from app import db
+    from app.modules.lifecycle import segments
+
+    pending = env.admin.execute(
+        """SELECT pe.id FROM progress_entry pe
+           WHERE pe.placement_id=%s AND NOT EXISTS
+             (SELECT 1 FROM progress_entry_review r WHERE r.entry_id=pe.id) ORDER BY pe.id""",
+        (pid,),
+    ).fetchall()
+    for row in pending:
+        with db.command(users[reviewer]) as ctx:
+            segments.review_hours(ctx, pid, row["id"], decision="ACCEPTED", accepted_hours=None,
+                                  reason_code=None, reason=None)

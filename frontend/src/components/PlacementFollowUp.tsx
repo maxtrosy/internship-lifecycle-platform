@@ -13,6 +13,8 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
   const [incidentKind, setIncidentKind] = useState<"INCIDENT" | "CHANGE">("INCIDENT");
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
+  const [changeLocation, setChangeLocation] = useState("");
+  const [changeResponsibilities, setChangeResponsibilities] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
   const showEvaluations = capabilities.read_evaluations || capabilities.submit_evaluation;
   const showIncidents = capabilities.read_incidents || capabilities.report_incident;
   const showEvidence = capabilities.read_completion_evidence || capabilities.submit_completion_evidence;
+  const showChanges = dossier.versions.length > 0 || capabilities.propose_change || capabilities.approve_change;
 
   async function save(event: FormEvent, task: () => Promise<unknown>, success: string, reset: () => void) {
     event.preventDefault();
@@ -49,7 +52,24 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
     }
   }
 
-  if (!showProgress && !showEvaluations && !showIncidents && !showEvidence) return null;
+  async function approveChange(versionId: number) {
+    const version = dossier.versions.find((candidate) => candidate.id === versionId);
+    if (!version) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.approvePlacementChange(dossier.placement.id, versionId);
+      setNotice("Versión aprobada y convertida en la versión vigente.");
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No fue posible aprobar la versión.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!showProgress && !showEvaluations && !showIncidents && !showEvidence && !showChanges) return null;
 
   return (
     <>
@@ -60,6 +80,49 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
         </div>
       )}
 
+      {showChanges && <BentoCard variant="content" className="dossier-wide" title="Cambios de la práctica" description="Las propuestas crean una versión inmutable y quedan pendientes de la autoridad institucional configurada.">
+        {dossier.versions.length > 0 && (
+          <ol className="follow-up-list" aria-label="Versiones de la práctica">
+            {dossier.versions.map((version) => (
+              <li key={version.version_no}>
+                <div className="row"><strong>Versión {version.version_no}</strong><Badge state={version.status}>{formatDomainLabel(version.status)}</Badge></div>
+                <p>{version.location} · {formatHistoryDate(version.start_date)} – {formatHistoryDate(version.end_date)}</p>
+                <span className="muted">Supervisor laboral: {version.workplace_supervisor_name ?? "Sin asignación"}</span>
+                {version.status === "PROPOSED" && capabilities.approve_change && (
+                  <button className="btn secondary" type="button" disabled={busy} onClick={() => void approveChange(version.id)}>
+                    Aprobar versión
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+        {capabilities.propose_change && (
+          <form className="follow-up-form" onSubmit={(event) => void save(
+            event,
+            () => api.proposePlacementChange(dossier.placement.id, {
+              ...(changeLocation.trim() ? { location: changeLocation.trim() } : {}),
+              ...(changeResponsibilities.trim() ? { responsibilities: changeResponsibilities.trim() } : {}),
+            }),
+            "Cambio propuesto y guardado como nueva versión.",
+            () => { setChangeLocation(""); setChangeResponsibilities(""); },
+          )}>
+            <label className="field">Nueva ubicación (opcional)
+              <input value={changeLocation} maxLength={240} aria-label="Nueva ubicación de la práctica"
+                onChange={(event) => setChangeLocation(event.currentTarget.value)} />
+            </label>
+            <label className="field">Responsabilidades actualizadas (opcional)
+              <textarea value={changeResponsibilities} maxLength={5000} rows={4}
+                aria-label="Responsabilidades actualizadas de la práctica"
+                onChange={(event) => setChangeResponsibilities(event.currentTarget.value)} />
+            </label>
+            <button className="btn" type="submit" disabled={busy || (!changeLocation.trim() && !changeResponsibilities.trim())}>
+              {busy ? <Spinner /> : "Proponer cambio"}
+            </button>
+          </form>
+        )}
+      </BentoCard>}
+
       {showProgress && (
         <BentoCard variant="content" className="dossier-wide" title="Avances de la práctica" description="Actualizaciones narrativas registradas por la persona titular; no representan aprobación académica.">
           {capabilities.read_progress_reports && dossier.progress_reports?.length === 0 && <EmptyState message="Todavía no hay avances registrados." />}
@@ -69,6 +132,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
                 <li key={record.revision}>
                   <div className="row"><strong>Actualización {record.revision}</strong><time dateTime={record.created_at}>{formatHistoryDate(record.created_at)}</time></div>
                   <p className="dossier-preserve-text">{record.content}</p>
+                  {typeof record.version_no === "number" && <span className="muted">Versión vigente al registrar: v{record.version_no}</span>}
                   <span className="muted">Registrado por {record.author}</span>
                 </li>
               ))}
@@ -99,6 +163,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
                 <li key={`${record.kind}-${record.revision}`}>
                   <div className="row"><strong>{formatDomainLabel(record.kind)} · versión {record.revision}</strong><time dateTime={record.submitted_at}>{formatHistoryDate(record.submitted_at)}</time></div>
                   <p className="dossier-preserve-text">{record.narrative}</p>
+                  {typeof record.version_no === "number" && <span className="muted">Versión vigente al registrar: v{record.version_no}</span>}
                   <span className="muted">Registrado por {record.evaluator}</span>
                 </li>
               ))}
@@ -135,6 +200,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
                 <li key={record.revision}>
                   <div className="row"><strong>{record.summary}</strong><div className="row"><Badge>{record.kind}</Badge><Badge state={record.status}>{record.status}</Badge></div></div>
                   <p className="dossier-preserve-text">{record.description}</p>
+                  {typeof record.version_no === "number" && <span className="muted">Versión vigente al reportar: v{record.version_no}</span>}
                   <span className="muted">{formatHistoryDate(record.reported_at)} · reportado por {record.reporter}</span>
                 </li>
               ))}
@@ -175,6 +241,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
                   <div>
                     <strong>{record.original_filename} · versión {record.revision}</strong>
                     <span>{formatHistoryDate(record.submitted_at)} · entregado por {record.submitted_by}</span>
+                    {typeof record.version_no === "number" && <span>Versión vigente al entregar: v{record.version_no}</span>}
                   </div>
                   <button className="btn secondary" type="button" onClick={() => void downloadEvidence(record)}>Descargar</button>
                 </li>

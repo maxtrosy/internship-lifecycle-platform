@@ -583,7 +583,8 @@ def _inspect_database(url: str, *, set_application_role: bool, mode: str = "part
                 )
                 report["planned_omissions"]["policy_writes"] = 0
                 for key in ("OPPORTUNITY_REVIEWER_ROLES", "OPPORTUNITY_PUBLISHER_ROLES",
-                            "PLACEMENT_FACULTY_ASSIGNER_ROLES"):
+                            "PLACEMENT_FACULTY_ASSIGNER_ROLES", "PLACEMENT_SEGMENT_MANAGER_ROLES",
+                            "PLACEMENT_HOURS_REVIEWER_ROLES"):
                     report["authority_variables_configured"][key] = bool(os.environ.get(key, "").strip())
                     if mode == "full" and not report["authority_variables_configured"][key]:
                         report["blockers"].append(f"Institutional authority {key} is not configured for this loader.")

@@ -28,6 +28,10 @@ The document repository is currently implemented as PostgreSQL byte storage for 
 
 Institutional transition authorities are not assumed. `OPPORTUNITY_REVIEWER_ROLES`, `OPPORTUNITY_PUBLISHER_ROLES`, and `PLACEMENT_FACULTY_ASSIGNER_ROLES` default to empty; until an institution configures them, those approval/publication and faculty assignment mutations are unavailable. The E2E harness configures these roles only for its disposable test database.
 
+### Evaluación 4: CR-05 rotational placements and transfers
+
+A placement can contain several sequential segments (rotations). Each segment has its own organization, unit, supervisor, dates, modality, responsibilities, expected hours, enablement conditions and records. Transfers are atomic and preserve the origin segment's history. Early termination records a reason and a recognition decision. Reported hours become accepted hours only through append-only reviews, and `MIN_HOURS` counts accepted hours across recognized segments. Closure also requires closed segments, reviewed hours, a final evaluation per segment and, for multi-segment practices, an approved combined-experience review. Former workplace supervisors lose access when their segment ends. `PLACEMENT_SEGMENT_MANAGER_ROLES` and `PLACEMENT_HOURS_REVIEWER_ROLES` default to empty (open institutional decisions). Schema head: `0016`. See [`evaluacion-4/README.md`](evaluacion-4/README.md).
+
 ## Local authentication
 
 The login accepts a username or email and password. The browser receives an `HttpOnly`, `SameSite=Strict` session cookie; it does not receive or store a JWT. `/auth/me` restores the current user and roles from the database after a page refresh. Roles and organizational/program relationships stay server-managed. There is no public signup.

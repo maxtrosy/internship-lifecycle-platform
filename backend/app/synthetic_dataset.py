@@ -364,6 +364,20 @@ def _ensure_hours(cur, placement_id: int, student_id: int, amount: float) -> Non
                  synthetic_demo=True)
 
 
+def _ensure_hours_accepted(cur, placement_id: int, reviewer_id: int) -> None:
+    """CR-05-BR-04: demo hours count only after the configured reviewer accepts them."""
+    from app.modules.lifecycle import segments
+
+    pending = cur.execute(
+        """SELECT pe.id FROM progress_entry pe WHERE pe.placement_id=%s AND NOT EXISTS
+             (SELECT 1 FROM progress_entry_review r WHERE r.entry_id=pe.id) ORDER BY pe.id""",
+        (placement_id,),
+    ).fetchall()
+    for row in pending:
+        _command(reviewer_id, segments.review_hours, placement_id, row["id"], decision="ACCEPTED",
+                 accepted_hours=None, reason_code=None, reason=None)
+
+
 def _ensure_work_plan(cur, placement_id: int, supervisor_id: int) -> None:
     plan = cur.execute(
         "SELECT 1 FROM placement_work_plan_item WHERE placement_id=%s LIMIT 1", (placement_id,),
@@ -423,6 +437,8 @@ def _ensure_completion(cur, *, placement_id: int, student_id: int, supervisor_id
     if threshold and threshold["threshold"] is not None and allow_demo_lifecycle_records:
         _ensure_hours(cur, placement_id, student_id, float(threshold["threshold"]))
     placement = _one(cur, "SELECT state FROM placement WHERE id=%s", (placement_id,))
+    if placement["state"] == "ACTIVE" and allow_demo_lifecycle_records:
+        _ensure_hours_accepted(cur, placement_id, coordinator_id)
     if placement["state"] == "ACTIVE" and allow_demo_lifecycle_records:
         _command(coordinator_id, lifecycle.confirm_completion, placement_id)
         placement = {"state": "COMPLETED"}

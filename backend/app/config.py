@@ -6,6 +6,11 @@ from dataclasses import dataclass
 
 OPPORTUNITY_AUTHORITY_ROLES = {"PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR"}
 FACULTY_ASSIGNER_ROLES = {"PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR"}
+# CR-05: institutional authorities for segments/transfers and hour acceptance are
+# not fixed by the change request. They stay empty until an institution configures them.
+SEGMENT_MANAGER_ROLES = {"PROGRAM_COORDINATOR", "EXPERIENTIAL_COORDINATOR"}
+HOURS_REVIEWER_ROLES = {"WORKPLACE_SUPERVISOR", "FACULTY_SUPERVISOR", "PROGRAM_COORDINATOR",
+                        "EXPERIENTIAL_COORDINATOR"}
 
 @dataclass(frozen=True)
 class Settings:
@@ -20,6 +25,8 @@ class Settings:
     opportunity_reviewer_roles: tuple[str, ...] = ()
     opportunity_publisher_roles: tuple[str, ...] = ()
     faculty_assigner_roles: tuple[str, ...] = ()
+    segment_manager_roles: tuple[str, ...] = ()
+    hours_reviewer_roles: tuple[str, ...] = ()
 
 
 def get_settings() -> Settings:
@@ -69,6 +76,15 @@ def get_settings() -> Settings:
             + ", ".join(sorted(invalid_faculty_roles))
         )
 
+    def configured_roles(key: str, allowed: set[str]) -> tuple[str, ...]:
+        roles = tuple(dict.fromkeys(
+            role.strip().upper() for role in os.environ.get(key, "").split(",") if role.strip()
+        ))
+        invalid = set(roles) - allowed
+        if invalid:
+            raise RuntimeError(f"{key} contains unsupported institutional role(s): {', '.join(sorted(invalid))}")
+        return roles
+
     return Settings(
         database_url=os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/postgres"),
         jwt_secret=jwt_secret,
@@ -80,6 +96,8 @@ def get_settings() -> Settings:
         opportunity_reviewer_roles=authority_roles("OPPORTUNITY_REVIEWER_ROLES"),
         opportunity_publisher_roles=authority_roles("OPPORTUNITY_PUBLISHER_ROLES"),
         faculty_assigner_roles=faculty_assigner_roles,
+        segment_manager_roles=configured_roles("PLACEMENT_SEGMENT_MANAGER_ROLES", SEGMENT_MANAGER_ROLES),
+        hours_reviewer_roles=configured_roles("PLACEMENT_HOURS_REVIEWER_ROLES", HOURS_REVIEWER_ROLES),
     )
 
 

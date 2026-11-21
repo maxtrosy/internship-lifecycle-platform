@@ -77,6 +77,124 @@ export type ProgressHoursEntry = {
   created_at: string;
   // PostgreSQL Decimal is JSON-encoded as a string by the current API stack.
   hours: number | string;
+  placement_version_id?: number | null;
+  version_no?: number | null;
+  // CR-05: every entry belongs to one segment and has an explicit review state.
+  segment_id?: number | null;
+  segment_sequence_no?: number | null;
+  work_date?: string | null;
+  description?: string | null;
+  review_status?: HoursReviewStatus;
+  accepted_hours?: number | string | null;
+  review_reason_code?: HoursReviewReason | null;
+  review_reason?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+};
+
+export type HoursReviewStatus = "SUBMITTED" | "ACCEPTED" | "REJECTED" | "DISPUTED";
+export type HoursReviewReason = "DUPLICATE" | "OUTSIDE_SEGMENT" | "NOT_VERIFIABLE" | "OTHER";
+export type SegmentStatus = "PLANNED" | "ACTIVE" | "COMPLETED" | "TERMINATED_EARLY" | "TRANSFERRED" | "CANCELLED";
+export type WorkRecognition = "ACCEPTED_HOURS_RECOGNIZED" | "NOT_RECOGNIZED";
+export type SegmentModality = "ONSITE" | "REMOTE" | "HYBRID";
+
+export type SegmentCondition = {
+  id: number;
+  kind: string;
+  status: "REQUIRED" | "SATISFIED";
+  confirmed_at: string | null;
+  reference: string | null;
+  confirmed_by: string | null;
+};
+
+export type PlacementSegment = {
+  id: number;
+  sequence_no: number;
+  host_org_id: number;
+  host_org_name: string;
+  unit: string | null;
+  workplace_supervisor_id: number | null;
+  workplace_supervisor_name: string | null;
+  start_date: string;
+  end_date: string;
+  modality: SegmentModality | null;
+  responsibilities: string;
+  expected_hours: number | string | null;
+  origin: "PLACEMENT_ACTIVATION" | "MIGRATED_SINGLE" | "ROTATION" | "TRANSFER";
+  status: SegmentStatus;
+  activated_at: string | null;
+  ended_on: string | null;
+  ended_at: string | null;
+  end_reason_shared: string | null;
+  // Present only for roles allowed to read confidential reasons (CR-05-BR-09).
+  end_reason_internal?: string | null;
+  work_recognition: WorkRecognition | null;
+  recognition_note: string | null;
+  conditions: SegmentCondition[];
+  status_history: { from_status: SegmentStatus | null; to_status: SegmentStatus; changed_at: string; actor_name: string | null }[];
+};
+
+export type PlacementTransfer = {
+  id: number;
+  from_segment_id: number;
+  from_sequence_no: number;
+  to_segment_id: number;
+  to_sequence_no: number;
+  effective_date: string;
+  reason_shared: string;
+  reason_internal?: string | null;
+  prior_work_treatment: WorkRecognition;
+  approved_at: string;
+  approved_by: string;
+};
+
+export type HoursSummarySegment = {
+  segment_id: number | null;
+  sequence_no: number | null;
+  work_recognition: WorkRecognition | null;
+  reported: number | string;
+  pending: number | string;
+  accepted: number | string;
+  rejected: number | string;
+  disputed: number | string;
+  counts_toward_total: boolean;
+};
+
+export type HoursSummary = {
+  segments: HoursSummarySegment[];
+  reported_total: number | string;
+  accepted_total: number | string;
+  pending_entries: number | null;
+  scope: "PLACEMENT" | "SEGMENT";
+};
+
+export type ExperienceReview = {
+  id: number;
+  decision: "APPROVED" | "CHANGES_REQUIRED";
+  rationale: string;
+  reviewed_at: string;
+  reviewer: string;
+};
+
+export type SegmentGate = {
+  open_segments: number;
+  active_segments: number;
+  effective_segments: number;
+  pending_hour_entries: number;
+  segments_missing_final_evaluation: number[];
+  combined_review_required: boolean;
+  combined_review_approved: boolean;
+};
+
+export type SegmentInput = {
+  host_org_id: number;
+  unit: string;
+  workplace_supervisor_id: number;
+  start_date: string;
+  end_date: string;
+  modality: SegmentModality;
+  responsibilities: string;
+  expected_hours: number | null;
 };
 
 export type PlacementHistoryEvent = {
@@ -97,40 +215,58 @@ export type CompletionRequirement = {
 
 export type ProgressReportRecord = {
   revision: number;
+  placement_version_id?: number | null;
+  version_no?: number | null;
   content: string;
   created_at: string;
   author: string;
+  segment_id?: number | null;
+  segment_sequence_no?: number | null;
 };
 
 export type WorkPlanItem = {
   revision: number;
+  placement_version_id?: number | null;
+  version_no?: number | null;
   title: string;
   description: string;
   assigned_at: string;
   assigned_by: string;
+  segment_id?: number | null;
+  segment_sequence_no?: number | null;
 };
 
 export type PlacementEvaluationRecord = {
   kind: "MIDTERM" | "FINAL";
   revision: number;
+  placement_version_id?: number | null;
+  version_no?: number | null;
   narrative: string;
   submitted_at: string;
   evaluator: string;
+  segment_id?: number | null;
+  segment_sequence_no?: number | null;
 };
 
 export type PlacementIncidentRecord = {
   kind: "INCIDENT" | "CHANGE";
   revision: number;
+  placement_version_id?: number | null;
+  version_no?: number | null;
   status: "REPORTED";
   summary: string;
   description: string;
   reported_at: string;
   reporter: string;
+  segment_id?: number | null;
+  segment_sequence_no?: number | null;
 };
 
 export type CompletionEvidenceRecord = {
   kind: "FINAL_REPORT";
   revision: number;
+  placement_version_id?: number | null;
+  version_no?: number | null;
   original_filename: string;
   content_type: string;
   byte_size: number;
@@ -179,6 +315,7 @@ export type PlacementDossier = {
     workplace_supervisor_name: string | null;
   };
   versions: {
+    id: number;
     version_no: number;
     start_date: string;
     end_date: string;
@@ -206,6 +343,12 @@ export type PlacementDossier = {
   documents: DossierChecklistItem[] | null;
   hours: ProgressHoursEntry[] | null;
   hours_total: number | string | null;
+  // CR-05 projections (optional so older payloads still render).
+  hours_summary?: HoursSummary | null;
+  segments?: PlacementSegment[];
+  transfers?: PlacementTransfer[];
+  experience_reviews?: ExperienceReview[];
+  segment_gate?: SegmentGate | null;
   progress_reports: ProgressReportRecord[] | null;
   work_plan: WorkPlanItem[] | null;
   evaluations: PlacementEvaluationRecord[] | null;
@@ -237,6 +380,13 @@ export type PlacementDossier = {
     may_configure_faculty_assignments: boolean;
     faculty_assignment_authority_configured: boolean;
     read_faculty_assignment_history: boolean;
+    propose_change: boolean;
+    approve_change: boolean;
+    manage_segments?: boolean;
+    confirm_segment_conditions?: boolean;
+    review_hours?: boolean;
+    review_combined_experience?: boolean;
+    read_segment_internal?: boolean;
   };
   activity: PlacementHistoryEvent[];
 };
@@ -315,6 +465,10 @@ function presentApiError(error: unknown, status: number): string {
     OPPORTUNITY_INVALID_TRANSITION: "La oportunidad no puede avanzar desde su estado actual.",
     OPPORTUNITY_REVIEW_AUTHORITY_UNCONFIGURED: "La autoridad institucional de revisión aún no está configurada.",
     OPPORTUNITY_PUBLISH_AUTHORITY_UNCONFIGURED: "La autoridad institucional de publicación aún no está configurada.",
+    CHANGE_EMPTY: "Indica al menos un campo para proponer un cambio.",
+    VERSION_NOT_FOUND: "La versión propuesta no pertenece a esta práctica.",
+    CURRENT_VERSION_MISSING: "La práctica no tiene una versión vigente válida.",
+    STALE_VERSION: "La versión propuesta quedó desactualizada frente a un cambio más reciente.",
     FACULTY_ASSIGNMENT_AUTHORITY_UNCONFIGURED: "La autoridad institucional para asignar supervisión docente aún no está configurada.",
     FACULTY_ASSIGNMENT_PLACEMENT_TERMINAL: "La práctica ya completó su ciclo y no admite cambios de supervisión docente.",
     FACULTY_SUPERVISOR_INVALID: "Selecciona una cuenta activa con rol de supervisión docente.",
@@ -353,6 +507,38 @@ function presentApiError(error: unknown, status: number): string {
     INVITATION_ACCOUNT_EXISTS: "Ya existe una cuenta para esta invitación.",
     PASSWORD_RESET_INVALID: "El enlace de restablecimiento no es válido o ya venció.",
     AUDIT_MISSING: "No se pudo guardar el cambio. Inténtalo de nuevo.",
+    NO_ACTIVE_SEGMENT: "No hay un segmento activo: las horas solo se registran en el segmento vigente.",
+    HOURS_WORK_DATE_INVALID: "La fecha debe estar dentro del periodo del segmento activo y no puede ser futura.",
+    HOURS_DAILY_LIMIT: "Las horas registradas para ese día superarían 24 h.",
+    HOURS_DESCRIPTION_TOO_LONG: "La descripción supera la longitud permitida.",
+    HOURS_REVIEW_INVALID: "Las horas aceptadas deben ser mayores que cero y no superar las reportadas.",
+    HOURS_REVIEW_OUTSIDE_SEGMENT: "Solo puedes revisar horas del segmento que supervisas actualmente.",
+    HOURS_REVIEW_DECISION_INVALID: "La decisión de revisión de horas no es válida.",
+    HOURS_REVIEW_REASON_INVALID: "El motivo de revisión no es válido.",
+    SEGMENT_FIELD_REQUIRED: "Completa los campos obligatorios del segmento.",
+    SEGMENT_FIELD_TOO_LONG: "Uno de los textos supera la longitud permitida.",
+    SEGMENT_MODALITY_INVALID: "Selecciona una modalidad válida.",
+    SEGMENT_DATES_INVALID: "La fecha de fin del segmento debe ser igual o posterior a la de inicio.",
+    SEGMENT_EXPECTED_HOURS_INVALID: "Las horas esperadas deben ser mayores que cero.",
+    SEGMENT_ORGANIZATION_INVALID: "La organización indicada no existe.",
+    SEGMENT_SUPERVISOR_INVALID: "El supervisor debe pertenecer a la organización del segmento.",
+    SEGMENT_NOT_PLANNED: "El segmento ya no está planificado.",
+    SEGMENT_NOT_ACTIVE: "El segmento no está activo.",
+    SEGMENT_ALREADY_ACTIVE: "Ya existe un segmento activo; ciérralo o transfiérelo antes de activar otro.",
+    SEGMENT_CONDITIONS_UNMET: "El segmento tiene condiciones de habilitación pendientes.",
+    SEGMENT_CONDITION_ALREADY_SATISFIED: "La condición ya fue confirmada.",
+    SEGMENT_FINAL_EVALUATION_MISSING: "Falta la evaluación final de este segmento.",
+    SEGMENT_END_DATE_INVALID: "La fecha de cierre debe estar dentro del periodo del segmento y no ser futura.",
+    SEGMENT_RECOGNITION_INVALID: "Indica si se reconocen las horas aceptadas del segmento.",
+    SEGMENT_REQUIREMENTS_PENDING: "Hay segmentos abiertos, horas sin revisar o falta la revisión de la experiencia combinada.",
+    SEGMENTS_STILL_OPEN: "Cierra todos los segmentos antes de revisar la experiencia combinada.",
+    TRANSFER_TREATMENT_INVALID: "Indica el tratamiento del trabajo previo.",
+    TRANSFER_EFFECTIVE_DATE_INVALID: "La fecha de efecto debe estar dentro del segmento de origen y no ser futura.",
+    TRANSFER_DESTINATION_DATES_INVALID: "El destino no puede comenzar antes de la fecha de efecto.",
+    EXPERIENCE_REVIEW_DECISION_INVALID: "La decisión de revisión no es válida.",
+    EXPERIENCE_REVIEW_RATIONALE_REQUIRED: "Escribe la justificación de la revisión académica.",
+    SEGMENT_CONTEXT: "El registro debe pertenecer al segmento activo de la práctica.",
+    SEGMENT_GATE: "El segmento no cumple las condiciones necesarias para este cambio.",
   };
   if (messages[code]) return messages[code];
   if (status === 401) return "Tu sesión terminó. Inicia sesión nuevamente.";
@@ -492,6 +678,23 @@ export function listVisiblePlacements(): Promise<VisiblePlacement[]> {
 
 export function getPlacementDossier(pid: number): Promise<PlacementDossier> {
   return request<PlacementDossier>(`/placements/${pid}/dossier`);
+}
+
+export function proposePlacementChange(pid: number, changes: {
+  start_date?: string;
+  end_date?: string;
+  location?: string;
+  responsibilities?: string;
+}): Promise<{ version_id: number; status: string }> {
+  return request<{ version_id: number; status: string }>(`/placements/${pid}/changes`, {
+    method: "POST", body: JSON.stringify(changes),
+  });
+}
+
+export function approvePlacementChange(pid: number, version_id: number): Promise<void> {
+  return request<void>(`/placements/${pid}/changes/approve`, {
+    method: "POST", body: JSON.stringify({ version_id }),
+  });
 }
 
 export function listFacultySupervisorOptions(pid: number): Promise<{ id: number; display_name: string }[]> {
@@ -652,10 +855,98 @@ export function closePlacement(pid: number): Promise<void> {
   return request<void>(`/placements/${pid}/close`, { method: "POST" });
 }
 
-export function recordPlacementHours(pid: number, hours: number): Promise<void> {
+export function recordPlacementHours(
+  pid: number,
+  hours: number,
+  details: { work_date?: string; description?: string } = {},
+): Promise<void> {
+  const body: Record<string, unknown> = { hours };
+  if (details.work_date) body.work_date = details.work_date;
+  if (details.description?.trim()) body.description = details.description.trim();
   return request<void>(`/placements/${pid}/hours`, {
     method: "POST",
-    body: JSON.stringify({ hours }),
+    body: JSON.stringify(body),
+  });
+}
+
+// ------------------------------------------------------------ CR-05 segments
+
+export function listPlacementSegments(pid: number): Promise<PlacementSegment[]> {
+  return request<PlacementSegment[]>(`/placements/${pid}/segments`);
+}
+
+export function createPlacementSegment(pid: number, segment: SegmentInput): Promise<{ segment_id: number; sequence_no: number; status: "PLANNED" }> {
+  return request(`/placements/${pid}/segments`, { method: "POST", body: JSON.stringify(segment) });
+}
+
+export function confirmSegmentCondition(pid: number, sid: number, conditionId: number, reference: string): Promise<void> {
+  return request<void>(`/placements/${pid}/segments/${sid}/conditions/${conditionId}/confirm`, {
+    method: "POST", body: JSON.stringify({ reference }),
+  });
+}
+
+export function activatePlacementSegment(pid: number, sid: number): Promise<void> {
+  return request<void>(`/placements/${pid}/segments/${sid}/activate`, { method: "POST" });
+}
+
+export function completePlacementSegment(pid: number, sid: number, ended_on?: string): Promise<void> {
+  return request<void>(`/placements/${pid}/segments/${sid}/complete`, {
+    method: "POST", body: JSON.stringify(ended_on ? { ended_on } : {}),
+  });
+}
+
+export function terminatePlacementSegment(pid: number, sid: number, body: {
+  ended_on: string;
+  reason_shared: string;
+  reason_internal?: string;
+  work_recognition: WorkRecognition;
+  recognition_note?: string;
+}): Promise<void> {
+  return request<void>(`/placements/${pid}/segments/${sid}/terminate`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function cancelPlacementSegment(pid: number, sid: number, reason_shared: string): Promise<void> {
+  return request<void>(`/placements/${pid}/segments/${sid}/cancel`, {
+    method: "POST", body: JSON.stringify({ reason_shared }),
+  });
+}
+
+export function transferPlacementSegment(pid: number, sid: number, body: {
+  effective_date: string;
+  reason_shared: string;
+  reason_internal?: string;
+  prior_work_treatment: WorkRecognition;
+  destination: SegmentInput;
+}): Promise<{ transfer_id: number; to_segment_id: number; to_sequence_no: number; status: "PLANNED" }> {
+  return request(`/placements/${pid}/segments/${sid}/transfer`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export type SegmentOption = { id: number; name: string; supervisors: { id: number; display_name: string }[] };
+
+export function listSegmentOptions(pid: number): Promise<SegmentOption[]> {
+  return request<SegmentOption[]>(`/placements/${pid}/segment-options`);
+}
+
+export function listPlacementTransfers(pid: number): Promise<PlacementTransfer[]> {
+  return request<PlacementTransfer[]>(`/placements/${pid}/transfers`);
+}
+
+export function getHoursSummary(pid: number): Promise<HoursSummary> {
+  return request<HoursSummary>(`/placements/${pid}/hours/summary`);
+}
+
+export function reviewPlacementHours(pid: number, entryId: number, body: {
+  decision: "ACCEPTED" | "REJECTED" | "DISPUTED";
+  accepted_hours?: number;
+  reason_code?: HoursReviewReason;
+  reason?: string;
+}): Promise<{ review_id: number; decision: string; accepted_hours: number | string | null; reviewed_at: string }> {
+  return request(`/placements/${pid}/hours/${entryId}/review`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function recordExperienceReview(pid: number, decision: "APPROVED" | "CHANGES_REQUIRED", rationale: string): Promise<{ review_id: number; decision: string; reviewed_at: string }> {
+  return request(`/placements/${pid}/experience-review`, {
+    method: "POST", body: JSON.stringify({ decision, rationale }),
   });
 }
 

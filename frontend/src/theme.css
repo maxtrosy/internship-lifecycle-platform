@@ -390,3 +390,26 @@ html[data-theme="dark"] .login-submit:disabled { color: #e9f2ed; background: #31
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* CR-05 (Evaluación 4): segments, transfers and hour review. */
+.segment-hours-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.segment-hours-overview > div { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: var(--surface-muted); border: 1px solid var(--line); border-radius: 10px; }
+.segment-hours-overview span { color: var(--muted); font-size: 12px; }
+.segment-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.segment-item { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.segment-item.segment-active { box-shadow: inset 3px 0 var(--primary); }
+.segment-heading { justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.segment-heading strong { overflow-wrap: anywhere; }
+.segment-facts { margin: 8px 0; }
+.segment-internal { padding: 6px 10px; border-left: 3px solid var(--line-strong); background: var(--surface-muted); }
+.segment-actions, .segment-inline-form { flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.segment-inline-form input, .segment-inline-form select { min-width: 0; flex: 1 1 140px; }
+.segment-panel { margin-top: 10px; padding: 12px; border: 1px dashed var(--line-strong); border-radius: 12px; display: grid; gap: 10px; }
+.segment-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.segment-form-wide { grid-column: 1 / -1; }
+.segment-destination { border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
+.segment-history { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+.segment-transfers, .segment-experience { margin-top: 14px; }
+.segment-transfers ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+.hours-entry { flex-wrap: wrap; gap: 6px; }
+.hours-entry > span { min-width: 0; overflow-wrap: anywhere; }

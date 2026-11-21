@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from urllib.parse import quote
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -52,6 +53,18 @@ class WorkPlanItemBody(BaseModel):
 
 class FacultySupervisorBody(BaseModel):
     user_id: int = Field(ge=1)
+
+
+class PlacementChangeBody(BaseModel):
+    """Only supplied fields are copied into a new immutable proposed version."""
+    start_date: date | None = None
+    end_date: date | None = None
+    location: str | None = Field(default=None, min_length=1, max_length=240)
+    responsibilities: str | None = Field(default=None, min_length=1, max_length=5000)
+
+
+class VersionApprovalBody(BaseModel):
+    version_id: int = Field(ge=1)
 
 
 @router.get("/placements/pending-academic")
@@ -185,6 +198,29 @@ def history(pid: int, subject_id: int = Depends(requires("placement:read"))) -> 
         subj = authz.subject(cur, subject_id)
         authz.authorize(cur, subj, "placement:read", pid)
         return audit_service.list_history(cur, pid)
+
+
+@router.post("/placements/{pid}/changes", status_code=201)
+def propose_placement_change(pid: int, body: PlacementChangeBody,
+                             subject_id: int = Depends(requires("placement:read"))) -> dict:
+    changes = body.model_dump(exclude_none=True)
+    if not changes:
+        raise BusinessError("CHANGE_EMPTY", "Indica al menos un campo para proponer un cambio.")
+    with db.command(subject_id) as ctx:
+        version_id = lifecycle.propose_change(ctx, pid, **changes)
+    return {"version_id": version_id, "status": "PROPOSED"}
+
+
+@router.post("/placements/{pid}/changes/approve", status_code=204)
+def approve_placement_change(pid: int, body: VersionApprovalBody,
+                             subject_id: int = Depends(requires("placement:read"))) -> None:
+    with db.command(subject_id) as ctx:
+        version = ctx.execute(
+            "SELECT placement_id FROM placement_version WHERE id=%s", (body.version_id,)
+        ).fetchone()
+        if version is None or version["placement_id"] != pid:
+            raise BusinessError("VERSION_NOT_FOUND", "La versión no pertenece a esta práctica.")
+        lifecycle.approve_version(ctx, body.version_id)
 
 
 @router.get("/placements/{pid}/progress-reports")

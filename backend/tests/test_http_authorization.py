@@ -304,8 +304,7 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
         "VALUES (%s,%s,%s,'REJECTED','Versión anterior incompleta.')",
         (item_id, first, users["legal1"]),
     )
-    env.admin.execute("INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,4.5)",
-                      (active, users["s1"]))
+    env.admin.execute("INSERT INTO progress_entry(placement_id,student_id,hours,segment_id) VALUES (%s,%s,4.5,(SELECT id FROM placement_segment WHERE placement_id=%s AND status='ACTIVE'))", (active, users["s1"], active))
     for action in ("application.submitted", "application.selected"):
         env.admin.execute(
             """INSERT INTO audit_event(actor_id,action,subject_type,subject_id,correlation_id)
@@ -395,7 +394,10 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
         plan = clients["s1"].get(work_plan_path)
         assert plan.status_code == 200
         first_plan_item = plan.json()[0]
-        assert set(first_plan_item) == {"revision", "title", "description", "assigned_at", "assigned_by"}
+        assert set(first_plan_item) == {
+            "revision", "placement_version_id", "version_no", "title", "description",
+            "assigned_at", "assigned_by", "segment_id", "segment_sequence_no",
+        }
         assert first_plan_item["revision"] == 1
         assert first_plan_item["title"] == "Preparar inventario"
         assert first_plan_item["description"] == "Documentar los pasos observados en el proceso."
@@ -465,7 +467,10 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
         assert progress.status_code == 201, progress.text
         progress_projection = clients["ws_alfa"].get(progress_path)
         assert progress_projection.status_code == 200
-        assert set(progress_projection.json()[0]) == {"revision", "content", "created_at", "author"}
+        assert set(progress_projection.json()[0]) == {
+            "revision", "placement_version_id", "version_no", "content", "created_at", "author",
+            "segment_id", "segment_sequence_no",
+        }
         assert progress_projection.json()[0]["content"].startswith("Avance")
         assert clients["f1"].get(progress_path).status_code == 200
         assert clients["hm_alfa"].get(progress_path).status_code == 403
@@ -482,7 +487,8 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
         assert incident.json()["status"] == "REPORTED"
         incident_projection = clients["pc_sys"].get(incident_path)
         assert set(incident_projection.json()[0]) == {
-            "kind", "revision", "status", "summary", "description", "reported_at", "reporter",
+            "kind", "revision", "placement_version_id", "version_no", "status", "summary",
+            "description", "reported_at", "reporter", "segment_id", "segment_sequence_no",
         }
         assert incident_projection.json()[0]["kind"] == "CHANGE"
         assert incident_projection.json()[0]["status"] == "REPORTED"
@@ -507,7 +513,8 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
         assert final_evaluation.status_code == 201, final_evaluation.text
         evaluation_projection = clients["s1"].get(evaluations_path)
         assert set(evaluation_projection.json()[0]) == {
-            "kind", "revision", "narrative", "submitted_at", "evaluator",
+            "kind", "revision", "placement_version_id", "version_no", "narrative",
+            "submitted_at", "evaluator", "segment_id", "segment_sequence_no",
         }
         assert evaluation_projection.json()[0]["kind"] == "FINAL"
         assert clients["f1"].get(evaluations_path).status_code == 200
@@ -528,7 +535,7 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
         report_rows = clients["s1"].get(final_evidence_path)
         assert report_rows.status_code == 200
         assert set(report_rows.json()[0]) == {
-            "kind", "revision", "original_filename", "content_type", "byte_size",
+            "kind", "revision", "placement_version_id", "version_no", "original_filename", "content_type", "byte_size",
             "sha256", "submitted_at", "submitted_by",
         }
         assert report_rows.json()[0]["revision"] == report_revision
@@ -542,8 +549,12 @@ def test_placement_dossier_is_persisted_and_scoped_by_relationship(env):
 
         # Completion availability is projected only to authorized internal roles and
         # follows the persisted policy requirements already attached to this placement.
-        env.admin.execute("INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,100)",
-                          (active, users["s1"]))
+        env.admin.execute(
+            """INSERT INTO progress_entry(placement_id,student_id,hours,segment_id)
+               SELECT %s,%s,100,id FROM placement_segment WHERE placement_id=%s AND status='ACTIVE'""",
+            (active, users["s1"], active))
+        from tests.conftest import accept_pending_hours
+        accept_pending_hours(env, users, active)  # CR-05-BR-04
         confirmation = clients["pc_sys"].post(
             f"/placements/{active}/confirm-completion", headers={"Origin": ORIGIN},
         )

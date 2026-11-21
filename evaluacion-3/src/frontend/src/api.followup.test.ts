@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { assignWorkPlanItem, listWorkPlan, reportPlacementIncident, submitCompletionEvidence, submitPlacementEvaluation, submitProgressReport } from "./api";
+import { approvePlacementChange, assignWorkPlanItem, listWorkPlan, proposePlacementChange, reportPlacementIncident, submitCompletionEvidence, submitPlacementEvaluation, submitProgressReport } from "./api";
 
 describe("follow-up lifecycle API", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -62,5 +62,23 @@ describe("follow-up lifecycle API", () => {
         headers: expect.objectContaining({ "Content-Type": "application/pdf" }),
       }),
     );
+  });
+
+  it("uses the immutable version proposal and approval endpoints", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ version_id: 8, status: "PROPOSED" }) })
+      .mockResolvedValueOnce({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(proposePlacementChange(12, { location: "Nueva sede" }))
+      .resolves.toEqual({ version_id: 8, status: "PROPOSED" });
+    await approvePlacementChange(12, 8);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/placements/12/changes", expect.objectContaining({
+      method: "POST", credentials: "same-origin", body: JSON.stringify({ location: "Nueva sede" }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/placements/12/changes/approve", expect.objectContaining({
+      method: "POST", credentials: "same-origin", body: JSON.stringify({ version_id: 8 }),
+    }));
   });
 });

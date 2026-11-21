@@ -4,6 +4,7 @@ import type { ActivationStatus, Application, DocumentSubmission } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 import PlacementHistory from "../components/PlacementHistory";
 import { hoursFromHistory, totalHours, type HoursEntry } from "../progress";
+import { HOURS_REVIEW_LABELS } from "../segments";
 
 export default function Documents() {
   const [apps, setApps] = useState<Application[] | null>(null);
@@ -11,6 +12,8 @@ export default function Documents() {
   const [submissions, setSubmissions] = useState<Record<string, DocumentSubmission[]>>({});
   const [hours, setHours] = useState<Record<number, HoursEntry[]>>({});
   const [hoursDraft, setHoursDraft] = useState<Record<number, string>>({});
+  const [workDateDraft, setWorkDateDraft] = useState<Record<number, string>>({});
+  const [descriptionDraft, setDescriptionDraft] = useState<Record<number, string>>({});
   const [files, setFiles] = useState<Record<number, File>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,9 +93,14 @@ export default function Documents() {
     setError(null);
     setMessage(null);
     try {
-      await api.recordPlacementHours(pid, value);
+      await api.recordPlacementHours(pid, value, {
+        work_date: workDateDraft[pid] || undefined,
+        description: descriptionDraft[pid] || undefined,
+      });
       setHoursDraft((current) => ({ ...current, [pid]: "" }));
-      setMessage("Las horas quedaron registradas en el historial de la práctica.");
+      setWorkDateDraft((current) => ({ ...current, [pid]: "" }));
+      setDescriptionDraft((current) => ({ ...current, [pid]: "" }));
+      setMessage("Las horas quedaron registradas en el segmento activo y quedan pendientes de revisión.");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -140,7 +148,7 @@ export default function Documents() {
               <section className="card work-log-card" aria-label={`Seguimiento de horas de ${a.title}`}>
                 <div className="section-heading">
                   <div><span className="eyebrow">SEGUIMIENTO</span><h2>Horas de práctica</h2>
-                    <p>Registro opcional. Si tu programa requiere horas, anota el tiempo realizado; coordinación verificará los requisitos configurados antes de confirmar el cierre.</p>
+                    <p>Las horas se registran en el segmento activo. Son horas reportadas: solo cuentan para el cierre cuando el rol revisor configurado las acepta.</p>
                   </div>
                   <strong className="metric-value">{totalHours(hours[pid] ?? [])} h</strong>
                 </div>
@@ -149,6 +157,14 @@ export default function Documents() {
                     <input id={`hours-${pid}`} type="number" min="0.1" step="0.1" required value={hoursDraft[pid] ?? ""}
                       onChange={(event) => setHoursDraft((current) => ({ ...current, [pid]: event.target.value }))} />
                   </div>
+                  <div className="field"><label htmlFor={`work-date-${pid}`}>Fecha de la jornada (opcional)</label>
+                    <input id={`work-date-${pid}`} type="date" value={workDateDraft[pid] ?? ""}
+                      onChange={(event) => setWorkDateDraft((current) => ({ ...current, [pid]: event.target.value }))} />
+                  </div>
+                  <div className="field"><label htmlFor={`hours-description-${pid}`}>Descripción (opcional)</label>
+                    <input id={`hours-description-${pid}`} maxLength={1000} value={descriptionDraft[pid] ?? ""}
+                      onChange={(event) => setDescriptionDraft((current) => ({ ...current, [pid]: event.target.value }))} />
+                  </div>
                   <button className="btn" type="submit" disabled={busy === pid || !hoursDraft[pid]}>
                     {busy === pid ? <Spinner /> : "Registrar horas"}
                   </button>
@@ -156,7 +172,7 @@ export default function Documents() {
                 {(hours[pid] ?? []).length > 0 ? (
                   <ul className="work-log-list">
                     {(hours[pid] ?? []).map((entry) => (
-                      <li key={entry.id}><span>{new Date(entry.occurredAt).toLocaleString("es-CO")}</span><strong>{entry.hours} h</strong></li>
+                      <li key={entry.id}><span>{new Date(entry.occurredAt).toLocaleString("es-CO")}{entry.segmentNo ? ` · segmento ${entry.segmentNo}` : ""}{entry.reviewStatus ? ` · ${HOURS_REVIEW_LABELS[entry.reviewStatus] ?? entry.reviewStatus}` : ""}</span><strong>{entry.hours} h</strong></li>
                     ))}
                   </ul>
                 ) : <p className="muted">Todavía no hay horas registradas.</p>}

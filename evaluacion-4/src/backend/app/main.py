@@ -1,0 +1,75 @@
+"""DH-05 backend entry point (Phase 1)."""
+from __future__ import annotations
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app import db
+from app.config import get_settings
+from app.errors import BusinessError, DomainError, Forbidden, NotFound, TooManyRequests, Unauthorized
+from app.modules.applications.router import router as applications_router
+from app.modules.identity.router import router as identity_router
+from app.modules.lifecycle.router import router as lifecycle_router
+from app.modules.opportunities.router import router as opportunities_router
+from app.modules.policies.router import router as policies_router
+from app.modules.notifications.router import router as notifications_router
+from app.modules.reports.router import router as reports_router
+
+app = FastAPI(title="DH-05 Placement API", version="0.1.0")
+
+settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.allowed_origins),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(identity_router)
+app.include_router(lifecycle_router)
+app.include_router(opportunities_router)
+app.include_router(applications_router)
+app.include_router(policies_router)
+app.include_router(notifications_router)
+app.include_router(reports_router)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/ready", response_model=None)
+def readiness() -> dict | JSONResponse:
+    """Confirm PostgreSQL access through app_user and the current schema marker."""
+    try:
+        with db.read() as cur:
+            row = cur.execute(
+                """SELECT to_regclass('public.placement_faculty_assignment_history') IS NOT NULL
+                          AS schema_ready"""
+            ).fetchone()
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+
+    if not row or not row["schema_ready"]:
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+    return {"status": "ready"}
+
+
+@app.exception_handler(DomainError)
+def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+    if isinstance(exc, Unauthorized):
+        body = {"error": "unauthorized"}
+    elif isinstance(exc, TooManyRequests):
+        body = {"error": "too_many_requests"}
+    elif isinstance(exc, NotFound):
+        body = {"error": "not_found"}
+    elif isinstance(exc, Forbidden):
+        body = {"error": "forbidden"}
+    elif isinstance(exc, BusinessError):
+        body = {"error": exc.code, "detail": exc.detail}
+    else:
+        body = {"error": str(exc)}
+    return JSONResponse(status_code=exc.status, content=body)

@@ -269,7 +269,7 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
         ).fetchone()
 
     versions = cur.execute(
-        """SELECT v.version_no, v.start_date, v.end_date, v.location, v.responsibilities,
+        """SELECT v.id, v.version_no, v.start_date, v.end_date, v.location, v.responsibilities,
                   v.status, u.display_name AS workplace_supervisor_name
            FROM placement_version v LEFT JOIN user_account u ON u.id = v.workplace_supervisor_id
            WHERE v.placement_id = %s ORDER BY v.version_no""",
@@ -462,6 +462,9 @@ def get_dossier(cur, subj: dict, pid: int) -> dict:
             "may_configure_faculty_assignments": may_configure_faculty_assignment,
             "faculty_assignment_authority_configured": faculty_assignment_authority_configured,
             "read_faculty_assignment_history": can_read_faculty_history,
+            "propose_change": authz.can_perform(cur, subj, "placement:propose_change", pid)
+                               and row["state"] == "ACTIVE",
+            "approve_change": authz.can_perform(cur, subj, "version:approve", pid),
             "read_work_plan": can_read_work_plan,
             "assign_work_plan_item": can_assign_work_plan,
             "activate": authz.can_perform(cur, subj, "placement:activate", pid) and activation_ready,
@@ -1088,7 +1091,13 @@ def propose_change(ctx: CommandContext, pid: int, **changes) -> int:
     subj = authz.subject(ctx.cur, ctx.actor_id)
     authz.authorize(ctx.cur, subj, "placement:propose_change", pid)
     p = _placement(ctx, pid)
+    if p is None:
+        raise NotFound()
+    if p["state"] != "ACTIVE":
+        raise BusinessError("PLACEMENT_NOT_ACTIVE", p["state"])
     cur_v = ctx.execute("SELECT * FROM placement_version WHERE id=%s", (p["current_version_id"],)).fetchone()
+    if cur_v is None:
+        raise BusinessError("CURRENT_VERSION_MISSING")
     n = ctx.execute("SELECT max(version_no)+1 AS n FROM placement_version WHERE placement_id=%s", (pid,)).fetchone()["n"]
     new = {k: cur_v[k] for k in ("workplace_supervisor_id", "start_date", "end_date", "location", "responsibilities")}
     new.update(changes)
@@ -1106,12 +1115,28 @@ def propose_change(ctx: CommandContext, pid: int, **changes) -> int:
 
 def approve_version(ctx: CommandContext, vid: int) -> None:
     v = ctx.execute("SELECT * FROM placement_version WHERE id=%s", (vid,)).fetchone()
+    if v is None:
+        raise NotFound()
     subj = authz.subject(ctx.cur, ctx.actor_id)
     authz.authorize(ctx.cur, subj, "version:approve", v["placement_id"])
     p = _placement(ctx, v["placement_id"])
+    if p is None:
+        raise NotFound()
+    # Re-read after taking the placement lock. This serializes competing
+    # approvals and prevents a stale proposal from moving the current pointer
+    # backwards after a newer version has already been approved.
+    v = ctx.execute("SELECT * FROM placement_version WHERE id=%s FOR UPDATE", (vid,)).fetchone()
+    if v is None:
+        raise NotFound()
     if v["status"] != "PROPOSED":
         raise BusinessError("INVALID_TRANSITION", v["status"])
+    if p["state"] != "ACTIVE":
+        raise BusinessError("PLACEMENT_NOT_ACTIVE", p["state"])
     old = ctx.execute("SELECT * FROM placement_version WHERE id=%s", (p["current_version_id"],)).fetchone()
+    if old is None:
+        raise BusinessError("CURRENT_VERSION_MISSING")
+    if v["version_no"] <= old["version_no"]:
+        raise BusinessError("STALE_VERSION", {"version_no": v["version_no"], "current_version_no": old["version_no"]})
     ctx.execute("UPDATE placement_version SET status='APPROVED', decided_by=%s WHERE id=%s", (ctx.actor_id, vid))
     ctx.execute("UPDATE placement SET current_version_id=%s WHERE id=%s", (vid, p["id"]))
     audit.write(ctx.cur, "placement.version_approved", "placement", p["id"],

@@ -4,7 +4,9 @@ The script never reads or connects to an inherited DATABASE_URL. It creates a
 fresh temporary PostgreSQL cluster, inserts one legacy incident at revision
 0007, upgrades to head, and verifies the status backfill, closed work-plan guard,
 notification tables, audience-separated conversations, opportunity workflow guard,
-faculty history, least-privilege application grants, and manual eligibility review notifications.
+faculty history, least-privilege application grants, manual eligibility review notifications,
+approved-version context for post-activation records, and the CR-05 (0016)
+backfill of one MIGRATED_SINGLE segment per active placement with its records.
 """
 from __future__ import annotations
 
@@ -83,6 +85,10 @@ def main() -> int:
                        VALUES (%s,'INCIDENT',1,%s,'Registro anterior a 0008','Fila sintética de migración')""",
                     (placement_id, users["s1"]),
                 )
+                conn.execute(
+                    "INSERT INTO progress_entry(placement_id,student_id,hours) VALUES (%s,%s,12.5)",
+                    (placement_id, users["s1"]),
+                )
 
             command.upgrade(config, "head")
             with psycopg.connect(database_url) as conn:
@@ -110,8 +116,30 @@ def main() -> int:
                 assignment_tables = conn.execute(
                     "SELECT to_regclass('public.placement_faculty_assignment_history')",
                 ).fetchone()[0]
-            if head != "0014":
-                raise AssertionError(f"Expected Alembic head 0014, got {head}.")
+                version_context = conn.execute(
+                    "SELECT to_regclass('public.progress_entry_version_lookup_idx')"
+                ).fetchone()[0]
+                segments = conn.execute(
+                    """SELECT id, sequence_no, origin, status, workplace_supervisor_id, unit, modality
+                       FROM placement_segment WHERE placement_id=%s""",
+                    (placement_id,),
+                ).fetchall()
+                record_segments = conn.execute(
+                    """SELECT (SELECT segment_id FROM progress_entry WHERE placement_id=%s),
+                              (SELECT segment_id FROM placement_incident WHERE placement_id=%s),
+                              (SELECT count(*) FROM progress_entry_review)""",
+                    (placement_id, placement_id),
+                ).fetchone()
+            if head != "0016":
+                raise AssertionError(f"Expected Alembic head 0016, got {head}.")
+            if len(segments) != 1 or segments[0][1:5] != (1, "MIGRATED_SINGLE", "ACTIVE", users["ws_alfa"]):
+                raise AssertionError(f"Unexpected CR-05 segment backfill: {segments!r}.")
+            if segments[0][5] is not None or segments[0][6] is not None:
+                raise AssertionError("Backfill must not invent unit/modality for legacy placements.")
+            if record_segments[0] != segments[0][0] or record_segments[1] != segments[0][0]:
+                raise AssertionError(f"Legacy records were not attached to the migrated segment: {record_segments!r}.")
+            if record_segments[2] != 0:
+                raise AssertionError("Backfill must not fabricate hour reviews for legacy entries.")
             if migrated_status != "REPORTED":
                 raise AssertionError(f"Existing incident received unexpected status {migrated_status!r}.")
             if "placement closure" not in guard:
@@ -126,6 +154,8 @@ def main() -> int:
                 raise AssertionError("Manual eligibility review notification category is absent from the schema.")
             if assignment_tables is None:
                 raise AssertionError("Faculty assignment history table was not installed.")
+            if version_context is None:
+                raise AssertionError("Lifecycle record version-context indexes were not installed.")
             with psycopg.connect(database_url) as conn:
                 privileges = conn.execute(
                     """SELECT
@@ -144,7 +174,9 @@ def main() -> int:
                 raise AssertionError(f"Unexpected app_user privilege set: {privileges!r}.")
 
             print(
-                "MIGRATION_CHAIN=0001->0014; initial_status_absent=true; "
+                "MIGRATION_CHAIN=0001->0016; initial_status_absent=true; "
+                "cr05_migrated_single_segment=true; legacy_records_attached_to_segment=true; "
+                "legacy_hours_left_pending_review=true; "
                 f"legacy_incident_status={migrated_status}; closed_work_plan_guard=true; "
                 "notifications_and_audience_scoped_messages=true; opportunity_state_guard=true; "
                 "manual_eligibility_review_notification=true; "
@@ -186,7 +218,7 @@ def main() -> int:
                     "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='user_notification_category_check'"
                 ).fetchone()[0]
             if (
-                head != "0014"
+                head != "0016"
                 or audit_update
                 or not user_insert
                 or "ELIGIBILITY_REVIEW" not in eligibility_constraint
@@ -195,7 +227,7 @@ def main() -> int:
                     "Upgrade from the existing 0010 schema did not install expected grants and review notification."
                 )
             print(
-                "MIGRATION_UPGRADE=0010->0011->0012->0013->0014; opportunity_state_guard=true; "
+                "MIGRATION_UPGRADE=0010->0011->0012->0013->0014->0015->0016; opportunity_state_guard=true; "
                 "faculty_assignment_history=true; manual_eligibility_review_notification=true; "
                 "app_user_minimal_grants=true"
             )

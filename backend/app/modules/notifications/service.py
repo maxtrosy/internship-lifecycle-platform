@@ -41,7 +41,8 @@ def _placement_context(cur: psycopg.Cursor, placement_id: int) -> dict | None:
     return cur.execute(
         """SELECT p.id AS placement_id, a.student_id, o.id AS opportunity_id,
                   o.host_org_id, o.program_id,
-                  pv.workplace_supervisor_id AS current_workplace_supervisor_id
+                  (SELECT os.supervisor_id FROM placement_operational_supervisor(p.id) os LIMIT 1)
+                    AS current_workplace_supervisor_id
            FROM placement p JOIN application a ON a.id=p.application_id
            JOIN opportunity o ON o.id=a.opportunity_id
            LEFT JOIN placement_version pv ON pv.id=p.current_version_id
@@ -55,7 +56,8 @@ def _app_context(cur: psycopg.Cursor, application_id: int) -> dict | None:
         """SELECT a.id AS application_id, a.student_id, a.state, a.eligibility_result,
                   o.id AS opportunity_id,
                   o.host_org_id, o.program_id, p.id AS placement_id,
-                  pv.workplace_supervisor_id AS current_workplace_supervisor_id
+                  (SELECT os.supervisor_id FROM placement_operational_supervisor(p.id) os LIMIT 1)
+                    AS current_workplace_supervisor_id
            FROM application a JOIN opportunity o ON o.id=a.opportunity_id
            LEFT JOIN placement p ON p.application_id=a.id
            LEFT JOIN placement_version pv ON pv.id=p.current_version_id

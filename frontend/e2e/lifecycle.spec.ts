@@ -699,6 +699,17 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await login(page, "pc_sys");
   await navigate(page, "Expedientes");
   const confirmDossier = page.locator(".dossier-detail").filter({ hasText: opportunityTitle });
+  // CR-05-BR-04: reported hours count only after the configured reviewer accepts them.
+  await expect(confirmDossier.getByRole("button", { name: "Confirmar finalización" })).toBeDisabled();
+  await expect(confirmDossier).toContainText("registro(s) de horas sin revisar");
+  const reviewForms = confirmDossier.locator("form[aria-label^='Revisar horas']");
+  await expect(reviewForms).toHaveCount(2);
+  for (let remaining = 2; remaining > 0; remaining -= 1) {
+    await reviewForms.first().getByRole("button", { name: "Registrar revisión" }).click();
+    await expect(reviewForms).toHaveCount(remaining - 1);
+  }
+  await expect(confirmDossier.locator(".segment-hours-overview")).toContainText(/Horas aceptadas consolidadas\s*100 h/);
+  await expect(confirmDossier.locator(".segment-heading").first()).toContainText("Segmento 1 · ");
   await expect(confirmDossier.getByRole("button", { name: "Confirmar finalización" })).toBeEnabled();
   await confirmDossier.getByRole("button", { name: "Confirmar finalización" }).click();
   await expect(confirmDossier.locator(".dossier-hero")).toContainText("Completada");
@@ -762,9 +773,9 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
 
   await login(page, "ws_alfa");
   await navigate(page, "Expedientes");
-  const closedSupervisorDossier = page.locator(".dossier-detail").filter({ hasText: opportunityTitle });
-  await expect(closedSupervisorDossier).toContainText("La práctica está cerrada. El plan permanece disponible para consulta.");
-  await expect(closedSupervisorDossier.getByLabel("Nombre de la actividad")).toHaveCount(0);
+  // CR-05-BR-06: the supervisor's segment ended with the practice, so the former
+  // supervisor no longer has a current relationship and receives 404 (no history leak).
+  await expect(page.locator(".dossier-detail").filter({ hasText: opportunityTitle })).toHaveCount(0);
   const closedWorkPlanWrite = await page.evaluate(async (id) => {
     const response = await fetch(`/placements/${id}/work-plan`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -772,10 +783,9 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
     });
     return { status: response.status, body: await response.json() };
   }, placementId);
-  expect(closedWorkPlanWrite.status).toBe(409);
-  expect(closedWorkPlanWrite.body.error).toBe("PLACEMENT_CLOSED");
+  expect(closedWorkPlanWrite.status).toBe(404);
   const closedSupervisorProjection = await dossierResponse(page, placementId);
-  expect(closedSupervisorProjection.body.work_plan).toHaveLength(1);
+  expect(closedSupervisorProjection.status).toBe(404);
   await logout(page);
 
   await login(page, "pc_sys");

@@ -179,6 +179,7 @@ export type PlacementDossier = {
     workplace_supervisor_name: string | null;
   };
   versions: {
+    id: number;
     version_no: number;
     start_date: string;
     end_date: string;
@@ -237,6 +238,8 @@ export type PlacementDossier = {
     may_configure_faculty_assignments: boolean;
     faculty_assignment_authority_configured: boolean;
     read_faculty_assignment_history: boolean;
+    propose_change: boolean;
+    approve_change: boolean;
   };
   activity: PlacementHistoryEvent[];
 };
@@ -315,6 +318,10 @@ function presentApiError(error: unknown, status: number): string {
     OPPORTUNITY_INVALID_TRANSITION: "La oportunidad no puede avanzar desde su estado actual.",
     OPPORTUNITY_REVIEW_AUTHORITY_UNCONFIGURED: "La autoridad institucional de revisión aún no está configurada.",
     OPPORTUNITY_PUBLISH_AUTHORITY_UNCONFIGURED: "La autoridad institucional de publicación aún no está configurada.",
+    CHANGE_EMPTY: "Indica al menos un campo para proponer un cambio.",
+    VERSION_NOT_FOUND: "La versión propuesta no pertenece a esta práctica.",
+    CURRENT_VERSION_MISSING: "La práctica no tiene una versión vigente válida.",
+    STALE_VERSION: "La versión propuesta quedó desactualizada frente a un cambio más reciente.",
     FACULTY_ASSIGNMENT_AUTHORITY_UNCONFIGURED: "La autoridad institucional para asignar supervisión docente aún no está configurada.",
     FACULTY_ASSIGNMENT_PLACEMENT_TERMINAL: "La práctica ya completó su ciclo y no admite cambios de supervisión docente.",
     FACULTY_SUPERVISOR_INVALID: "Selecciona una cuenta activa con rol de supervisión docente.",
@@ -492,6 +499,23 @@ export function listVisiblePlacements(): Promise<VisiblePlacement[]> {
 
 export function getPlacementDossier(pid: number): Promise<PlacementDossier> {
   return request<PlacementDossier>(`/placements/${pid}/dossier`);
+}
+
+export function proposePlacementChange(pid: number, changes: {
+  start_date?: string;
+  end_date?: string;
+  location?: string;
+  responsibilities?: string;
+}): Promise<{ version_id: number; status: string }> {
+  return request<{ version_id: number; status: string }>(`/placements/${pid}/changes`, {
+    method: "POST", body: JSON.stringify(changes),
+  });
+}
+
+export function approvePlacementChange(pid: number, version_id: number): Promise<void> {
+  return request<void>(`/placements/${pid}/changes/approve`, {
+    method: "POST", body: JSON.stringify({ version_id }),
+  });
 }
 
 export function listFacultySupervisorOptions(pid: number): Promise<{ id: number; display_name: string }[]> {
