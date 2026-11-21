@@ -1,3 +1,4 @@
+import { Icon } from "./components/ui";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -25,7 +26,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       document.documentElement.style.colorScheme = resolved;
       document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
         "content",
-        resolved === "dark" ? "#111a18" : "#f2f6f3",
+        resolved === "dark" ? "#0e1418" : "#f5f7f8",
       );
     };
     const onSystemChange = () => { if (mode === "system") apply(); };
@@ -49,7 +50,7 @@ export function ThemeControl() {
   const { mode, setMode } = useTheme();
   return (
     <label className="theme-control">
-      <span aria-hidden="true" className="theme-control-icon">◐</span>
+      <Icon name="contrast" />
       <span className="sr-only">Apariencia</span>
       <select aria-label="Apariencia" value={mode} onChange={(event) => setMode(event.target.value as ThemeMode)}>
         <option value="system">Sistema</option>

@@ -76,7 +76,7 @@ export default function DocumentReview() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="REVISIÓN" title="Revisión documental" description="Revisa cada archivo, registra el motivo de la decisión y consulta el historial de versiones." />
+      <PageHeader eyebrow="Revisión" title="Revisión documental" description="Revisa cada archivo, registra el motivo de la decisión y consulta el historial de versiones." />
       {error && <Alert kind="error">{error}</Alert>}
       {message && <Alert kind="success">{message}</Alert>}
       {rows === null && !error && <div className="empty"><Spinner /> Cargando…</div>}

@@ -44,7 +44,17 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
   const isWorkplaceSupervisor = roles.includes("WORKPLACE_SUPERVISOR");
   const isFacultySupervisor = roles.includes("FACULTY_SUPERVISOR");
   const dashboardVariant = isStudent ? "student" : isEmployer ? "employer" : isAcademic ? "academic" : isLegal ? "legal" : isEc ? "experiential" : isWorkplaceSupervisor ? "workplace" : isFacultySupervisor ? "faculty" : "limited";
-  const dashboardEyebrow = isStudent ? "TU PRÁCTICA" : isEmployer ? "ORGANIZACIÓN ANFITRIONA" : isAcademic ? "COORDINACIÓN ACADÉMICA" : isLegal ? "REVISIÓN DOCUMENTAL" : isEc ? "COORDINACIÓN EXPERIENCIAL" : isWorkplaceSupervisor ? "SUPERVISIÓN LABORAL" : isFacultySupervisor ? "SUPERVISIÓN DOCENTE" : "ESPACIO DE TRABAJO";
+  // Accounts can hold several roles (e.g. supervisor + coordinator). Only the
+  // primary role — the same precedence used for `dashboardVariant` — gets the
+  // hero; every other role section is rendered as a secondary card so the page
+  // keeps a single main heading area instead of stacking several heroes.
+  const primaryBlock = dashboardVariant === "workplace" || dashboardVariant === "faculty" ? "supervision" : dashboardVariant;
+  const roleHero = (block: "student" | "employer" | "academic" | "supervision" | "legal" | "experiential") => (
+    block === primaryBlock
+      ? { variant: "hero" as const, className: "dashboard-hero" }
+      : { variant: "action" as const, className: "dashboard-role-card" }
+  );
+  const dashboardEyebrow = isStudent ? "Tu práctica" : isEmployer ? "Organización anfitriona" : isAcademic ? "Coordinación académica" : isLegal ? "Revisión documental" : isEc ? "Coordinación experiencial" : isWorkplaceSupervisor ? "Supervisión laboral" : isFacultySupervisor ? "Supervisión docente" : "Espacio de trabajo";
   const dashboardDescription = isStudent
     ? "Consulta el estado de tus postulaciones y las acciones habilitadas para tu práctica."
     : isEmployer
@@ -148,14 +158,14 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
       <div className={`bento-grid dashboard-grid dashboard-grid--${dashboardVariant}`}>
         {isStudent && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" title="Siguiente paso" description={studentJourney.description}>
+            <BentoCard {...roleHero("student")} title="Siguiente paso" description={studentJourney.description}>
               <div className="hero-content">
                 <div>
                   <h2>{studentJourney.title}</h2>
                   {latestApplication && <p className="hero-record">Proceso más reciente · {latestApplication.title}</p>}
                   {studentJourney.state && <Badge>{studentJourney.state}</Badge>}
                 </div>
-                <button className="btn" type="button" disabled={studentJourney.disabled} onClick={() => onNavigate(studentJourney.action)}>{studentJourney.actionLabel}<span aria-hidden="true">→</span></button>
+                <button className="btn" type="button" disabled={studentJourney.disabled} onClick={() => onNavigate(studentJourney.action)}>{studentJourney.actionLabel}</button>
               </div>
             </BentoCard>
             <MetricCard label="Mis postulaciones" value={data.applications?.length ?? null} detail="En el historial de tu cuenta" />
@@ -183,10 +193,10 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {isEmployer && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" title="Gestión de oportunidades" description="El catálogo está limitado a las oportunidades visibles para tus relaciones registradas.">
+            <BentoCard {...roleHero("employer")} title="Gestión de oportunidades" description="El catálogo está limitado a las oportunidades visibles para tus relaciones registradas.">
               <div className="hero-content">
                 <div><h2>Revisa tus candidaturas</h2><p className="hero-record">Las postulaciones muestran la información autorizada por el sistema.</p></div>
-                <button className="btn" type="button" onClick={() => onNavigate("opportunities")}>Gestionar oportunidades<span aria-hidden="true">→</span></button>
+                <button className="btn" type="button" onClick={() => onNavigate("opportunities")}>Gestionar oportunidades</button>
               </div>
             </BentoCard>
             <MetricCard label="Oportunidades gestionadas" value={data.opportunities?.length ?? null} detail="Según el alcance de tu cuenta" />
@@ -200,10 +210,10 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {isAcademic && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" title="Coordinación académica" description="Las selecciones se muestran según el programa asociado a tu cuenta.">
+            <BentoCard {...roleHero("academic")} title="Coordinación académica" description="Las selecciones se muestran según el programa asociado a tu cuenta.">
               <div className="hero-content">
                 <div><h2>{data.academicQueue?.length ? "Hay selecciones por revisar" : "Revisa tu cola académica"}</h2><p className="hero-record">La aprobación fija las políticas vigentes para la colocación.</p></div>
-                <button className="btn" type="button" onClick={() => onNavigate("academic")}>Abrir revisión<span aria-hidden="true">→</span></button>
+                <button className="btn" type="button" onClick={() => onNavigate("academic")}>Abrir revisión</button>
               </div>
             </BentoCard>
             <MetricCard label="Selecciones pendientes" value={data.academicQueue?.length ?? null} detail="En tu alcance académico" />
@@ -231,8 +241,7 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
         {(isWorkplaceSupervisor || isFacultySupervisor) && (
           <>
             <BentoCard
-              variant="hero"
-              className="dashboard-hero"
+              {...roleHero("supervision")}
               title={isWorkplaceSupervisor ? "Supervisión laboral" : "Acompañamiento académico"}
               description={isWorkplaceSupervisor
                 ? "Consulta las prácticas y sus avances cuando la relación de supervisión está registrada."
@@ -243,11 +252,11 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
                   <h2>{isWorkplaceSupervisor ? "Seguimiento en sitio" : "Seguimiento formativo"}</h2>
                   <p className="hero-record">La información visible depende de las relaciones registradas para cada práctica.</p>
                 </div>
-                <button className="btn" type="button" onClick={() => onNavigate("dossier")}>Abrir expedientes<span aria-hidden="true">→</span></button>
+                <button className="btn" type="button" onClick={() => onNavigate("dossier")}>Abrir expedientes</button>
               </div>
             </BentoCard>
             <MetricCard label="Prácticas vinculadas" value={data.visiblePlacements?.length ?? null} detail="Según las relaciones de supervisión" />
-            <BentoCard variant="activity" className="dashboard-related-placements" title="Prácticas vinculadas" description="Los expedientes aparecen según las relaciones de supervisión registradas para tu cuenta.">
+            {!isAcademic && <BentoCard variant="activity" className="dashboard-related-placements" title="Prácticas vinculadas" description="Los expedientes aparecen según las relaciones de supervisión registradas para tu cuenta.">
               {relatedPlacementsState === "ready" ? (
                 <ul className="activity-list">
                   {data.visiblePlacements!.slice(0, 5).map((placement) => (
@@ -261,14 +270,14 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
                 : relatedPlacementsState === "error" ? <p role="status" className="muted">No se pudo cargar la lista. Usa «Reintentar carga» en el aviso para volver a consultar.</p>
                   : <div className="loading-line"><Spinner /> Consultando relaciones…</div>}
               <button className="btn secondary" type="button" onClick={() => onNavigate("dossier")}>Ver todas las prácticas</button>
-            </BentoCard>
+            </BentoCard>}
           </>
         )}
 
         {isLegal && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" title="Revisión documental" description="La cola está limitada por los permisos de revisión de tu cuenta.">
-              <div className="hero-content"><div><h2>Documentos que requieren atención</h2><p className="hero-record">Revisa cada archivo y registra el motivo de la decisión.</p></div><button className="btn" type="button" onClick={() => onNavigate("docreview")}>Abrir bandeja<span aria-hidden="true">→</span></button></div>
+            <BentoCard {...roleHero("legal")} title="Revisión documental" description="La cola está limitada por los permisos de revisión de tu cuenta.">
+              <div className="hero-content"><div><h2>Documentos que requieren atención</h2><p className="hero-record">Revisa cada archivo y registra el motivo de la decisión.</p></div><button className="btn" type="button" onClick={() => onNavigate("docreview")}>Abrir bandeja</button></div>
             </BentoCard>
             <MetricCard label="Prácticas en la cola" value={data.documentQueue?.length ?? null} detail="Con documentos para revisar" />
           </>
@@ -276,8 +285,8 @@ export default function Dashboard({ user, onNavigate }: { user: User; onNavigate
 
         {isEc && (
           <>
-            <BentoCard variant="hero" className="dashboard-hero" title="Activación de prácticas" description="El sistema calcula las condiciones y vuelve a validarlas antes de activar.">
-              <div className="hero-content"><div><h2>Comprueba las condiciones</h2><p className="hero-record">La práctica solo se podrá activar cuando cumpla todas las condiciones.</p></div><button className="btn" type="button" onClick={() => onNavigate("activation")}>Abrir activaciones<span aria-hidden="true">→</span></button></div>
+            <BentoCard {...roleHero("experiential")} title="Activación de prácticas" description="El sistema calcula las condiciones y vuelve a validarlas antes de activar.">
+              <div className="hero-content"><div><h2>Comprueba las condiciones</h2><p className="hero-record">La práctica solo se podrá activar cuando cumpla todas las condiciones.</p></div><button className="btn" type="button" onClick={() => onNavigate("activation")}>Abrir activaciones</button></div>
             </BentoCard>
             <MetricCard label="En documentación" value={data.activationQueue?.length ?? null} detail="Prácticas pendientes de activación" />
           </>

@@ -17,7 +17,7 @@ export default function Applications({ onNavigate }: { onNavigate: (section: Sec
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="MI PROCESO" title="Mis postulaciones" description="Consulta las decisiones de selección, el estado de tu práctica y el resultado de elegibilidad." />
+      <PageHeader eyebrow="Mi proceso" title="Mis postulaciones" description="Consulta las decisiones de selección, el estado de tu práctica y el resultado de elegibilidad." />
 
       {error && <Alert kind="error">{error}</Alert>}
       {items === null && !error && (

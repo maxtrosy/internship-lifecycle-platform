@@ -198,7 +198,7 @@ export default function Opportunities({ user }: { user: User }) {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="CATÁLOGO"
+        eyebrow="Catálogo"
         title="Oportunidades"
         description={isEmployer
           ? "Crea borradores, envíalos a revisión y consulta las postulaciones de oportunidades publicadas."
@@ -207,7 +207,7 @@ export default function Opportunities({ user }: { user: User }) {
 
       {isCreator && (
         <form className="card form-card" onSubmit={create}>
-          <div className="section-heading"><div><span className="eyebrow">GESTIÓN</span><h2>Crear borrador</h2><p>El borrador debe pasar por revisión y publicación según las autoridades institucionales configuradas.</p></div></div>
+          <div className="section-heading"><div><h2>Crear borrador</h2><p>El borrador debe pasar por revisión y publicación según las autoridades institucionales configuradas.</p></div></div>
           <div className="grid cols-3 opportunity-assignment-grid">
             <div className="field">
               <label htmlFor="opp-title">Título</label>
@@ -250,7 +250,7 @@ export default function Opportunities({ user }: { user: User }) {
       {items !== null && items.length > 0 && (
         <section className="card catalog-card">
           <div className="catalog-toolbar">
-            <div className="catalog-heading"><div><span className="eyebrow">EXPLORAR</span><h2>Oportunidades disponibles</h2></div><span className="result-count">{filteredItems.length} de {items.length}</span></div>
+            <div className="catalog-heading"><div><h2>Oportunidades disponibles</h2></div><span className="result-count">{filteredItems.length} de {items.length}</span></div>
             <div className="catalog-filters">
               <div className="field search-field"><label htmlFor="opportunity-search">Buscar oportunidad</label><input id="opportunity-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Título, programa u organización" /></div>
               <div className="field state-filter"><label htmlFor="opportunity-state">Estado</label><select id="opportunity-state" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="ALL">Todos</option>{["DRAFT", "IN_REVIEW", "APPROVED", "PUBLISHED", "CLOSED"].map((state) => <option key={state} value={state}>{({ DRAFT: "Borrador", IN_REVIEW: "En revisión", APPROVED: "Aprobada", PUBLISHED: "Publicada", CLOSED: "Cerrada" } as Record<string, string>)[state]}</option>)}</select></div>
@@ -332,23 +332,23 @@ export default function Opportunities({ user }: { user: User }) {
                         )}
                         {selectingId === a.id && (
                           <div className="grid cols-2" style={{ marginTop: 8 }}>
-                            <div className="field"><label>Supervisor laboral asignado (opcional)</label>
-                              <small className="field-note">Déjalo vacío si aún no tienes una asignación de supervisor.</small>
-                              <select aria-label="Supervisor laboral asignado (opcional)" value={sel.supervisor}
+                            <div className="field"><label htmlFor={`select-${a.id}-supervisor`}>Supervisor laboral asignado (opcional)</label>
+                              <small className="field-note" id={`select-${a.id}-supervisor-hint`}>Déjalo vacío si aún no tienes una asignación de supervisor.</small>
+                              <select id={`select-${a.id}-supervisor`} aria-describedby={`select-${a.id}-supervisor-hint`} value={sel.supervisor}
                                 onChange={(e) => setSel({ ...sel, supervisor: e.target.value })} disabled={supervisors === null}>
                                 <option value="">Sin asignar</option>
                                 {(supervisors ?? []).map((supervisor) => <option key={supervisor.id} value={supervisor.id}>{supervisor.display_name}</option>)}
                               </select>
                               {supervisors?.length === 0 && <small className="field-note">No hay supervisores activos registrados para esta organización.</small>}
                             </div>
-                            <div className="field"><label>Fecha de inicio</label>
-                              <input type="date" value={sel.start} onChange={(e) => setSel({ ...sel, start: e.target.value })} /></div>
-                            <div className="field"><label>Fecha de finalización</label>
-                              <input type="date" value={sel.end} onChange={(e) => setSel({ ...sel, end: e.target.value })} /></div>
-                            <div className="field"><label>Ubicación</label>
-                              <input value={sel.location} onChange={(e) => setSel({ ...sel, location: e.target.value })} /></div>
-                            <div className="field" style={{ gridColumn: "1 / -1" }}><label>Responsabilidades</label>
-                              <textarea rows={3} value={sel.responsibilities} onChange={(e) => setSel({ ...sel, responsibilities: e.target.value })} /></div>
+                            <div className="field"><label htmlFor={`select-${a.id}-start`}>Fecha de inicio</label>
+                              <input id={`select-${a.id}-start`} type="date" value={sel.start} onChange={(e) => setSel({ ...sel, start: e.target.value })} /></div>
+                            <div className="field"><label htmlFor={`select-${a.id}-end`}>Fecha de finalización</label>
+                              <input id={`select-${a.id}-end`} type="date" value={sel.end} onChange={(e) => setSel({ ...sel, end: e.target.value })} /></div>
+                            <div className="field"><label htmlFor={`select-${a.id}-location`}>Ubicación</label>
+                              <input id={`select-${a.id}-location`} value={sel.location} onChange={(e) => setSel({ ...sel, location: e.target.value })} /></div>
+                            <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor={`select-${a.id}-responsibilities`}>Responsabilidades</label>
+                              <textarea id={`select-${a.id}-responsibilities`} rows={3} value={sel.responsibilities} onChange={(e) => setSel({ ...sel, responsibilities: e.target.value })} /></div>
                             <div className="row">
                               <button className="btn" onClick={() => doSelect(a.id)}>Confirmar</button>
                               <button className="btn secondary" onClick={() => setSelectingId(null)}>Cancelar</button>

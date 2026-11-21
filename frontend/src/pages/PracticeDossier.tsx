@@ -14,14 +14,12 @@ import { segmentGateBlockers } from "../segments";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 import { completionRequirementsSatisfied } from "../completion";
 import { canDisplayDossierHours } from "../dossier";
-import { formatHistoryDate } from "../history";
+import { formatCalendarDate, formatHistoryDate } from "../history";
 
 type Props = { user: User; onNavigate: (section: SectionId) => void };
 
 function localDate(value: string | null | undefined): string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(value)) return "Fecha no disponible";
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString("es-CO");
+  return formatCalendarDate(value);
 }
 
 function hoursLabel(value: number | string | null): string {
@@ -134,7 +132,7 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
 
   return (
     <div className="page-stack dossier-page">
-      <PageHeader eyebrow="CICLO DE VIDA" title="Expediente de práctica" description="Consulta el recorrido persistido de cada práctica. Los documentos, horas y acciones disponibles dependen de tu relación y permisos." />
+      <PageHeader eyebrow="Ciclo de vida" title="Expediente de práctica" description="Consulta el recorrido persistido de cada práctica. Los documentos, horas y acciones disponibles dependen de tu relación y permisos." />
       {error && <Alert kind="error">{error} <button className="btn link" type="button" onClick={() => {
         setAttempt((value) => value + 1);
         setDetailAttempt((value) => value + 1);
@@ -168,7 +166,7 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
             <div className="dossier-detail" key={dossier.placement.id}>
               <BentoCard variant="hero" className="dossier-hero">
                 <div className="dossier-hero-heading">
-                  <div><span className="eyebrow">EXPEDIENTE DE PRÁCTICA</span><h2>{dossier.opportunity.title}</h2>
+                  <div><h2>{dossier.opportunity.title}</h2>
                     <p>{dossier.opportunity.host_org_name} · {dossier.opportunity.program_code}</p></div>
                   <Badge>{dossier.placement.state}</Badge>
                 </div>

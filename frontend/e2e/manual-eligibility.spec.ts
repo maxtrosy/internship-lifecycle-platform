@@ -16,7 +16,7 @@ async function logout(page: Page) {
 }
 
 async function navigate(page: Page, label: string) {
-  await page.locator(".sidebar-nav").getByRole("button", { name: label, exact: true }).click();
+  await page.locator(".sidebar-nav").getByRole("link", { name: label, exact: true }).click();
 }
 
 test("manual eligibility review waits for the related coordinator and persists the decision", async ({ page }) => {

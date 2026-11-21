@@ -5,6 +5,7 @@ import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainL
 import PlacementHistory from "../components/PlacementHistory";
 import { hoursFromHistory, totalHours, type HoursEntry } from "../progress";
 import { HOURS_REVIEW_LABELS } from "../segments";
+import { formatHistoryDate } from "../history";
 
 export default function Documents() {
   const [apps, setApps] = useState<Application[] | null>(null);
@@ -114,7 +115,7 @@ export default function Documents() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="MI PRÁCTICA" title="Mis documentos" description="Consulta los requisitos, entrega archivos y revisa las decisiones del equipo académico." />
+      <PageHeader eyebrow="Mi práctica" title="Mis documentos" description="Consulta los requisitos, entrega archivos y revisa las decisiones del equipo académico." />
       <Alert kind="info">Carga únicamente archivos sintéticos para esta demostración. Se aceptan PDF, PNG, JPG y DOCX de hasta 10 MB.</Alert>
       {error && <Alert kind="error">{error}</Alert>}
       {message && <Alert kind="success">{message}</Alert>}
@@ -147,7 +148,7 @@ export default function Documents() {
             {a.placement_state === "ACTIVE" && (
               <section className="card work-log-card" aria-label={`Seguimiento de horas de ${a.title}`}>
                 <div className="section-heading">
-                  <div><span className="eyebrow">SEGUIMIENTO</span><h2>Horas de práctica</h2>
+                  <div><h2>Horas de práctica</h2>
                     <p>Las horas se registran en el segmento activo. Son horas reportadas: solo cuentan para el cierre cuando el rol revisor configurado las acepta.</p>
                   </div>
                   <strong className="metric-value">{totalHours(hours[pid] ?? [])} h</strong>
@@ -172,7 +173,7 @@ export default function Documents() {
                 {(hours[pid] ?? []).length > 0 ? (
                   <ul className="work-log-list">
                     {(hours[pid] ?? []).map((entry) => (
-                      <li key={entry.id}><span>{new Date(entry.occurredAt).toLocaleString("es-CO")}{entry.segmentNo ? ` · segmento ${entry.segmentNo}` : ""}{entry.reviewStatus ? ` · ${HOURS_REVIEW_LABELS[entry.reviewStatus] ?? entry.reviewStatus}` : ""}</span><strong>{entry.hours} h</strong></li>
+                      <li key={entry.id}><span>{formatHistoryDate(entry.occurredAt)}{entry.segmentNo ? ` · segmento ${entry.segmentNo}` : ""}{entry.reviewStatus ? ` · ${HOURS_REVIEW_LABELS[entry.reviewStatus] ?? entry.reviewStatus}` : ""}</span><strong>{entry.hours} h</strong></li>
                     ))}
                   </ul>
                 ) : <p className="muted">Todavía no hay horas registradas.</p>}

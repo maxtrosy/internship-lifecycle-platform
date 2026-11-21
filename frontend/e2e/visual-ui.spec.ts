@@ -4,13 +4,13 @@ import { join } from "node:path";
 type Role = "STUDENT" | "HOST_ORG_MEMBER" | "PROGRAM_COORDINATOR" | "LEGAL_REVIEWER" | "EXPERIENTIAL_COORDINATOR" | "WORKPLACE_SUPERVISOR" | "FACULTY_SUPERVISOR";
 
 const roleDashboards: { role: Role; variant: string; eyebrow: string }[] = [
-  { role: "STUDENT", variant: "student", eyebrow: "TU PRÁCTICA" },
-  { role: "HOST_ORG_MEMBER", variant: "employer", eyebrow: "ORGANIZACIÓN ANFITRIONA" },
-  { role: "PROGRAM_COORDINATOR", variant: "academic", eyebrow: "COORDINACIÓN ACADÉMICA" },
-  { role: "LEGAL_REVIEWER", variant: "legal", eyebrow: "REVISIÓN DOCUMENTAL" },
-  { role: "EXPERIENTIAL_COORDINATOR", variant: "experiential", eyebrow: "COORDINACIÓN EXPERIENCIAL" },
-  { role: "WORKPLACE_SUPERVISOR", variant: "workplace", eyebrow: "SUPERVISIÓN LABORAL" },
-  { role: "FACULTY_SUPERVISOR", variant: "faculty", eyebrow: "SUPERVISIÓN DOCENTE" },
+  { role: "STUDENT", variant: "student", eyebrow: "Tu práctica" },
+  { role: "HOST_ORG_MEMBER", variant: "employer", eyebrow: "Organización anfitriona" },
+  { role: "PROGRAM_COORDINATOR", variant: "academic", eyebrow: "Coordinación académica" },
+  { role: "LEGAL_REVIEWER", variant: "legal", eyebrow: "Revisión documental" },
+  { role: "EXPERIENTIAL_COORDINATOR", variant: "experiential", eyebrow: "Coordinación experiencial" },
+  { role: "WORKPLACE_SUPERVISOR", variant: "workplace", eyebrow: "Supervisión laboral" },
+  { role: "FACULTY_SUPERVISOR", variant: "faculty", eyebrow: "Supervisión docente" },
 ];
 
 const operationalRoutes = [
@@ -76,7 +76,7 @@ async function expectNoHorizontalOverflow(page: Page, width: number) {
 }
 
 async function expectDarkThemeSettled(page: Page) {
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(17, 26, 24)");
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(14, 20, 24)");
 }
 
 test("login no autenticado mantiene tema y controles legibles en móvil y oscuro", async ({ page }) => {
@@ -87,7 +87,7 @@ test("login no autenticado mantiene tema y controles legibles en móvil y oscuro
   await expect(page.getByLabel("Contraseña")).toBeVisible();
   await page.getByLabel("Apariencia").selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect.poll(() => page.locator('meta[name="theme-color"]').getAttribute("content")).toBe("#111a18");
+  await expect.poll(() => page.locator('meta[name="theme-color"]').getAttribute("content")).toBe("#0e1418");
   await expectDarkThemeSettled(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await captureVisual(page, "login-dark-mobile");

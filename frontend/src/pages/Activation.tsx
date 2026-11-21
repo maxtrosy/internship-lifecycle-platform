@@ -17,8 +17,11 @@ export default function Activation() {
     try {
       const list = await api.listPendingActivation();
       setRows(list);
+      // Fetch every activation status in parallel instead of one request per
+      // loop iteration; a single failure still rejects the whole reload.
+      const loaded = await Promise.all(list.map((r) => api.activationStatus(r.id)));
       const map: Record<number, ActivationStatus> = {};
-      for (const r of list) map[r.id] = await api.activationStatus(r.id);
+      list.forEach((r, index) => { map[r.id] = loaded[index]; });
       setStatuses(map);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -44,7 +47,7 @@ export default function Activation() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="CICLO DE VIDA" title="Activación de prácticas" description="Consulta las condiciones obligatorias. El sistema las comprobará de nuevo antes de activar." />
+      <PageHeader eyebrow="Ciclo de vida" title="Activación de prácticas" description="Consulta las condiciones obligatorias. El sistema las comprobará de nuevo antes de activar." />
       {error && <Alert kind="error">{error}</Alert>}
       {message && <Alert kind="success">{message}</Alert>}
       {rows === null && !error && <div className="empty"><Spinner /> Cargando…</div>}

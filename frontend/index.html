@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f3f6f4" />
+    <meta name="theme-color" content="#f5f7f8" />
     <title>Prácticas · DH-05</title>
+    <link rel="preload" href="/fonts/source-sans-3-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <script>
       try {
         const saved = localStorage.getItem("ilp-theme");
@@ -13,7 +14,7 @@
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeMode = mode;
         document.documentElement.style.colorScheme = resolved;
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#111a18' : '#f2f6f3');
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#0e1418' : '#f5f7f8');
       } catch { document.documentElement.dataset.theme = "light"; }
     </script>
   </head>

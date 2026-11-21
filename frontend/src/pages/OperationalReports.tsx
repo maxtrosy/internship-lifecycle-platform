@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { OperationalReport } from "../api";
+import { formatCalendarDate } from "../history";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 
 type DistributionCardRow = {
@@ -25,9 +26,7 @@ function DistributionCards({ rows, label }: { rows: DistributionCardRow[]; label
 }
 
 function localDate(value: string): string {
-  const parts = value.slice(0, 10).split("-").map(Number);
-  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return "Fecha no disponible";
-  return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString("es-CO");
+  return formatCalendarDate(value);
 }
 
 export default function OperationalReports() {
@@ -71,10 +70,10 @@ export default function OperationalReports() {
 
   return (
     <div className="page-stack reports-page">
-      <PageHeader eyebrow="OPERACIÓN INSTITUCIONAL" title="Reportes operativos" description="Conteos calculados desde oportunidades, postulaciones, prácticas, requisitos e incidentes persistidos. El alcance depende de tu programa o rol institucional." />
+      <PageHeader eyebrow="Operación institucional" title="Reportes operativos" description="Conteos calculados desde oportunidades, postulaciones, prácticas, requisitos e incidentes persistidos. El alcance depende de tu programa o rol institucional." />
       {error && <Alert kind="error">{error} <button className="btn link" type="button" onClick={() => setAttempt((value) => value + 1)}>Reintentar</button></Alert>}
       <section className="card report-filters" aria-label="Filtros de reportes">
-        <div className="section-heading"><div><span className="eyebrow">CONSULTA</span><h2>Filtrar datos</h2></div>{loading && <span className="muted"><Spinner /> Actualizando…</span>}</div>
+        <div className="section-heading"><div><h2>Filtrar datos</h2></div>{loading && <span className="muted"><Spinner /> Actualizando…</span>}</div>
         <div className="grid cols-3">
           <div className="field"><label htmlFor="report-program">Programa</label><select id="report-program" value={filters.program_id} onChange={(event) => setFilter("program_id", event.target.value)} disabled={!options}><option value="">Todos los programas autorizados</option>{options?.by_program.map((row) => <option key={row.program_code} value={row.program_id}>{row.program_name} ({row.program_code})</option>)}</select></div>
           <div className="field"><label htmlFor="report-organization">Organización</label><select id="report-organization" value={filters.organization_id} onChange={(event) => setFilter("organization_id", event.target.value)} disabled={!options}><option value="">Todas</option>{options?.by_organization.map((row) => <option key={row.organization_id} value={row.organization_id}>{row.organization}</option>)}</select></div>

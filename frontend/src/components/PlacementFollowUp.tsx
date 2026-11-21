@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import * as api from "../api";
 import type { PlacementDossier } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, Spinner, formatDomainLabel } from "./ui";
-import { formatHistoryDate } from "../history";
+import { formatCalendarDate, formatHistoryDate } from "../history";
 
 type Props = { dossier: PlacementDossier; onChanged: () => void };
 
@@ -86,7 +86,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             {dossier.versions.map((version) => (
               <li key={version.version_no}>
                 <div className="row"><strong>Versión {version.version_no}</strong><Badge state={version.status}>{formatDomainLabel(version.status)}</Badge></div>
-                <p>{version.location} · {formatHistoryDate(version.start_date)} – {formatHistoryDate(version.end_date)}</p>
+                <p>{version.location} · {formatCalendarDate(version.start_date)} – {formatCalendarDate(version.end_date)}</p>
                 <span className="muted">Supervisor laboral: {version.workplace_supervisor_name ?? "Sin asignación"}</span>
                 {version.status === "PROPOSED" && capabilities.approve_change && (
                   <button className="btn secondary" type="button" disabled={busy} onClick={() => void approveChange(version.id)}>

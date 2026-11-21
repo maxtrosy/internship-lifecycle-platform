@@ -2,7 +2,7 @@ import { useState } from "react";
 import * as api from "../api";
 import type { PlacementDossier, ProgressHoursEntry } from "../api";
 import { Alert, Badge, EmptyState } from "./ui";
-import { formatHistoryDate } from "../history";
+import { formatCalendarDate, formatHistoryDate } from "../history";
 import { HOURS_REASON_LABELS, HOURS_REVIEW_LABELS, buildHoursReview, formatHours, segmentTone, type HoursReviewDraft } from "../segments";
 
 type Props = { dossier: PlacementDossier; onChanged: () => void };
@@ -50,7 +50,7 @@ export default function HoursReviewList({ dossier, onChanged }: Props) {
             <li key={entry.id} className="hours-entry">
               <span>
                 <time dateTime={entry.created_at}>{formatHistoryDate(entry.created_at)}</time>
-                {entry.work_date && <small> · jornada {entry.work_date}</small>}
+                {entry.work_date && <small> · jornada {formatCalendarDate(entry.work_date)}</small>}
                 {typeof entry.segment_sequence_no === "number" && <small> · segmento {entry.segment_sequence_no}</small>}
                 {typeof entry.version_no === "number" && <small> · versión v{entry.version_no}</small>}
                 {entry.description && <small> · {entry.description}</small>}

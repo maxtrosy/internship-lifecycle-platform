@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import * as api from "../api";
 import type { PlacementDossier, PlacementSegment, SegmentOption, WorkRecognition } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, Spinner, formatDomainLabel } from "./ui";
-import { formatHistoryDate } from "../history";
+import { formatCalendarDate, formatHistoryDate } from "../history";
 import {
   EMPTY_SEGMENT_DRAFT,
   MODALITY_LABELS,
@@ -22,9 +22,7 @@ type Props = { dossier: PlacementDossier; onChanged: () => void };
 type Panel = { segmentId: number; kind: "terminate" | "transfer" | "cancel" } | null;
 
 function localDate(value: string | null | undefined): string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(value)) return "—";
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString("es-CO");
+  return formatCalendarDate(value, "—");
 }
 
 function SegmentFields({ draft, setDraft, options, idPrefix }: {

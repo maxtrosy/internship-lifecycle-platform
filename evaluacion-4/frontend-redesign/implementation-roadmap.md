@@ -6,6 +6,28 @@
 > 3. `npx vite build`
 > 4. Si cambian flujos o selectores, también `python scripts/run_isolated_e2e.py`.
 
+## 0. Estado de implementación (actualizado el 2026-11-21)
+
+| Fase | Estado | Qué quedó hecho | Qué falta |
+|---|---|---|---|
+| F1 | **Completa** | C1 (fechas con `formatCalendarDate`), C2 (etiquetas), C5 (foco sólido), I1 (doble rol), I2 (badge), I8 (`Promise.all`) | — |
+| F2 | **Completa** | Tokens definitivos en `theme.css` (marca `--brand-*`, semánticos, alias legados), paleta petróleo y grises fríos, modo oscuro solo por tokens, Source Sans 3 / Source Serif 4 alojadas en `public/fonts` (OFL, vía Fontsource 5.2.8/5.2.9), escala tipográfica ≥12 px, radios 4/6/8, sin sombras en paneles. `index.css` sin tokens duplicados ni hex (salvo `#fff` heredado) y con `!important` solo en reduced-motion | Eliminar las media queries antiguas de `index.css` (1100/820/680/420) a favor de 767/1023 |
+| F3 | **Completa (sin componentes nuevos de formulario)** | `Badge` con tono, icono y texto (5 tonos), `Alert` con icono, `EmptyState` con icono, `Skeleton`, set de 34 iconos SVG, botones (primario, secundario, peligro, enlace, ghost, small), inputs/selects con borde 3,72:1, tablas con encabezado sobrio, etiquetas en MAYÚSCULAS eliminadas, flechas "→" eliminadas | `Field` con `aria-describedby`/errores y `useAsyncAction` (F5/F6) |
+| F4 | **Completa** | `Layout.tsx`: sidebar oscura institucional con enlaces `<a href>`, grupos por rol (mismas reglas que `canAccessSection`), header de 56 px, breadcrumbs, botón Avisos con contador de no leídas (`listNotifications`, sin endpoint nuevo), menú de perfil con roles, Cerrar sesión, rail en tableta y desktop contraído, cajón móvil | Focus trap completo en el cajón móvil |
+| F5 | Pendiente | — | DataTable, ConfirmDialog (7 `window.confirm`), Drawer, Tabs ARIA |
+| F6–F10 | Pendientes | — | Ver §2 |
+
+**Capturas reales:** `evaluacion-4/frontend-redesign/screenshots/` (`f3-*` tras F3, `f4-*` tras F4).
+
+### Continuidad para la siguiente sesión
+
+1. Arrancar la demo aislada: `PYTHONPATH=backend/.deps;backend`, `DATABASE_URL=''`, `python scripts/run_eval3_demo.py` y entrar por `#/demo-login`.
+2. Verificar: `npx vitest run --exclude "e2e/**"`, `npx tsc -b`, `npx vite build`, y el E2E aislado con el mismo `PYTHONPATH` (`python scripts/run_isolated_e2e.py` y `--populated`). **No editar archivos de `frontend/` mientras corre el E2E** (Vite recarga y provoca timeouts falsos).
+3. Regenerar capturas: script Playwright usado en esta sesión (iniciar sesión con el botón de la cuenta demo, `page.screenshot`), guardando en `screenshots/` con prefijo de fase.
+4. Siguiente trabajo: F5 (ConfirmDialog con `<dialog>` para los 7 `window.confirm`, Tabs ARIA en `PlacementMessages.tsx`, Drawer para formularios de segmento) y luego F6 (expediente: índice fijo, stepper, división de `PlacementSegments`).
+5. Selectores E2E ya migrados: navegación lateral usa `getByRole("link")`; eyebrows del inicio en tipo oración; fondo oscuro `rgb(14, 20, 24)`; `theme-color` oscuro `#0e1418`.
+6. No regenerar `evaluacion-4.zip` hasta terminar y validar todo el rediseño.
+
 ## 1. Auditoría de calidad (Fase E)
 
 Se basa en web-design-guidelines (reglas de `references/command.md`), composition-patterns y react-best-practices (solo las reglas de cliente; las de Next.js/RSC no aplican).

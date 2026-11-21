@@ -150,7 +150,7 @@ export default function Policies() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="CONFIGURACIÓN" title="Políticas del programa" description="Configura condiciones versionadas. Las nuevas reglas aplican a colocaciones aprobadas desde ese momento." />
+      <PageHeader eyebrow="Configuración" title="Políticas del programa" description="Configura condiciones versionadas. Las nuevas reglas aplican a colocaciones aprobadas desde ese momento." />
       {error && <Alert kind="error">{error}</Alert>}
       {message && <Alert kind="success">{message}</Alert>}
       {programs === null && !error && <div className="empty"><Spinner /> Cargando…</div>}
@@ -202,8 +202,8 @@ export default function Policies() {
             <h2>Activación</h2>
             <p className="muted">El sistema fija estas condiciones cuando se aprueba académicamente la selección.</p>
             {selected?.policies.ACTIVATION && <PolicyProvenance version={selected.policies.ACTIVATION} />}
-            <div className="field"><label>Documentos obligatorios (tipos separados por coma)</label>
-              <input value={draft.documents} onChange={(event) => set("documents", event.target.value)} placeholder="DOC_INSURANCE, DOC_AGREEMENT" /></div>
+            <div className="field"><label htmlFor="policy-activation-documents">Documentos obligatorios (tipos separados por coma)</label>
+              <input id="policy-activation-documents" value={draft.documents} onChange={(event) => set("documents", event.target.value)} placeholder="DOC_INSURANCE, DOC_AGREEMENT" /></div>
             <label className="row" style={{ marginTop: 12 }}>
               <input type="checkbox" checked={draft.supervisors} onChange={(event) => set("supervisors", event.target.checked)} style={{ width: "auto" }} />
               Exigir supervisor del lugar asignado
@@ -222,8 +222,8 @@ export default function Policies() {
                 onChange={(event) => set("finalReport", event.target.checked)} style={{ width: "auto" }} />Informe final obligatorio</label>
               <label className="row"><input type="checkbox" checked={draft.finalEvaluation}
                 onChange={(event) => set("finalEvaluation", event.target.checked)} style={{ width: "auto" }} />Evaluación final obligatoria</label>
-              <div className="field"><label>Horas mínimas (vacío = sin condición de horas)</label>
-                <input type="number" min="1" step="1" value={draft.minHours} onChange={(event) => set("minHours", event.target.value)} /></div>
+              <div className="field"><label htmlFor="policy-completion-min-hours">Horas mínimas (vacío = sin condición de horas)</label>
+                <input id="policy-completion-min-hours" type="number" min="1" step="1" value={draft.minHours} onChange={(event) => set("minHours", event.target.value)} /></div>
             </div>
             <button className="btn" style={{ marginTop: 12 }} disabled={busy !== null} onClick={() => void save("COMPLETION")}>
               {busy === "COMPLETION" ? <Spinner /> : "Crear versión de cierre"}

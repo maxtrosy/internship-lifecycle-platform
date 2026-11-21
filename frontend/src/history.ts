@@ -32,3 +32,19 @@ export function formatHistoryDate(value: unknown): string {
   if (!Number.isFinite(timestamp.getTime())) return "Fecha no disponible";
   return timestamp.toLocaleString("es-CO");
 }
+
+/**
+ * Formats a calendar date ("YYYY-MM-DD", optionally followed by a time part
+ * that is ignored) as a local date without any time-zone conversion.
+ * `new Date("2026-09-01")` is parsed as UTC midnight, which renders as the
+ * previous day in negative-offset zones; this helper avoids that shift.
+ */
+export function formatCalendarDate(value: unknown, fallback = "Fecha no disponible"): string {
+  if (typeof value !== "string") return fallback;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return fallback;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return fallback;
+  return date.toLocaleDateString("es-CO");
+}

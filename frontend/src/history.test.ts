@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHistoryAction, formatHistoryDate } from "./history";
+import { formatCalendarDate, formatHistoryAction, formatHistoryDate } from "./history";
 
 describe("placement history presentation", () => {
   it("translates known actions to student-facing text", () => {
@@ -25,5 +25,15 @@ describe("placement history presentation", () => {
     expect(formatHistoryDate("2026-10-25T12:00:00Z")).not.toBe("Fecha no disponible");
     expect(formatHistoryDate("not-a-date")).toBe("Fecha no disponible");
     expect(formatHistoryDate(null)).toBe("Fecha no disponible");
+  });
+
+  it("formats calendar dates without shifting the day or adding a time", () => {
+    const expected = new Date(2026, 8, 1).toLocaleDateString("es-CO");
+    expect(formatCalendarDate("2026-09-01")).toBe(expected);
+    expect(formatCalendarDate("2026-09-01T00:00:00Z")).toBe(expected);
+    expect(formatCalendarDate("2026-09-01")).not.toMatch(/:/);
+    expect(formatCalendarDate("2026-02-30")).toBe("Fecha no disponible");
+    expect(formatCalendarDate("01/09/2026")).toBe("Fecha no disponible");
+    expect(formatCalendarDate(undefined, "—")).toBe("—");
   });
 });

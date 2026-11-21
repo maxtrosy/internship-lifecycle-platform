@@ -70,7 +70,7 @@ export default function NotificationInbox({ onNavigate }: Props) {
 
   return (
     <div className="page-stack notification-page">
-      <PageHeader eyebrow="ACTIVIDAD" title="Notificaciones" description="Avisos persistidos de oportunidades y prácticas relacionadas con tu cuenta." />
+      <PageHeader eyebrow="Actividad" title="Notificaciones" description="Avisos persistidos de oportunidades y prácticas relacionadas con tu cuenta." />
       {error && <Alert kind="error">{error} <button className="btn link" type="button" onClick={() => setAttempt((value) => value + 1)}>Reintentar</button></Alert>}
       <BentoCard variant="content" title="Bandeja" description="Los avisos no contienen detalles de documentos, evaluaciones o incidentes.">
         {rows === null && !error && <div className="empty"><Spinner /> Cargando notificaciones…</div>}

@@ -18,7 +18,7 @@ async function login(page: Page, username: string) {
 }
 
 async function openDossiers(page: Page) {
-  await page.locator(".sidebar-nav").getByRole("button", { name: "Expedientes", exact: true }).click();
+  await page.locator(".sidebar-nav").getByRole("link", { name: "Expedientes", exact: true }).click();
 }
 
 async function dossier(page: Page, placementId: string) {
@@ -70,7 +70,7 @@ test("[@populated] expediente cerrado mantiene documentos, relaciones, horas e h
   await page.screenshot({ path: process.env.E2E_POPULATED_DESKTOP_SCREENSHOT, fullPage: true, animations: "disabled" });
   await page.getByLabel("Apariencia").selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(17, 26, 24)");
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(14, 20, 24)");
   await page.screenshot({ path: process.env.E2E_POPULATED_DARK_DESKTOP_SCREENSHOT, fullPage: true, animations: "disabled" });
 
   await page.reload();
@@ -179,7 +179,7 @@ test("[@populated] cada consulta conserva alcance por organización, programa y 
   expect(student.body.placement.state).toBe("ACTIVE");
   expect(student.body.work_plan.length).toBeGreaterThan(0);
   expect(student.body.progress_reports.length).toBeGreaterThan(0);
-  await page.locator(".sidebar-nav").getByRole("button", { name: "Notificaciones", exact: true }).click();
+  await page.locator(".sidebar-nav").getByRole("link", { name: "Notificaciones", exact: true }).click();
   const inbox = await page.evaluate(async () => (await fetch("/notifications")).json());
   expect(inbox.some((notice: { category: string; placement_id: number | null }) =>
     notice.category === "APPLICATION_SELECTED" && notice.placement_id === Number(placementId))).toBe(true);

@@ -105,7 +105,7 @@ export default function AcademicReview() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="COORDINACIÓN" title="Revisión académica" description="Al aprobar, el sistema fija las políticas vigentes del programa para activar y cerrar la práctica." />
+      <PageHeader eyebrow="Coordinación" title="Revisión académica" description="Al aprobar, el sistema fija las políticas vigentes del programa para activar y cerrar la práctica." />
 
       {success && <Alert kind="success">{success}</Alert>}
       {error && <Alert kind="error">{error}</Alert>}
@@ -114,7 +114,7 @@ export default function AcademicReview() {
       {eligibilityItems !== null && eligibilityItems.length === 0 && <EmptyState message="No hay postulaciones pendientes de revisión de elegibilidad." />}
       {!!eligibilityItems?.length && (
         <div className="card queue-card">
-          <div className="section-heading"><div><span className="eyebrow">ELEGIBILIDAD</span><h2>Revisión manual pendiente</h2><p>El resultado requiere una decisión documentada de la coordinación del programa.</p></div></div>
+          <div className="section-heading"><div><h2>Revisión manual pendiente</h2><p>El resultado requiere una decisión documentada de la coordinación del programa.</p></div></div>
           <div className="table-scroll" tabIndex={0} aria-label="Postulaciones pendientes de revisión de elegibilidad"><table className="eligibility-review-table">
             <thead><tr><th>Estudiante</th><th>Programa y oportunidad</th><th>Datos registrados</th><th>Decisión y fundamento</th></tr></thead>
             <tbody>{eligibilityItems.map((item) => (
@@ -145,7 +145,7 @@ export default function AcademicReview() {
       {items !== null && items.length === 0 && <EmptyState message="No hay selecciones pendientes de revisión." />}
       {items !== null && items.length > 0 && (
         <div className="card queue-card">
-          <div className="section-heading"><div><span className="eyebrow">COLA DE REVISIÓN</span><h2>Selecciones pendientes</h2><p>{items.length} {items.length === 1 ? "selección requiere" : "selecciones requieren"} una decisión académica.</p></div></div>
+          <div className="section-heading"><div><h2>Selecciones pendientes</h2><p>{items.length} {items.length === 1 ? "selección requiere" : "selecciones requieren"} una decisión académica.</p></div></div>
           <div className="table-scroll" tabIndex={0} aria-label="Selecciones pendientes"><table>
             <thead>
               <tr>
