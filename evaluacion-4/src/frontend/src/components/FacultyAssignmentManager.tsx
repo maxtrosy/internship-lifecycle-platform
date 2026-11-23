@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { PlacementDossier } from "../api";
 import { Alert, EmptyState, Spinner } from "./ui";
 import { formatHistoryDate } from "../history";
+import { Field } from "./Field";
 
 export default function FacultyAssignmentManager({ dossier, onChanged }: {
   dossier: PlacementDossier;
@@ -69,13 +70,13 @@ export default function FacultyAssignmentManager({ dossier, onChanged }: {
         {options === null && !error && <div className="empty"><Spinner /> Cargando supervisión docente…</div>}
         {options?.length === 0 && <EmptyState message="No hay cuentas activas con rol de supervisión docente." />}
         {!!options?.length && <div className="faculty-assignment-controls">
-          <label className="field" htmlFor={`faculty-assignment-${dossier.placement.id}`}>Asignar supervisión docente
-            <select id={`faculty-assignment-${dossier.placement.id}`} value={selected} onChange={(event) => setSelected(event.target.value)}>
+          <Field id={`faculty-assignment-${dossier.placement.id}`} label="Asignar supervisión docente">
+            <select value={selected} onChange={(event) => setSelected(event.target.value)}>
               <option value="">Selecciona una persona</option>
               {options.filter((person) => !dossier.responsibles.faculty_assignments.some((assignment) => assignment.id === person.id))
                 .map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}
             </select>
-          </label>
+          </Field>
           <button className="btn" type="button" disabled={busyId !== null || !selected} onClick={() => void assign()}>
             {busyId === "assign" ? <Spinner /> : "Asignar"}
           </button>

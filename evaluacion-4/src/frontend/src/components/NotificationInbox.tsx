@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { UserNotification } from "../api";
 import type { SectionId } from "./Layout";
 import { Alert, BentoCard, EmptyState, PageHeader, Spinner } from "./ui";
+import { TabPanel, Tabs } from "./overlays";
 import { formatHistoryDate } from "../history";
 
 type Props = { onNavigate: (section: SectionId) => void };
@@ -24,6 +25,7 @@ export function notificationTitle(category: UserNotification["category"]): strin
     OPPORTUNITY_REVIEW: "Una oportunidad requiere una decisión institucional",
     OPPORTUNITY_PUBLISHED: "Hay una nueva oportunidad publicada en tu programa",
     OPPORTUNITY_CLOSED: "Una oportunidad relacionada fue cerrada",
+    SEGMENT_CHANGED: "Cambió un segmento de la práctica (activación, cierre o transferencia)",
   };
   return labels[category];
 }
@@ -33,6 +35,7 @@ export default function NotificationInbox({ onNavigate }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [filter, setFilter] = useState<"all" | "unread">("all");
 
   useEffect(() => {
     let current = true;
@@ -45,6 +48,9 @@ export default function NotificationInbox({ onNavigate }: Props) {
       });
     return () => { current = false; };
   }, [attempt]);
+
+  const unreadCount = rows?.filter((row) => !row.is_read).length ?? 0;
+  const visibleRows = (rows ?? []).filter((row) => filter === "all" || !row.is_read);
 
   async function open(item: UserNotification) {
     setBusyId(item.id);
@@ -70,26 +76,34 @@ export default function NotificationInbox({ onNavigate }: Props) {
 
   return (
     <div className="page-stack notification-page">
-      <PageHeader eyebrow="ACTIVIDAD" title="Notificaciones" description="Avisos persistidos de oportunidades y prácticas relacionadas con tu cuenta." />
+      <PageHeader eyebrow="Actividad" title="Notificaciones" description="Avisos persistidos de oportunidades y prácticas relacionadas con tu cuenta." />
       {error && <Alert kind="error">{error} <button className="btn link" type="button" onClick={() => setAttempt((value) => value + 1)}>Reintentar</button></Alert>}
       <BentoCard variant="content" title="Bandeja" description="Los avisos no contienen detalles de documentos, evaluaciones o incidentes.">
-        {rows === null && !error && <div className="empty"><Spinner /> Cargando notificaciones…</div>}
-        {rows?.length === 0 && <EmptyState message="No tienes notificaciones todavía." />}
-        {!!rows?.length && <ol className="notification-list">
-          {rows.map((item) => (
-            <li key={item.id} className={item.is_read ? "notification-item read" : "notification-item unread"}>
-              <div className="notification-copy">
-                <strong>{notificationTitle(item.category)}</strong>
-                <time dateTime={item.created_at}>{formatHistoryDate(item.created_at)}</time>
-                <span>{item.is_read ? "Leída" : "Sin leer"}</span>
-              </div>
-              <button className="btn secondary" type="button" disabled={busyId === item.id}
-                onClick={() => void open(item)}>
-                {busyId === item.id ? <Spinner /> : item.placement_id !== null ? "Abrir expediente" : "Abrir oportunidad"}
-              </button>
-            </li>
-          ))}
-        </ol>}
+        {!!rows?.length && <Tabs label="Filtrar notificaciones" idBase="notifications" value={filter} onChange={setFilter}
+          items={[{ id: "all", label: "Todas", count: rows.length }, { id: "unread", label: "Sin leer", count: unreadCount }]} />}
+        <TabPanel idBase="notifications" id={filter} active={!!rows?.length}>
+          {rows === null && !error && <div className="empty" role="status"><Spinner /> Cargando notificaciones…</div>}
+          {rows?.length === 0 && <EmptyState icon="bell" message="No tienes notificaciones todavía." />}
+          {!!rows?.length && visibleRows.length === 0 && <EmptyState icon="check" message="No tienes notificaciones sin leer." />}
+          {visibleRows.length > 0 && <ol className="notification-list">
+            {visibleRows.map((item) => (
+              <li key={item.id} className={item.is_read ? "notification-item read" : "notification-item unread"}>
+                <span className="notification-dot" aria-hidden="true" />
+                <div className="notification-copy">
+                  <strong>{notificationTitle(item.category)}</strong>
+                  <span className="notification-meta">
+                    <time dateTime={item.created_at}>{formatHistoryDate(item.created_at)}</time>
+                    <span>{item.is_read ? "Leída" : "Sin leer"}</span>
+                  </span>
+                </div>
+                <button className="btn secondary small" type="button" disabled={busyId === item.id}
+                  onClick={() => void open(item)}>
+                  {busyId === item.id ? <Spinner /> : item.placement_id !== null ? "Abrir expediente" : "Abrir oportunidad"}
+                </button>
+              </li>
+            ))}
+          </ol>}
+        </TabPanel>
       </BentoCard>
     </div>
   );

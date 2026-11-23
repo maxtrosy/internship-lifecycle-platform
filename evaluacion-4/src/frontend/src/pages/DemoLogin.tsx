@@ -70,7 +70,7 @@ export default function DemoLogin({
     <main className="demo-login-page">
       <div className="demo-login-header">
         <div>
-          <span className="eyebrow">DH-05 · DEMOSTRACIÓN</span>
+          <span className="eyebrow">DH-05 · demostración</span>
           <h1>Cuentas de prueba</h1>
           <p>Elige un perfil para entrar directamente. Cada acceso usa la sesión normal de la aplicación.</p>
         </div>
@@ -92,7 +92,7 @@ export default function DemoLogin({
               <small>{account.roles}</small>
             </span>
             <span className="demo-account-action">
-              {busy === account.name ? <Spinner /> : "Entrar →"}
+              {busy === account.name ? <Spinner /> : "Entrar"}
             </span>
           </button>
         ))}

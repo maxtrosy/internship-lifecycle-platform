@@ -25,6 +25,7 @@ export function notificationTitle(category: UserNotification["category"]): strin
     OPPORTUNITY_REVIEW: "Una oportunidad requiere una decisión institucional",
     OPPORTUNITY_PUBLISHED: "Hay una nueva oportunidad publicada en tu programa",
     OPPORTUNITY_CLOSED: "Una oportunidad relacionada fue cerrada",
+    SEGMENT_CHANGED: "Cambió un segmento de la práctica (activación, cierre o transferencia)",
   };
   return labels[category];
 }

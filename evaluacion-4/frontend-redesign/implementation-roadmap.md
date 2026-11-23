@@ -6,6 +6,39 @@
 > 3. `npx vite build`
 > 4. Si cambian flujos o selectores, también `python scripts/run_isolated_e2e.py`.
 
+## 00. Quinta sesión (2026-11-22/23): versión final de DH-05
+
+**Hecho y probado**
+- CR-05 completo en el backend: `GET /reports/rotations` (`reports/service.py::rotations`, mismo alcance que el reporte operativo, solo agregados) y avisos `SEGMENT_CHANGED` al activar, completar, terminar o transferir un segmento. El supervisor anterior no recibe avisos. Migración `0017`, que solo amplía las categorías de aviso. Decisión en ADR-013.
+- Frontend: sección «Rotaciones y transferencias» en Reportes operativos (`RotationReportSection.tsx`, clases propias `.rotation-*`) y etiqueta del aviso en la bandeja.
+- Defecto corregido: `PracticeDossier.tsx` refresca el expediente en el sitio tras una acción. Antes se desmontaba y se perdían el aviso de éxito, la pestaña y la posición.
+- E2E nuevo `e2e/rotation.spec.ts` (`@populated`): transferencia con horas aceptadas conservadas, condición jurídica del destino, `404` para el supervisor anterior, avisos y reporte.
+- Documentación (README, ADR-013, adr-review, arquitectura, contratos, migraciones, matriz de impacto y de trazabilidad, limitaciones, guion, instalación) y copias del MD (§6.9) y del PPTX (diapositivas 13–14) en `docs/cambio-e-impacto/`.
+- Resultados en `evaluacion-4/evidence/test-results-2026-11-22.md`:
+  - backend 125 superadas (CR-05: 14);
+  - migraciones 0001→0017 y 0010→0017;
+  - Vitest 51/51, `tsc -b` y build correctos;
+  - E2E 18 superadas / 5 omitidas, y `--populated` 5/5;
+  - demo `--smoke` con cabeza 0017.
+
+**Implementado con limitaciones**
+- Excepciones temporales: no se puede extender ni editar un segmento (se cancela y se planifica otro).
+- El filtro de organización del reporte usa la organización de la oportunidad.
+- El reporte se calcula en cada petición.
+
+**Pendiente de decisión institucional**
+- OPEN-CR05-01 a 06: quién gestiona segmentos, quién acepta horas, superposición, disputas, acceso histórico y evidencia tras una interrupción. Las dos autoridades siguen vacías por defecto.
+
+**Bloqueos externos**
+- Video de 5–6 minutos no grabado (hay guion).
+- Sin revisión con lector de pantalla real ni con usuarios.
+- Activos institucionales oficiales no recibidos.
+
+**Cómo retomar**
+1. Ejecutar las verificaciones del encabezado, más `run_isolated_e2e.py --populated`.
+2. Si algo cambia, regenerar el paquete con `python scripts/build_eval4_package.py` (refresca `evaluacion-4/src`, `evaluacion-4/tests` y `evaluacion-4.zip`).
+3. Sin `git add`, commits ni push.
+
 ## 0. Estado de implementación (actualizado el 2026-11-22, cuarta sesión: cierre de F10)
 
 | Fase | Estado | Qué quedó hecho | Qué falta |

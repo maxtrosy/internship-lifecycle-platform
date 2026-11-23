@@ -2,7 +2,10 @@ import { useState, type FormEvent } from "react";
 import * as api from "../api";
 import type { PlacementDossier } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, Spinner, formatDomainLabel } from "./ui";
-import { formatHistoryDate } from "../history";
+import { formatCalendarDate, formatHistoryDate } from "../history";
+import { Field, useFieldErrors, type FieldErrors } from "./Field";
+
+type FieldKey = "change" | "progress" | "evaluation" | "summary" | "description" | "evidence";
 
 type Props = { dossier: PlacementDossier; onChanged: () => void };
 
@@ -20,14 +23,20 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const capabilities = dossier.capabilities;
+  const fid = `follow-up-${dossier.placement.id}`;
+  const fieldId = (key: FieldKey) => `${fid}-${key}`;
+  const fields = useFieldErrors<FieldKey>(fieldId);
   const showProgress = capabilities.read_progress_reports || capabilities.submit_progress_report;
   const showEvaluations = capabilities.read_evaluations || capabilities.submit_evaluation;
   const showIncidents = capabilities.read_incidents || capabilities.report_incident;
   const showEvidence = capabilities.read_completion_evidence || capabilities.submit_completion_evidence;
   const showChanges = dossier.versions.length > 0 || capabilities.propose_change || capabilities.approve_change;
 
-  async function save(event: FormEvent, task: () => Promise<unknown>, success: string, reset: () => void) {
+  // `invalid` holds the same rules the form enforced before; on failure the
+  // first invalid field receives focus and its error is announced.
+  async function save(event: FormEvent, invalid: FieldErrors<FieldKey>, task: () => Promise<unknown>, success: string, reset: () => void) {
     event.preventDefault();
+    if (!fields.report(invalid)) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -86,7 +95,7 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             {dossier.versions.map((version) => (
               <li key={version.version_no}>
                 <div className="row"><strong>Versión {version.version_no}</strong><Badge state={version.status}>{formatDomainLabel(version.status)}</Badge></div>
-                <p>{version.location} · {formatHistoryDate(version.start_date)} – {formatHistoryDate(version.end_date)}</p>
+                <p>{version.location} · {formatCalendarDate(version.start_date)} – {formatCalendarDate(version.end_date)}</p>
                 <span className="muted">Supervisor laboral: {version.workplace_supervisor_name ?? "Sin asignación"}</span>
                 {version.status === "PROPOSED" && capabilities.approve_change && (
                   <button className="btn secondary" type="button" disabled={busy} onClick={() => void approveChange(version.id)}>
@@ -98,8 +107,9 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
           </ol>
         )}
         {capabilities.propose_change && (
-          <form className="follow-up-form" onSubmit={(event) => void save(
+          <form className="follow-up-form" noValidate onSubmit={(event) => void save(
             event,
+            changeLocation.trim() || changeResponsibilities.trim() ? {} : { change: "Indica una nueva ubicación o responsabilidades actualizadas." },
             () => api.proposePlacementChange(dossier.placement.id, {
               ...(changeLocation.trim() ? { location: changeLocation.trim() } : {}),
               ...(changeResponsibilities.trim() ? { responsibilities: changeResponsibilities.trim() } : {}),
@@ -107,16 +117,16 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             "Cambio propuesto y guardado como nueva versión.",
             () => { setChangeLocation(""); setChangeResponsibilities(""); },
           )}>
-            <label className="field">Nueva ubicación (opcional)
-              <input value={changeLocation} maxLength={240} aria-label="Nueva ubicación de la práctica"
-                onChange={(event) => setChangeLocation(event.currentTarget.value)} />
-            </label>
-            <label className="field">Responsabilidades actualizadas (opcional)
+            <Field id={fieldId("change")} label="Nueva ubicación de la práctica (opcional)"
+              hint="Completa al menos uno de los dos campos." error={fields.errors.change}>
+              <input value={changeLocation} maxLength={240}
+                onChange={(event) => { setChangeLocation(event.currentTarget.value); fields.clear("change"); }} />
+            </Field>
+            <Field id={`${fid}-responsibilities`} label="Responsabilidades actualizadas de la práctica (opcional)">
               <textarea value={changeResponsibilities} maxLength={5000} rows={4}
-                aria-label="Responsabilidades actualizadas de la práctica"
-                onChange={(event) => setChangeResponsibilities(event.currentTarget.value)} />
-            </label>
-            <button className="btn" type="submit" disabled={busy || (!changeLocation.trim() && !changeResponsibilities.trim())}>
+                onChange={(event) => { setChangeResponsibilities(event.currentTarget.value); fields.clear("change"); }} />
+            </Field>
+            <button className="btn" type="submit" disabled={busy}>
               {busy ? <Spinner /> : "Proponer cambio"}
             </button>
           </form>
@@ -139,16 +149,17 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             </ol>
           )}
           {capabilities.submit_progress_report && (
-            <form className="follow-up-form" onSubmit={(event) => void save(
-              event, () => api.submitProgressReport(dossier.placement.id, progress),
+            <form className="follow-up-form" noValidate onSubmit={(event) => void save(
+              event, progress.trim() ? {} : { progress: "Describe el avance antes de guardarlo." },
+              () => api.submitProgressReport(dossier.placement.id, progress),
               "Avance guardado en el expediente.", () => setProgress(""),
             )}>
-              <label className="field">Registrar un avance
+              <Field id={fieldId("progress")} label="Detalle del avance" error={fields.errors.progress}>
                 <textarea value={progress} maxLength={5000} required rows={4}
-                  aria-label="Detalle del avance" placeholder="Describe el trabajo realizado o el progreso observado."
-                  onChange={(event) => setProgress(event.currentTarget.value)} />
-              </label>
-              <button className="btn" type="submit" disabled={busy || !progress.trim()}>{busy ? <Spinner /> : "Guardar avance"}</button>
+                  placeholder="Describe el trabajo realizado o el progreso observado…"
+                  onChange={(event) => { setProgress(event.currentTarget.value); fields.clear("progress"); }} />
+              </Field>
+              <button className="btn" type="submit" disabled={busy}>{busy ? <Spinner /> : "Guardar avance"}</button>
             </form>
           )}
         </BentoCard>
@@ -170,22 +181,23 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             </ol>
           )}
           {capabilities.submit_evaluation && (
-            <form className="follow-up-form evaluation-form" onSubmit={(event) => void save(
-              event, () => api.submitPlacementEvaluation(dossier.placement.id, evaluationKind, evaluation),
+            <form className="follow-up-form evaluation-form" noValidate onSubmit={(event) => void save(
+              event, evaluation.trim() ? {} : { evaluation: "Registra las observaciones de la evaluación." },
+              () => api.submitPlacementEvaluation(dossier.placement.id, evaluationKind, evaluation),
               "Evaluación guardada en el expediente.", () => setEvaluation(""),
             )}>
-              <label className="field">Tipo de evaluación
+              <Field id={`${fid}-evaluation-kind`} label="Tipo de evaluación">
                 <select value={evaluationKind} onChange={(event) => setEvaluationKind(event.currentTarget.value as "MIDTERM" | "FINAL")}>
                   <option value="MIDTERM">Seguimiento intermedio</option>
                   <option value="FINAL">Evaluación final</option>
                 </select>
-              </label>
-              <label className="field">Observaciones
+              </Field>
+              <Field id={fieldId("evaluation")} label="Observaciones de la evaluación" error={fields.errors.evaluation}>
                 <textarea value={evaluation} maxLength={8000} required rows={5}
-                  aria-label="Observaciones de la evaluación" placeholder="Registra observaciones concretas sobre la experiencia."
-                  onChange={(event) => setEvaluation(event.currentTarget.value)} />
-              </label>
-              <button className="btn" type="submit" disabled={busy || !evaluation.trim()}>{busy ? <Spinner /> : "Guardar evaluación"}</button>
+                  placeholder="Registra observaciones concretas sobre la experiencia…"
+                  onChange={(event) => { setEvaluation(event.currentTarget.value); fields.clear("evaluation"); }} />
+              </Field>
+              <button className="btn" type="submit" disabled={busy}>{busy ? <Spinner /> : "Guardar evaluación"}</button>
             </form>
           )}
         </BentoCard>
@@ -207,25 +219,30 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             </ol>
           )}
           {capabilities.report_incident && (
-            <form className="follow-up-form" onSubmit={(event) => void save(
-              event, () => api.reportPlacementIncident(dossier.placement.id, incidentKind, summary, description),
+            <form className="follow-up-form" noValidate onSubmit={(event) => void save(
+              event,
+              {
+                ...(summary.trim() ? {} : { summary: "Escribe un resumen breve." }),
+                ...(description.trim() ? {} : { description: "Describe la situación o el cambio." }),
+              },
+              () => api.reportPlacementIncident(dossier.placement.id, incidentKind, summary, description),
               "Registro guardado en el expediente.", () => { setSummary(""); setDescription(""); },
             )}>
-              <label className="field">Tipo de registro
+              <Field id={`${fid}-incident-kind`} label="Tipo de registro">
                 <select value={incidentKind} onChange={(event) => setIncidentKind(event.currentTarget.value as "INCIDENT" | "CHANGE")}>
                   <option value="INCIDENT">Situación o problema</option>
                   <option value="CHANGE">Cambio solicitado o comunicado</option>
                 </select>
-              </label>
-              <label className="field">Resumen
-                <input value={summary} maxLength={160} required aria-label="Resumen de situación o cambio"
-                  onChange={(event) => setSummary(event.currentTarget.value)} />
-              </label>
-              <label className="field">Detalle
-                <textarea value={description} maxLength={5000} required rows={4} aria-label="Detalle de situación o cambio"
-                  onChange={(event) => setDescription(event.currentTarget.value)} />
-              </label>
-              <button className="btn" type="submit" disabled={busy || !summary.trim() || !description.trim()}>{busy ? <Spinner /> : "Registrar"}</button>
+              </Field>
+              <Field id={fieldId("summary")} label="Resumen de situación o cambio" error={fields.errors.summary}>
+                <input value={summary} maxLength={160} required
+                  onChange={(event) => { setSummary(event.currentTarget.value); fields.clear("summary"); }} />
+              </Field>
+              <Field id={fieldId("description")} label="Detalle de situación o cambio" error={fields.errors.description}>
+                <textarea value={description} maxLength={5000} required rows={4}
+                  onChange={(event) => { setDescription(event.currentTarget.value); fields.clear("description"); }} />
+              </Field>
+              <button className="btn" type="submit" disabled={busy}>{busy ? <Spinner /> : "Registrar"}</button>
             </form>
           )}
         </BentoCard>
@@ -249,15 +266,16 @@ export default function PlacementFollowUp({ dossier, onChanged }: Props) {
             </ol>
           )}
           {capabilities.submit_completion_evidence && (
-            <form className="follow-up-form" onSubmit={(event) => void save(
-              event, () => evidenceFile ? api.submitCompletionEvidence(dossier.placement.id, evidenceFile) : Promise.reject(new Error("Selecciona un archivo.")),
+            <form className="follow-up-form" noValidate onSubmit={(event) => void save(
+              event, evidenceFile ? {} : { evidence: "Selecciona el archivo del informe final." },
+              () => evidenceFile ? api.submitCompletionEvidence(dossier.placement.id, evidenceFile) : Promise.reject(new Error("Selecciona un archivo.")),
               "Informe final persistido en el expediente.", () => setEvidenceFile(null),
             )}>
-              <label className="field">Archivo del informe final
-                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.docx" required aria-label="Archivo del informe final"
-                  onChange={(event) => setEvidenceFile(event.currentTarget.files?.[0] ?? null)} />
-              </label>
-              <button className="btn" type="submit" disabled={busy || evidenceFile === null}>{busy ? <Spinner /> : "Entregar informe final"}</button>
+              <Field id={fieldId("evidence")} label="Archivo del informe final" hint="PDF, PNG, JPG o DOCX." error={fields.errors.evidence}>
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.docx" required
+                  onChange={(event) => { setEvidenceFile(event.currentTarget.files?.[0] ?? null); fields.clear("evidence"); }} />
+              </Field>
+              <button className="btn" type="submit" disabled={busy}>{busy ? <Spinner /> : "Entregar informe final"}</button>
             </form>
           )}
           {!capabilities.submit_completion_evidence && capabilities.read_completion_evidence &&

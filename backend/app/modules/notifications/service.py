@@ -34,6 +34,13 @@ NOTICE_ACTIONS = {
     "opportunity.approved_for_publication": "OPPORTUNITY_REVIEW",
     "opportunity.published": "OPPORTUNITY_PUBLISHED",
     "opportunity.closed": "OPPORTUNITY_CLOSED",
+    # CR-05: the segment's supervisor is resolved at audit time, so an activation
+    # reaches the new supervisor and a transfer/termination does not reach the
+    # previous one (no automatic access, CR-05-BR-06).
+    "segment.activated": "SEGMENT_CHANGED",
+    "segment.completed": "SEGMENT_CHANGED",
+    "segment.terminated_early": "SEGMENT_CHANGED",
+    "segment.transferred": "SEGMENT_CHANGED",
 }
 
 

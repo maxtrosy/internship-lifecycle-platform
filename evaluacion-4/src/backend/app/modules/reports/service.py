@@ -140,3 +140,127 @@ def operations(cur: psycopg.Cursor, subj: dict, *, program_id: int | None = None
         "by_program": programs,
         "by_organization": organizations,
     }
+
+
+def rotations(cur: psycopg.Cursor, subj: dict, *, program_id: int | None = None,
+              organization_id: int | None = None) -> dict:
+    """CR-05 aggregates (rotations, transfers, interruptions, accepted hours,
+    missing evaluations, pending consolidations) with the same scope rules as
+    ``operations``: program coordinators see their programs, the experiential
+    coordinator sees every program, nobody else is allowed. Aggregates only;
+    no names, reasons, evaluations or entry-level data are returned. The
+    organization filter applies to the placement's opportunity, like
+    ``operations``; a segment may run at another organization."""
+    where, params = _scope(subj, program_id, organization_id, None)
+    scoped = f"""
+        WITH scoped AS (
+          SELECT p.id AS placement_id, p.state AS placement_state, o.program_id
+          FROM placement p JOIN application a ON a.id=p.application_id
+          JOIN opportunity o ON o.id=a.opportunity_id WHERE {where}
+        ), seg AS (
+          SELECT s.*, sc.program_id, sc.placement_state FROM placement_segment s
+          JOIN scoped sc ON sc.placement_id=s.placement_id
+        ), per_placement AS (
+          SELECT sc.placement_id, sc.program_id, sc.placement_state,
+                 count(s.id) FILTER (WHERE s.status <> 'CANCELLED') AS effective,
+                 count(s.id) FILTER (WHERE s.status IN ('PLANNED','ACTIVE')) AS open,
+                 max(s.ended_at) AS last_ended_at
+          FROM scoped sc LEFT JOIN placement_segment s ON s.placement_id=sc.placement_id
+          GROUP BY sc.placement_id, sc.program_id, sc.placement_state
+        ), consolidation AS (
+          SELECT pp.*, (pp.placement_state='ACTIVE' AND pp.effective > 1 AND pp.open = 0 AND NOT EXISTS (
+                   SELECT 1 FROM placement_experience_review r
+                   WHERE r.placement_id=pp.placement_id AND r.decision='APPROVED'
+                     AND r.id = (SELECT max(r2.id) FROM placement_experience_review r2
+                                 WHERE r2.placement_id=pp.placement_id)
+                     AND (pp.last_ended_at IS NULL OR r.reviewed_at >= pp.last_ended_at))) AS pending
+          FROM per_placement pp
+        )"""
+
+    def one(select: str) -> dict:
+        return cur.execute(scoped + select, params).fetchone()
+
+    def many(select: str) -> list[dict]:
+        return cur.execute(scoped + select, params).fetchall()
+
+    placements = one(
+        """SELECT count(*) FILTER (WHERE effective > 1)::int AS multi_segment_placements,
+                  count(*) FILTER (WHERE effective = 1)::int AS single_segment_placements,
+                  count(*) FILTER (WHERE pending)::int AS pending_consolidations
+           FROM consolidation"""
+    )
+    segments_by_status = many(
+        "SELECT status, count(*)::int AS count FROM seg GROUP BY status ORDER BY status"
+    )
+    active_rotations = one(
+        """SELECT count(*)::int AS count FROM seg s
+           WHERE s.status='ACTIVE' AND s.placement_state='ACTIVE' AND EXISTS (
+             SELECT 1 FROM placement_segment o WHERE o.placement_id=s.placement_id
+               AND o.id <> s.id AND o.status <> 'CANCELLED')"""
+    )["count"]
+    transfers = many(
+        """SELECT t.prior_work_treatment AS treatment, count(*)::int AS count
+           FROM placement_transfer t JOIN scoped sc ON sc.placement_id=t.placement_id
+           GROUP BY t.prior_work_treatment ORDER BY t.prior_work_treatment"""
+    )
+    interruptions = many(
+        """SELECT work_recognition AS recognition, count(*)::int AS count FROM seg
+           WHERE status='TERMINATED_EARLY' GROUP BY work_recognition ORDER BY work_recognition"""
+    )
+    hours = one(
+        """SELECT coalesce(sum(pe.hours),0) AS reported,
+                  coalesce(sum(r.accepted_hours) FILTER (WHERE r.decision='ACCEPTED'
+                    AND s.work_recognition IS DISTINCT FROM 'NOT_RECOGNIZED'),0) AS accepted,
+                  count(pe.id) FILTER (WHERE (r.decision IS NULL OR r.decision='DISPUTED')
+                    AND s.work_recognition IS DISTINCT FROM 'NOT_RECOGNIZED')::int AS pending_entries,
+                  count(pe.id) FILTER (WHERE r.decision='DISPUTED')::int AS disputed_entries,
+                  coalesce(sum(pe.hours) FILTER (WHERE s.work_recognition='NOT_RECOGNIZED'),0)
+                    AS not_recognized
+           FROM progress_entry pe JOIN scoped sc ON sc.placement_id=pe.placement_id
+           LEFT JOIN LATERAL (SELECT decision, accepted_hours FROM progress_entry_review rv
+                              WHERE rv.entry_id=pe.id ORDER BY rv.id DESC LIMIT 1) r ON true
+           LEFT JOIN placement_segment s ON s.id=pe.segment_id"""
+    )
+    evaluations = one(
+        """SELECT count(*) FILTER (WHERE s.status='ACTIVE')::int AS active_without_final,
+                  count(*) FILTER (WHERE s.status='COMPLETED' AND s.origin <> 'MIGRATED_SINGLE')::int
+                    AS completed_without_final
+           FROM seg s
+           WHERE s.status IN ('ACTIVE','COMPLETED')
+             AND EXISTS (SELECT 1 FROM completion_requirement cr WHERE cr.placement_id=s.placement_id
+                         AND cr.kind='FINAL_EVALUATION' AND cr.mandatory)
+             AND NOT EXISTS (SELECT 1 FROM placement_evaluation ev
+                             WHERE ev.segment_id=s.id AND ev.kind='FINAL')"""
+    )
+    by_program = many(
+        """SELECT ap.id AS program_id, ap.code AS program_code, ap.name AS program_name,
+                  count(*) FILTER (WHERE c.effective > 1)::int AS multi_segment_placements,
+                  count(*) FILTER (WHERE c.pending)::int AS pending_consolidations,
+                  (SELECT count(*) FROM placement_transfer t JOIN scoped sc ON sc.placement_id=t.placement_id
+                   WHERE sc.program_id=ap.id)::int AS transfers,
+                  (SELECT count(*) FROM seg s WHERE s.program_id=ap.id
+                   AND s.status='TERMINATED_EARLY')::int AS interruptions
+           FROM consolidation c JOIN academic_program ap ON ap.id=c.program_id
+           GROUP BY ap.id, ap.code, ap.name ORDER BY ap.code"""
+    )
+    return {
+        "multi_segment_placements": placements["multi_segment_placements"],
+        "single_segment_placements": placements["single_segment_placements"],
+        "active_rotations": active_rotations,
+        "segments_by_status": segments_by_status,
+        "transfers": sum(row["count"] for row in transfers),
+        "transfers_by_treatment": transfers,
+        "interruptions": sum(row["count"] for row in interruptions),
+        "interruptions_by_recognition": interruptions,
+        "hours": {
+            "reported": float(hours["reported"]),
+            "accepted": float(hours["accepted"]),
+            "not_recognized": float(hours["not_recognized"]),
+            "pending_entries": hours["pending_entries"],
+            "disputed_entries": hours["disputed_entries"],
+        },
+        "active_segments_without_final_evaluation": evaluations["active_without_final"],
+        "completed_segments_missing_final_evaluation": evaluations["completed_without_final"],
+        "pending_consolidations": placements["pending_consolidations"],
+        "by_program": by_program,
+    }

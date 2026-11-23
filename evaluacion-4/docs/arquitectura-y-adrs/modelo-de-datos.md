@@ -1,4 +1,6 @@
-# Modelo de datos CR-05 (migración 0016)
+# Modelo de datos CR-05 (migraciones 0016 y 0017)
+
+La migración 0017 no cambia tablas: solo amplía la restricción de categorías de `user_notification` con `SEGMENT_CHANGED` (ADR-013). El resto de este documento describe 0016.
 
 ```mermaid
 erDiagram

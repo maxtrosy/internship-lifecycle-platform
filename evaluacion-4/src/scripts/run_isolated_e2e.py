@@ -180,6 +180,38 @@ def main() -> int:
                     "E2E_SCENARIO_PENDING_ID": str(scenario_ids["aprobacion-academica-pendiente-1"]),
                     "E2E_SCENARIO_PENDING_USER": scenario_students["aprobacion-academica-pendiente-1"],
                 }
+                # CR-05 browser scenario: an active practice no other populated check uses,
+                # the current (origin) supervisor, a supervisor of a different organization
+                # and the coordinator configured as hours reviewer for its program.
+                rotation_id = scenario_ids["activa-sin-informe"]
+                origin = conn.execute(
+                    """SELECT u.username, s.host_org_id FROM placement_segment s
+                       JOIN user_account u ON u.id=s.workplace_supervisor_id
+                       WHERE s.placement_id=%s AND s.status='ACTIVE'""", (rotation_id,),
+                ).fetchone()
+                destination = conn.execute(
+                    """SELECT u.username, u.display_name, h.name AS organization FROM role_assignment ra
+                       JOIN user_account u ON u.id=ra.user_id AND u.is_active
+                       JOIN host_org h ON h.id=ra.host_org_id
+                       WHERE ra.role='WORKPLACE_SUPERVISOR' AND ra.host_org_id<>%s
+                       ORDER BY (u.username='ws_beta') DESC, u.id LIMIT 1""", (origin["host_org_id"],),
+                ).fetchone()
+                reviewer = conn.execute(
+                    """SELECT u.username FROM placement p JOIN application a ON a.id=p.application_id
+                       JOIN opportunity o ON o.id=a.opportunity_id
+                       JOIN role_assignment ra ON ra.role='PROGRAM_COORDINATOR' AND ra.program_id=o.program_id
+                       JOIN user_account u ON u.id=ra.user_id AND u.is_active
+                       WHERE p.id=%s ORDER BY (u.username='pc_sys') DESC, u.id LIMIT 1""", (rotation_id,),
+                ).fetchone()
+                populated_test_env.update({
+                    "E2E_ROTATION_ID": str(rotation_id),
+                    "E2E_ROTATION_USER": scenario_students["activa-sin-informe"],
+                    "E2E_ROTATION_ORIGIN_SUPERVISOR": origin["username"],
+                    "E2E_ROTATION_DEST_SUPERVISOR": destination["username"],
+                    "E2E_ROTATION_DEST_SUPERVISOR_NAME": destination["display_name"],
+                    "E2E_ROTATION_DEST_ORGANIZATION": destination["organization"],
+                    "E2E_ROTATION_REVIEWER": reviewer["username"],
+                })
             else:
                 seed_assigned_faculty_practice(conn.cursor())
 

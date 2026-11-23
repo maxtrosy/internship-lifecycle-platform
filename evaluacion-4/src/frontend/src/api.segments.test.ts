@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   activatePlacementSegment, confirmSegmentCondition, createPlacementSegment, recordExperienceReview,
-  recordPlacementHours, reviewPlacementHours, terminatePlacementSegment, transferPlacementSegment,
+  getRotationReports, recordPlacementHours, reviewPlacementHours, terminatePlacementSegment,
+  transferPlacementSegment,
 } from "./api";
 
 const destination = {
@@ -52,5 +53,19 @@ describe("CR-05 segment API", () => {
   it("presents CR-05 domain errors in Spanish", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: "SEGMENT_ALREADY_ACTIVE" }) }));
     await expect(activatePlacementSegment(7, 3)).rejects.toThrow("Ya existe un segmento activo");
+  });
+
+  it("requests the CR-05 rotation report with only the scope filters provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ transfers: 1 }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getRotationReports();
+    await getRotationReports({ program_id: 3, organization_id: 2 });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/reports/rotations",
+      "/reports/rotations?program_id=3&organization_id=2",
+    ]);
+    expect(fetchMock.mock.calls.every(([, init]) => !init.method && init.credentials === "same-origin")).toBe(true);
   });
 });

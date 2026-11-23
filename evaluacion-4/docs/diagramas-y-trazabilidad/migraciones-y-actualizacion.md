@@ -1,4 +1,4 @@
-# Migraciones y procedimiento de actualización (0015 → 0016)
+# Migraciones y procedimiento de actualización (0015 → 0016 → 0017)
 
 ## Qué hace `0016_rotational_segments_and_transfers`
 
@@ -11,11 +11,15 @@
 
 `downgrade()` lanza error a propósito: revertir destruiría historia.
 
+## Qué hace `0017_segment_notifications`
+
+Solo reemplaza la restricción `user_notification_category_check` para admitir `SEGMENT_CHANGED` (ADR-013). No reescribe avisos, segmentos ni auditoría. Los eventos de segmento anteriores a 0017 no generan avisos retroactivos. `downgrade()` borra los avisos `SEGMENT_CHANGED` (no contienen datos de origen, solo la categoría y el vínculo) y restaura la lista de 0014.
+
 ## Procedimiento recomendado
 
 1. Respaldar la base (`pg_dump`) y verificar el respaldo.
 2. Desplegar el código con la migración, sin tráfico de escritura.
-3. `alembic upgrade head` y confirmar `SELECT version_num FROM alembic_version` = `0016`.
+3. `alembic upgrade head` y confirmar `SELECT version_num FROM alembic_version` = `0017`.
 4. Configurar, si la institución ya decidió, `PLACEMENT_SEGMENT_MANAGER_ROLES` y `PLACEMENT_HOURS_REVIEWER_ROLES`. Si se dejan vacías, nadie puede gestionar segmentos ni aceptar horas, y **las prácticas activas no podrán cerrarse** mientras haya horas pendientes.
 5. Revisar las horas migradas antes de confirmar cierres.
 
@@ -23,4 +27,4 @@ Ninguno de estos pasos se ejecutó contra Neon ni contra Docker en este trabajo.
 
 ## Verificación ejecutada
 
-`python scripts/check_isolated_migrations.py` crea un PostgreSQL temporal, migra 0001→0007, inserta una práctica activa con un incidente y horas heredadas, migra a 0016 y verifica el segmento `MIGRATED_SINGLE` (secuencia 1, `ACTIVE`, supervisor de la versión, unidad y modalidad `NULL`), los registros asociados y la ausencia de revisiones fabricadas. Después prueba la ruta 0010→0016. El resultado está en `../../evidence/test-results-2026-11-20.md`.
+`python scripts/check_isolated_migrations.py` crea un PostgreSQL temporal, migra 0001→0007, inserta una práctica activa con un incidente y horas heredadas, migra a 0017 y verifica el segmento `MIGRATED_SINGLE` (secuencia 1, `ACTIVE`, supervisor de la versión, unidad y modalidad `NULL`), los registros asociados y la ausencia de revisiones fabricadas. Después prueba la ruta 0010→0017. El resultado vigente está en `../../evidence/test-results-2026-11-22.md` (la ejecución anterior, hasta 0016, en `test-results-2026-11-20.md`).

@@ -18,14 +18,16 @@ Este documento separa lo **implementado** de lo **diseñado sin implementar**, y
 
 - No hay carga de archivos por segmento: las condiciones documentales se confirman con una referencia textual verificada por `LEGAL_REVIEWER`.
 - Un segmento planificado no se puede editar: hay que cancelarlo y crear otro.
-- No se emiten notificaciones nuevas para segmentos o transferencias. Las mutaciones quedan auditadas y visibles en el expediente.
+- Los avisos de segmento (`SEGMENT_CHANGED`, ADR-013) cubren activación, cierre, terminación y transferencia. No hay aviso al planificar un segmento, ni al supervisor anterior tras una transferencia (no tiene acceso, BR-06). Tampoco hay envío por correo: los avisos viven en la bandeja de la aplicación, como en E3.
+- Los reportes de CR-05 (`GET /reports/rotations`) son agregados por alcance. No listan prácticas individuales ni permiten exportar. Un listado nominal para actuar sobre consolidaciones pendientes requeriría decidir qué datos personales puede ver cada rol en un reporte.
 - Las horas de E3 migradas quedan pendientes de revisión. En una instalación real, una autoridad debería revisarlas antes del cierre.
 - La migración 0016 es irreversible (`downgrade` lanza error), porque revertirla destruiría historia. El procedimiento exige respaldo previo.
 - Sin RLS en PostgreSQL: el aislamiento depende de la capa `authz` y de los filtros por segmento, verificados con pruebas.
-- El E2E de Playwright existente recorre los flujos de E3 con la configuración de CR-05. No existe un spec de Playwright dedicado a una rotación completa en la interfaz; esos flujos se prueban a nivel de servicio, de HTTP y con pruebas unitarias del frontend.
+- El E2E de Playwright recorre los flujos de E3 con la configuración de CR-05. `frontend/e2e/rotation.spec.ts` (modo `--populated`) recorre en el navegador una transferencia completa: revisión de horas, transferencia, condición jurídica, activación, acceso del supervisor anterior y del nuevo, privacidad del motivo, avisos y reporte. La planificación de una rotación sin transferencia y la terminación anticipada se prueban a nivel de servicio y HTTP, no en el navegador.
+- El escenario del navegador usa las fechas de la fixture (1 sep 2026 – 15 ene 2027). Si se ejecuta después del 15 ene 2027, la fecha de efecto de la transferencia queda fuera del segmento y el spec falla por la regla `TRANSFER_EFFECTIVE_DATE_INVALID`, no por un defecto.
 
 ## Real frente a simulado
 
-- **Real (ejecutado):** pruebas backend contra PostgreSQL temporal (pgserver), migraciones 0001→0016 y 0010→0016 en PostgreSQL temporal, pruebas unitarias del frontend (vitest), build de producción del frontend y E2E aislado con Chromium.
+- **Real (ejecutado):** pruebas backend contra PostgreSQL temporal (pgserver), migraciones 0001→0017 y 0010→0017 en PostgreSQL temporal, pruebas unitarias del frontend (vitest), build de producción del frontend y E2E aislado con Chromium.
 - **Simulado/sintético:** todas las personas, organizaciones, políticas, horas y referencias documentales de pruebas y demo.
 - **No ejecutado:** ningún despliegue en Neon, Render o Docker. Neon y Docker no se modificaron.

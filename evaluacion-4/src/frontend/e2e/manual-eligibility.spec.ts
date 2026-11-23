@@ -2,6 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 const demoPassword = process.env.E2E_DEMO_PASSWORD ?? "Demo-Only-2026!";
 
+async function acceptConfirm(page: Page) {
+  // Destructive and state-changing actions ask for confirmation in an in-app alertdialog.
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await dialog.locator(".confirm-dialog-accept").click();
+  await expect(dialog).toHaveCount(0);
+}
+
 async function login(page: Page, username: string) {
   await page.goto("/");
   await page.getByLabel("Correo electrónico o nombre de usuario").fill(username);
@@ -16,7 +24,7 @@ async function logout(page: Page) {
 }
 
 async function navigate(page: Page, label: string) {
-  await page.locator(".sidebar-nav").getByRole("button", { name: label, exact: true }).click();
+  await page.locator(".sidebar-nav").getByRole("link", { name: label, exact: true }).click();
 }
 
 test("manual eligibility review waits for the related coordinator and persists the decision", async ({ page }) => {
@@ -55,6 +63,7 @@ test("manual eligibility review waits for the related coordinator and persists t
 
   await login(page, "hm_alfa");
   await navigate(page, "Oportunidades");
+  await page.getByRole("button", { name: "Nueva oportunidad" }).click();
   await page.locator("#opp-title").fill(title);
   await page.locator("#opp-org").selectOption({ label: "Org Alfa (synthetic)" });
   await page.locator("#opp-prog").selectOption({ label: "Systems Engineering (synthetic) · ING-SIS" });
@@ -135,8 +144,8 @@ test("manual eligibility review waits for the related coordinator and persists t
     await page.screenshot({ path: `${process.env.VISUAL_CAPTURE_DIR}/eligibility-review-mobile.png`, fullPage: true, animations: "disabled" });
   }
   await page.setViewportSize({ width: 1280, height: 900 });
-  page.once("dialog", (dialog) => dialog.accept());
   await pending.getByRole("button", { name: "Marcar elegible" }).click();
+  await acceptConfirm(page);
   await expect(page.locator(".alert.success")).toContainText("Se registró la decisión académica");
   await logout(page);
 

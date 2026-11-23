@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
+import { useConfirm } from "../components/overlays";
 import type { PendingAcademic, PendingEligibilityReview } from "../api";
 import { Alert, Badge, EmptyState, PageHeader, Spinner } from "../components/ui";
 
 export default function AcademicReview() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<PendingAcademic[] | null>(null);
   const [eligibilityItems, setEligibilityItems] = useState<PendingEligibilityReview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export default function AcademicReview() {
       return;
     }
     const decisionLabel = decision === "ELIGIBLE" ? "elegible" : "no elegible";
-    if (!window.confirm(`Marcar a ${item.display_name} como ${decisionLabel} para ${item.opportunity_title}?`)) return;
+    if (!(await confirm({ title: `¿Marcar como ${decisionLabel}?`, message: `${item.display_name} quedará como ${decisionLabel} para ${item.opportunity_title}. La justificación se guarda en el historial.`, confirmLabel: decision === "ELIGIBLE" ? "Marcar elegible" : "Marcar no elegible", tone: decision === "ELIGIBLE" ? "default" : "danger" }))) return;
     setBusy(item.id);
     setError(null);
     setSuccess(null);
@@ -64,7 +66,7 @@ export default function AcademicReview() {
   }, []);
 
   async function approve(item: PendingAcademic) {
-    if (!window.confirm(`¿Aprobar la selección de ${item.display_name} para ${item.opportunity_title}?`)) return;
+    if (!(await confirm({ title: "¿Aprobar la selección?", message: `${item.display_name} · ${item.opportunity_title}. Al aprobar se fijan las políticas vigentes de activación y finalización.`, confirmLabel: "Aprobar selección" }))) return;
     const pid = item.id;
     setBusy(pid);
     setError(null);
@@ -86,7 +88,7 @@ export default function AcademicReview() {
       setError("Escribe un motivo para rechazar.");
       return;
     }
-    if (!window.confirm(`¿Rechazar la selección de ${item.display_name} para ${item.opportunity_title}?`)) return;
+    if (!(await confirm({ title: "¿Rechazar la selección?", message: `${item.display_name} · ${item.opportunity_title}. El motivo quedará registrado.`, confirmLabel: "Rechazar selección", tone: "danger" }))) return;
     setBusy(pid);
     setError(null);
     setSuccess(null);
@@ -105,7 +107,7 @@ export default function AcademicReview() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="COORDINACIÓN" title="Revisión académica" description="Al aprobar, el sistema fija las políticas vigentes del programa para activar y cerrar la práctica." />
+      <PageHeader eyebrow="Coordinación" title="Revisión académica" description="Al aprobar, el sistema fija las políticas vigentes del programa para activar y cerrar la práctica." />
 
       {success && <Alert kind="success">{success}</Alert>}
       {error && <Alert kind="error">{error}</Alert>}
@@ -114,21 +116,25 @@ export default function AcademicReview() {
       {eligibilityItems !== null && eligibilityItems.length === 0 && <EmptyState message="No hay postulaciones pendientes de revisión de elegibilidad." />}
       {!!eligibilityItems?.length && (
         <div className="card queue-card">
-          <div className="section-heading"><div><span className="eyebrow">ELEGIBILIDAD</span><h2>Revisión manual pendiente</h2><p>El resultado requiere una decisión documentada de la coordinación del programa.</p></div></div>
+          <div className="section-heading"><div><h2>Revisión manual pendiente</h2><p>El resultado requiere una decisión documentada de la coordinación del programa.</p></div></div>
           <div className="table-scroll" tabIndex={0} aria-label="Postulaciones pendientes de revisión de elegibilidad"><table className="eligibility-review-table">
-            <thead><tr><th>Estudiante</th><th>Programa y oportunidad</th><th>Datos registrados</th><th>Decisión y fundamento</th></tr></thead>
+            <thead><tr><th scope="col">Estudiante</th><th scope="col">Programa y oportunidad</th><th scope="col">Datos registrados</th><th scope="col">Decisión y fundamento</th></tr></thead>
             <tbody>{eligibilityItems.map((item) => (
               <tr key={item.id}>
                 <td data-label="Estudiante">{item.display_name}</td>
                 <td data-label="Programa y oportunidad">{item.program_code}<br /><span className="muted">{item.opportunity_title}</span></td>
                 <td data-label="Datos registrados">{profileSummary(item.eligibility_result)}<br /><span className="muted">Política v{item.policy_version ?? "sin versión"}</span></td>
                 <td data-label="Decisión y fundamento">
-                  <div className="field" style={{ minWidth: 250 }}>
+                  <div className="field field--decision">
                     <label htmlFor={`eligibility-rationale-${item.id}`}>Fundamento de la decisión</label>
                     <textarea id={`eligibility-rationale-${item.id}`} value={eligibilityRationale[item.id] ?? ""}
-                      maxLength={2000} rows={3} onChange={(event) => setEligibilityRationale((current) => ({ ...current, [item.id]: event.target.value }))} />
+                      maxLength={2000} rows={3} aria-describedby={`eligibility-hint-${item.id}`}
+                      onChange={(event) => setEligibilityRationale((current) => ({ ...current, [item.id]: event.target.value }))} />
+                    <p className="field-hint" id={`eligibility-hint-${item.id}`}>
+                      {eligibilityRationale[item.id]?.trim() ? "El fundamento queda registrado con la decisión." : "Escribe el fundamento para habilitar la decisión."}
+                    </p>
                   </div>
-                  <div className="row" style={{ marginTop: 8 }}>
+                  <div className="row action-row">
                     <button className="btn" type="button" disabled={busy === item.id || !eligibilityRationale[item.id]?.trim()}
                       onClick={() => void decideEligibility(item, "ELIGIBLE")}>{busy === item.id ? <Spinner /> : "Marcar elegible"}</button>
                     <button className="btn danger" type="button" disabled={busy === item.id || !eligibilityRationale[item.id]?.trim()}
@@ -145,14 +151,14 @@ export default function AcademicReview() {
       {items !== null && items.length === 0 && <EmptyState message="No hay selecciones pendientes de revisión." />}
       {items !== null && items.length > 0 && (
         <div className="card queue-card">
-          <div className="section-heading"><div><span className="eyebrow">COLA DE REVISIÓN</span><h2>Selecciones pendientes</h2><p>{items.length} {items.length === 1 ? "selección requiere" : "selecciones requieren"} una decisión académica.</p></div></div>
+          <div className="section-heading"><div><h2>Selecciones pendientes</h2><p>{items.length} {items.length === 1 ? "selección requiere" : "selecciones requieren"} una decisión académica.</p></div></div>
           <div className="table-scroll" tabIndex={0} aria-label="Selecciones pendientes"><table>
             <thead>
               <tr>
-                <th>Estudiante</th>
-                <th>Programa</th>
-                <th>Oportunidad</th>
-                <th>Acciones</th>
+                <th scope="col">Estudiante</th>
+                <th scope="col">Programa</th>
+                <th scope="col">Oportunidad</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -167,9 +173,9 @@ export default function AcademicReview() {
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          placeholder="Motivo del rechazo"
+                          placeholder="Motivo del rechazo…"
                           aria-label="Motivo del rechazo"
-                          style={{ minWidth: 200 }}
+                          className="inline-input"
                         />
                         <button className="btn danger" disabled={busy === p.id} onClick={() => reject(p)}>
                           {busy === p.id ? <Spinner /> : "Rechazar"}

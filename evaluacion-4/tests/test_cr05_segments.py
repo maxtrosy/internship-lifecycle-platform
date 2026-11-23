@@ -19,6 +19,7 @@ from app.main import app
 from app.modules.authz import service as authz
 from app.modules.lifecycle import segments as sg
 from app.modules.lifecycle import service as lc
+from app.modules.reports import service as reports
 from tests.conftest import TEST_PASSWORD, make_active, make_opportunity, race, seed_base
 
 TODAY = dt.date.today()
@@ -527,3 +528,103 @@ def test_http_segment_endpoints_enforce_permissions_and_privacy(world):
     finally:
         for client in clients.values():
             client.close()
+
+
+# ------------------------------------------------------------- CR-05 reports
+
+def test_rotation_reports_aggregate_cr05_state_within_scope(world):
+    """CR-05 requested reports: multi-segment placements, active rotations,
+    transfers, interruptions, accepted hours, missing evaluations and pending
+    consolidations. Aggregates only, scoped like the E3 operational report."""
+    env, U, pid = world
+    seg1 = segments_of(env, pid)[0]["id"]
+    cmd(U["s1"], lc.record_hours, pid, 30)
+    accept_all(env, U, pid)
+    moved = cmd(U["ec1"], sg.transfer, pid, seg1, effective_date=TODAY,
+                reason_shared="Rotación sintética", reason_internal="Nota interna sintética",
+                prior_work_treatment="ACCEPTED_HOURS_RECOGNIZED", destination=seg_data(2, U["ws_beta"]))
+    seg2 = moved["to_segment_id"]
+
+    def report(user, **filters):
+        return read(U[user], lambda cur, subj: reports.rotations(cur, subj, **filters))
+
+    planned = report("pc_sys")
+    assert planned["multi_segment_placements"] == 1 and planned["transfers"] == 1
+    assert planned["active_rotations"] == 0 and planned["pending_consolidations"] == 0
+    assert {r["status"]: r["count"] for r in planned["segments_by_status"]} == {"TRANSFERRED": 1, "PLANNED": 1}
+
+    confirm_doc_conditions(env, U, pid, seg2)
+    cmd(U["ec1"], sg.activate_segment, pid, seg2)
+    cmd(U["s1"], lc.record_hours, pid, 10)
+    active = report("ec1")
+    assert active["active_rotations"] == 1
+    assert active["active_segments_without_final_evaluation"] == 1
+    assert active["hours"]["pending_entries"] == 1
+
+    cmd(U["ec1"], sg.terminate_segment, pid, seg2, ended_on=TODAY,
+        reason_shared="La organización suspendió la rotación (sintético)", reason_internal=None,
+        work_recognition="NOT_RECOGNIZED", recognition_note=None)
+    ended = report("pc_sys", program_id=U["P"]["ING-SIS"])
+    assert ended["interruptions"] == 1
+    assert ended["interruptions_by_recognition"] == [{"recognition": "NOT_RECOGNIZED", "count": 1}]
+    assert ended["hours"] == {"reported": 40.0, "accepted": 30.0, "not_recognized": 10.0,
+                              "pending_entries": 0, "disputed_entries": 0}
+    assert ended["pending_consolidations"] == 1 and ended["active_rotations"] == 0
+    assert ended["by_program"][0]["program_code"] == "ING-SIS"
+    assert ended["by_program"][0]["pending_consolidations"] == 1
+
+    cmd(U["pc_sys"], sg.record_experience_review, pid, "APPROVED", "Experiencia combinada revisada (sintético).")
+    assert report("pc_sys")["pending_consolidations"] == 0
+
+    # Scope: another program's coordinator sees nothing of this placement and cannot ask for it.
+    other = report("pc_adm")
+    assert other["multi_segment_placements"] == 0 and other["transfers"] == 0
+    with pytest.raises(Forbidden):
+        report("pc_adm", program_id=U["P"]["ING-SIS"])
+    with pytest.raises(Forbidden):
+        report("ws_beta")
+
+    clients = {name: _client(name) for name in ("pc_sys", "hm_alfa", "s1")}
+    try:
+        response = clients["pc_sys"].get("/reports/rotations")
+        assert response.status_code == 200, response.text
+        assert response.json()["transfers"] == 1
+        assert "Nota interna" not in response.text and "Student One" not in response.text
+        assert "suspendió" not in response.text
+        assert clients["hm_alfa"].get("/reports/rotations").status_code == 403
+        assert clients["s1"].get("/reports/rotations").status_code == 403
+    finally:
+        for client in clients.values():
+            client.close()
+
+
+def test_segment_events_notify_related_people_but_not_the_previous_supervisor(world):
+    """CR-05 notices: activation reaches the new supervisor; a transfer reaches the
+    student and university roles but never the previous supervisor (BR-06)."""
+    env, U, pid = world
+
+    def notices(user):
+        return [row["category"] for row in env.admin.execute(
+            "SELECT category FROM user_notification WHERE recipient_id=%s AND placement_id=%s ORDER BY id",
+            (U[user], pid)).fetchall()]
+
+    seg1 = segments_of(env, pid)[0]["id"]
+    before_alfa = notices("ws_alfa").count("SEGMENT_CHANGED")
+    moved = cmd(U["ec1"], sg.transfer, pid, seg1, effective_date=TODAY, reason_shared="Rotación sintética",
+                reason_internal=None, prior_work_treatment="ACCEPTED_HOURS_RECOGNIZED",
+                destination=seg_data(2, U["ws_beta"]))
+    assert notices("s1").count("SEGMENT_CHANGED") == 1
+    assert notices("pc_sys").count("SEGMENT_CHANGED") == 1
+    assert notices("ws_alfa").count("SEGMENT_CHANGED") == before_alfa  # previous supervisor: no notice
+    assert notices("ec1").count("SEGMENT_CHANGED") == 0  # the actor is never notified of their own action
+    assert "SEGMENT_CHANGED" not in notices("ws_beta")  # still PLANNED
+
+    confirm_doc_conditions(env, U, pid, moved["to_segment_id"])
+    cmd(U["ec1"], sg.activate_segment, pid, moved["to_segment_id"])
+    assert notices("ws_beta").count("SEGMENT_CHANGED") == 1
+    assert notices("ws_alfa").count("SEGMENT_CHANGED") == before_alfa
+    assert notices("s1").count("SEGMENT_CHANGED") == 2
+    payload = env.admin.execute(
+        "SELECT to_jsonb(n) AS row FROM user_notification n WHERE recipient_id=%s ORDER BY id DESC LIMIT 1",
+        (U["ws_beta"],)).fetchone()["row"]
+    assert "reason" not in str(payload)  # a notice carries only its category and links

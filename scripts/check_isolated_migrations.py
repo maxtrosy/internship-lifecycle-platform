@@ -130,8 +130,8 @@ def main() -> int:
                               (SELECT count(*) FROM progress_entry_review)""",
                     (placement_id, placement_id),
                 ).fetchone()
-            if head != "0016":
-                raise AssertionError(f"Expected Alembic head 0016, got {head}.")
+            if head != "0017":
+                raise AssertionError(f"Expected Alembic head 0017, got {head}.")
             if len(segments) != 1 or segments[0][1:5] != (1, "MIGRATED_SINGLE", "ACTIVE", users["ws_alfa"]):
                 raise AssertionError(f"Unexpected CR-05 segment backfill: {segments!r}.")
             if segments[0][5] is not None or segments[0][6] is not None:
@@ -174,7 +174,7 @@ def main() -> int:
                 raise AssertionError(f"Unexpected app_user privilege set: {privileges!r}.")
 
             print(
-                "MIGRATION_CHAIN=0001->0016; initial_status_absent=true; "
+                "MIGRATION_CHAIN=0001->0017; initial_status_absent=true; "
                 "cr05_migrated_single_segment=true; legacy_records_attached_to_segment=true; "
                 "legacy_hours_left_pending_review=true; "
                 f"legacy_incident_status={migrated_status}; closed_work_plan_guard=true; "
@@ -218,7 +218,7 @@ def main() -> int:
                     "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='user_notification_category_check'"
                 ).fetchone()[0]
             if (
-                head != "0016"
+                head != "0017"
                 or audit_update
                 or not user_insert
                 or "ELIGIBILITY_REVIEW" not in eligibility_constraint
@@ -227,7 +227,7 @@ def main() -> int:
                     "Upgrade from the existing 0010 schema did not install expected grants and review notification."
                 )
             print(
-                "MIGRATION_UPGRADE=0010->0011->0012->0013->0014->0015->0016; opportunity_state_guard=true; "
+                "MIGRATION_UPGRADE=0010->0011->0012->0013->0014->0015->0016->0017; opportunity_state_guard=true; "
                 "faculty_assignment_history=true; manual_eligibility_review_notification=true; "
                 "app_user_minimal_grants=true"
             )

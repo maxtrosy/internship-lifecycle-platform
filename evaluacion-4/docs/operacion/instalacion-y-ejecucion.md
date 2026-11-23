@@ -34,19 +34,21 @@ $env:DATABASE_URL = ''
 python -m pytest -q tests
 # Solo CR-05
 python -m pytest -q tests/test_cr05_segments.py
-# Migraciones 0001→0016 y 0010→0016 (desde src/)
+# Migraciones 0001→0017 y 0010→0017 (desde src/)
 python scripts/check_isolated_migrations.py
 # Frontend (desde src/frontend)
 npx vitest run --exclude "e2e/**"
 npx tsc -b; npx vite build
 # E2E aislado con Chromium (desde src/)
 python scripts/run_isolated_e2e.py
+# E2E con la fixture sintética poblada, incluido el recorrido CR-05 (rotation.spec.ts)
+python scripts/run_isolated_e2e.py --populated
 # Demo interactiva aislada (desde src/); imprime la URL y la contraseña sintética
 python scripts/run_eval3_demo.py --open-browser
 ```
 
-`run_eval3_demo.py` conserva su nombre de E3, pero ejecuta el código vigente (esquema 0016) y configura `PLACEMENT_SEGMENT_MANAGER_ROLES=EXPERIENTIAL_COORDINATOR` y `PLACEMENT_HOURS_REVIEWER_ROLES=FACULTY_SUPERVISOR,PROGRAM_COORDINATOR` solo para la base temporal.
+`run_eval3_demo.py` conserva su nombre de E3, pero ejecuta el código vigente (esquema 0017) y configura `PLACEMENT_SEGMENT_MANAGER_ROLES=EXPERIENTIAL_COORDINATOR` y `PLACEMENT_HOURS_REVIEWER_ROLES=FACULTY_SUPERVISOR,PROGRAM_COORDINATOR` solo para la base temporal.
 
 ## 5. Verificar
 
-Compara tus salidas con `evidence/test-results-2026-11-20.md`. Para el recorrido manual de CR-05, usa `docs/operacion/guion-de-demostracion.md`.
+Compara tus salidas con `evidence/test-results-2026-11-22.md`. Para el recorrido manual de CR-05, usa `docs/operacion/guion-de-demostracion.md`.

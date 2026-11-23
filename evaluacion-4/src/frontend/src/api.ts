@@ -398,7 +398,7 @@ export type UserNotification = {
     | "PLACEMENT_ACTIVATED" | "PROGRESS_REPORTED" | "EVALUATION_SUBMITTED"
     | "INCIDENT_REPORTED" | "CHANGE_REPORTED" | "PLACEMENT_COMPLETED"
     | "PLACEMENT_CLOSED" | "MESSAGE_RECEIVED" | "OPPORTUNITY_REVIEW"
-    | "OPPORTUNITY_PUBLISHED" | "OPPORTUNITY_CLOSED";
+    | "OPPORTUNITY_PUBLISHED" | "OPPORTUNITY_CLOSED" | "SEGMENT_CHANGED";
   placement_id: number | null;
   opportunity_id: number | null;
   created_at: string;
@@ -424,6 +424,24 @@ export type OperationalReport = {
   expected_end_dates: { end_date: string; placements: number }[];
   by_program: { program_id: number; program_code: string; program_name: string; opportunities: number; applications: number; placements: number }[];
   by_organization: { organization_id: number; organization: string; opportunities: number; applications: number; placements: number }[];
+};
+
+/** CR-05 aggregates returned by `GET /reports/rotations` (no names, reasons or entries). */
+export type RotationReport = {
+  multi_segment_placements: number;
+  single_segment_placements: number;
+  active_rotations: number;
+  segments_by_status: { status: SegmentStatus; count: number }[];
+  transfers: number;
+  transfers_by_treatment: { treatment: WorkRecognition; count: number }[];
+  interruptions: number;
+  interruptions_by_recognition: { recognition: WorkRecognition; count: number }[];
+  hours: { reported: number; accepted: number; not_recognized: number; pending_entries: number; disputed_entries: number };
+  active_segments_without_final_evaluation: number;
+  completed_segments_missing_final_evaluation: number;
+  pending_consolidations: number;
+  by_program: { program_id: number; program_code: string; program_name: string; multi_segment_placements: number;
+    pending_consolidations: number; transfers: number; interruptions: number }[];
 };
 
 // Clear the previous demo JWT if a browser still has it. Current sessions use an HttpOnly cookie.
@@ -728,6 +746,15 @@ export function sendPlacementMessage(pid: number, audience: "JOINT" | "ACADEMIC"
   return request<PlacementMessage>(`/placements/${pid}/messages`, {
     method: "POST", body: JSON.stringify({ audience, content }),
   });
+}
+
+export function getRotationReports(filters: { program_id?: number; organization_id?: number } = {}): Promise<RotationReport> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const query = params.toString();
+  return request<RotationReport>(`/reports/rotations${query ? `?${query}` : ""}`);
 }
 
 export function getOperationalReports(filters: {

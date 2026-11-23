@@ -1,6 +1,6 @@
 # Matriz de trazabilidad: regla → decisión → componente → implementación → prueba → evidencia
 
-Las rutas de prueba son relativas a `src/backend/tests/` (backend) y `src/frontend/` (frontend). La evidencia ejecutada está en `../../evidence/test-results-2026-11-20.md`.
+Las rutas de prueba son relativas a `src/backend/tests/` (backend) y `src/frontend/` (frontend). La evidencia ejecutada vigente está en `../../evidence/test-results-2026-11-22.md` (la de 2026-11-20 se conserva como historial).
 
 ## Reglas CR-05
 
@@ -38,4 +38,7 @@ Las rutas de prueba son relativas a `src/backend/tests/` (backend) y `src/fronte
 | 15 | Los motivos sensibles se ocultan | `test_s05`, prueba HTTP | Pasa |
 | 16 | Se rechaza el acceso cruzado | `test_s16_cross_access_is_rejected`, `test_s16b`, prueba HTTP | Pasa |
 | 17 | Consistencia bajo concurrencia | `test_s17_concurrent_activation_and_transfer_stay_consistent`, `test_s17b` | Pasa |
-| 18 | Los flujos de E3 siguen funcionando | suites `test_lifecycle.py`, `test_http_authorization.py`, `test_documents.py`, etc.; E2E aislado; migración 0001→0016 | Pasa (ver evidencia) |
+| 18 | Los flujos de E3 siguen funcionando | suites `test_lifecycle.py`, `test_http_authorization.py`, `test_documents.py`, etc.; E2E aislado; migración 0001→0017 | Pasa (ver evidencia) |
+| 19 | Una transferencia conserva las horas aceptadas y el supervisor anterior queda sin acceso, recorrido en el navegador | `frontend/e2e/rotation.spec.ts` (`--populated`) | Ver evidencia 2026-11-22 |
+| 20 | Reportes de CR-05 agregados y limitados por alcance | `test_rotation_reports_aggregate_cr05_state_within_scope`, `src/api.segments.test.ts` | Ver evidencia 2026-11-22 |
+| 21 | Avisos de segmento sin alcanzar al supervisor anterior ni al actor | `test_segment_events_notify_related_people_but_not_the_previous_supervisor` | Ver evidencia 2026-11-22 |

@@ -23,3 +23,16 @@ def operational_reports(
         return service.operations(cur, subj, program_id=program_id, organization_id=organization_id,
                                   placement_state=placement_state, opportunity_state=opportunity_state,
                                   application_state=application_state)
+
+
+@router.get("/reports/rotations")
+def rotation_reports(
+    program_id: int | None = Query(default=None, ge=1),
+    organization_id: int | None = Query(default=None, ge=1),
+    subject_id: int = Depends(requires("reports:read")),
+) -> dict:
+    """CR-05 aggregates: rotations, transfers, interruptions, accepted hours,
+    missing segment evaluations and pending combined reviews."""
+    with db.read() as cur:
+        subj = authz.subject(cur, subject_id)
+        return service.rotations(cur, subj, program_id=program_id, organization_id=organization_id)

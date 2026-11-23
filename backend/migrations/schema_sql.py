@@ -1523,8 +1523,23 @@ GRANT USAGE ON SEQUENCE placement_segment_id_seq, placement_segment_condition_id
   progress_entry_review_id_seq, placement_experience_review_id_seq TO app_user;
 """
 
+UPGRADE_0017_SQL = """
+-- CR-05: notify the people related to a placement when one of its segments is
+-- activated, completed, terminated early or transferred. Only the category
+-- list grows; existing notifications, segments and audit rows are untouched.
+ALTER TABLE user_notification DROP CONSTRAINT user_notification_category_check;
+ALTER TABLE user_notification ADD CONSTRAINT user_notification_category_check
+  CHECK (category IN (
+    'APPLICATION_SUBMITTED','APPLICATION_SELECTED','ELIGIBILITY_REVIEW','DOCUMENT_ACTIVITY',
+    'PLACEMENT_ACTIVATED','PROGRESS_REPORTED','EVALUATION_SUBMITTED',
+    'INCIDENT_REPORTED','CHANGE_REPORTED','PLACEMENT_COMPLETED','PLACEMENT_CLOSED',
+    'MESSAGE_RECEIVED','OPPORTUNITY_REVIEW','OPPORTUNITY_PUBLISHED','OPPORTUNITY_CLOSED',
+    'SEGMENT_CHANGED'
+  ));
+"""
+
 CURRENT_SCHEMA = (SCHEMA + UPGRADE_0002_SQL + UPGRADE_0003_SQL + UPGRADE_0004_SQL
                   + UPGRADE_0005_SQL + UPGRADE_0006_SQL + UPGRADE_0007_SQL
                   + UPGRADE_0008_SQL + UPGRADE_0009_SQL + UPGRADE_0010_SQL + UPGRADE_0011_SQL
                   + UPGRADE_0012_SQL + UPGRADE_0013_SQL + UPGRADE_0014_SQL + UPGRADE_0015_SQL
-                  + UPGRADE_0016_SQL)
+                  + UPGRADE_0016_SQL + UPGRADE_0017_SQL)

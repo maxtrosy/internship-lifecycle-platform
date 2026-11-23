@@ -89,6 +89,7 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
   const [completionAction, setCompletionAction] = useState<"confirm" | "close" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+  const loadedId = useRef<number | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -111,13 +112,18 @@ export default function PracticeDossier({ user, onNavigate }: Props) {
   }, [attempt]);
 
   useEffect(() => {
-    if (selectedId === null) { setDossier(null); return; }
+    if (selectedId === null) { setDossier(null); loadedId.current = null; return; }
     let current = true;
-    setDetailLoading(true);
+    // A refresh after an action keeps the current dossier mounted, so the
+    // section that acted keeps its success message, open tab and scroll.
+    const refreshing = loadedId.current === selectedId;
+    if (!refreshing) {
+      setDetailLoading(true);
+      setDossier(null);
+    }
     setError(null);
-    setDossier(null);
     api.getPlacementDossier(selectedId)
-      .then((record) => { if (current) setDossier(record); })
+      .then((record) => { if (current) { setDossier(record); loadedId.current = record.placement.id; } })
       .catch((err: unknown) => {
         if (current) setError(err instanceof Error ? err.message : "No fue posible cargar el expediente.");
       })

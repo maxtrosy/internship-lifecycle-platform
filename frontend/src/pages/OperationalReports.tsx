@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { OperationalReport } from "../api";
 import { formatCalendarDate } from "../history";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
+import RotationReportSection from "../components/RotationReportSection";
 
 type DistributionCardRow = {
   key: string;
@@ -115,6 +116,9 @@ export default function OperationalReports() {
           </BentoCard>
         </div>
       </>}
+      <RotationReportSection
+        programId={filters.program_id ? Number(filters.program_id) : undefined}
+        organizationId={filters.organization_id ? Number(filters.organization_id) : undefined} />
     </div>
   );
 }

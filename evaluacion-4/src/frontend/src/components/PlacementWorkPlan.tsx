@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { PlacementDossier } from "../api";
 import { Alert, BentoCard, EmptyState, Spinner } from "./ui";
 import { formatHistoryDate } from "../history";
+import { Field, useFieldErrors } from "./Field";
 
 type Props = { dossier: PlacementDossier; onChanged: () => void };
 
@@ -14,11 +15,17 @@ export default function PlacementWorkPlan({ dossier, onChanged }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const canRead = dossier.capabilities.read_work_plan;
   const canAssign = dossier.capabilities.assign_work_plan_item;
+  const formId = `work-plan-${dossier.placement.id}`;
+  const fields = useFieldErrors<"title" | "description">((key) => `${formId}-${key}`);
 
   if (!canRead && !canAssign) return null;
 
   async function assign(event: FormEvent) {
     event.preventDefault();
+    if (!fields.report({
+      ...(title.trim() ? {} : { title: "Escribe el nombre de la actividad." }),
+      ...(description.trim() ? {} : { description: "Describe la actividad asignada." }),
+    })) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -66,29 +73,16 @@ export default function PlacementWorkPlan({ dossier, onChanged }: Props) {
         <p className="muted">La práctica está cerrada. El plan permanece disponible para consulta.</p>
       )}
       {canAssign && (
-        <form className="follow-up-form" onSubmit={(event) => void assign(event)}>
-          <label className="field">
-            Actividad
-            <input
-              value={title}
-              maxLength={160}
-              required
-              aria-label="Nombre de la actividad"
-              onChange={(event) => setTitle(event.currentTarget.value)}
-            />
-          </label>
-          <label className="field">
-            Descripción
-            <textarea
-              value={description}
-              maxLength={3000}
-              required
-              rows={4}
-              aria-label="Descripción de la actividad"
-              onChange={(event) => setDescription(event.currentTarget.value)}
-            />
-          </label>
-          <button className="btn" type="submit" disabled={busy || !title.trim() || !description.trim()}>
+        <form className="follow-up-form" noValidate onSubmit={(event) => void assign(event)}>
+          <Field id={`${formId}-title`} label="Nombre de la actividad" error={fields.errors.title}>
+            <input value={title} maxLength={160} required
+              onChange={(event) => { setTitle(event.currentTarget.value); fields.clear("title"); }} />
+          </Field>
+          <Field id={`${formId}-description`} label="Descripción de la actividad" error={fields.errors.description}>
+            <textarea value={description} maxLength={3000} required rows={4}
+              onChange={(event) => { setDescription(event.currentTarget.value); fields.clear("description"); }} />
+          </Field>
+          <button className="btn" type="submit" disabled={busy}>
             {busy ? <Spinner /> : "Asignar actividad"}
           </button>
         </form>
