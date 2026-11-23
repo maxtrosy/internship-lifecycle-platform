@@ -112,6 +112,8 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
   const roles = user.roles.map((role) => role.role);
   const roleLabels = [...new Set(user.roles.map((role) => formatDomainLabel(role.role)))];
   const viewTitle = SECTION_TITLES[active];
@@ -149,6 +151,44 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
     };
   }, [mobileMenuOpen, profileOpen]);
 
+  // Mobile navigation drawer: move focus inside, keep Tab/Shift+Tab within the
+  // drawer, make the page behind it inert, and close it if the viewport grows.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const drawer = sidebarRef.current;
+    const page = mainRef.current;
+    if (!drawer) return;
+    page?.setAttribute("inert", "");
+    const focusable = () => Array.from(drawer.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => element.offsetParent !== null);
+    const current = drawer.querySelector<HTMLElement>('.sidebar-nav a[aria-current="page"]');
+    (current ?? drawer.querySelector<HTMLElement>(".sidebar-nav a") ?? focusable()[0])?.focus();
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => { if (desktop.matches) setMobileMenuOpen(false); };
+    document.addEventListener("keydown", trap);
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => {
+      page?.removeAttribute("inert");
+      document.removeEventListener("keydown", trap);
+      desktop.removeEventListener("change", closeOnDesktop);
+    };
+  }, [mobileMenuOpen]);
+
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""} ${mobileMenuOpen ? "mobile-menu-open" : ""}`}>
       <a
@@ -160,7 +200,7 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
         }}
       >Saltar al contenido</a>
 
-      <aside className="sidebar">
+      <aside className="sidebar" ref={sidebarRef}>
         <div className="sidebar-top">
           <a className="brand" href="#/home" onClick={go("home")} aria-label="Prácticas y Pasantías, ir al inicio">
             {/* Neutral placeholder: the official crest must be supplied by the institution. */}
@@ -212,7 +252,7 @@ export default function Layout({ user, active, onNavigate, onLogout, children }:
         </div>
       </aside>
 
-      <div className="main">
+      <div className="main" ref={mainRef}>
         <header className="topbar">
           <nav className="topbar-context breadcrumbs" aria-label="Ruta de navegación">
             <ol>

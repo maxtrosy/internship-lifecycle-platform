@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
+import { useConfirm } from "../components/overlays";
 import type { ActivationStatus } from "../api";
 import { Alert, Badge, BentoCard, EmptyState, PageHeader, Spinner, formatDomainLabel } from "../components/ui";
 
 type Row = { id: number; state: string; display_name: string; program_code: string; opportunity_title: string };
 
 export default function Activation() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [statuses, setStatuses] = useState<Record<number, ActivationStatus>>({});
   const [open, setOpen] = useState<number | null>(null);
@@ -33,7 +35,7 @@ export default function Activation() {
   }, []);
 
   async function activate(row: Row) {
-    if (!window.confirm(`¿Activar la práctica de ${row.display_name} para ${row.opportunity_title}?`)) return;
+    if (!(await confirm({ title: "¿Activar la práctica?", message: `${row.display_name} · ${row.opportunity_title}. El backend vuelve a comprobar las condiciones antes de activar.`, confirmLabel: "Activar práctica" }))) return;
     setError(null);
     setMessage(null);
     try {
@@ -56,26 +58,32 @@ export default function Activation() {
         const st = statuses[r.id];
         return (
           <BentoCard variant="task" className="activation-card" key={r.id}>
-            <div className="row">
-              <div className="spacer">
-                <h3>{r.display_name} · {r.program_code}</h3>
-                <p className="muted">{r.opportunity_title}</p>
+            <div className="activation-row">
+              <div className="activation-identity">
+                <h3>{r.display_name}</h3>
+                <p className="muted">{r.opportunity_title} · {r.program_code}</p>
               </div>
               <Badge>{r.state}</Badge>
-              <button className="btn secondary" onClick={() => setOpen(open === r.id ? null : r.id)}>
-                Condiciones
-              </button>
-              <button className="btn" disabled={!st?.ready_to_activate} onClick={() => activate(r)}>
-                Activar
-              </button>
+              <div className="activation-actions">
+                <button className="btn secondary" type="button" aria-expanded={open === r.id} aria-controls={`activation-conditions-${r.id}`}
+                  onClick={() => setOpen(open === r.id ? null : r.id)}>
+                  {open === r.id ? "Ocultar condiciones" : "Ver condiciones"}
+                </button>
+                <button className="btn" type="button" disabled={!st?.ready_to_activate}
+                  aria-describedby={`activation-readiness-${r.id}`} onClick={() => activate(r)}>
+                  Activar
+                </button>
+              </div>
+              <p id={`activation-readiness-${r.id}`} className={`activation-readiness${st?.ready_to_activate ? " is-ready" : ""}`}>
+                {!st ? "Comprobando condiciones…"
+                  : st.ready_to_activate ? "Cumple todas las condiciones obligatorias."
+                    : `No se puede activar todavía. Pendiente: ${st.unmet.map(formatDomainLabel).join(", ") || "condiciones sin detalle"}.`}
+              </p>
             </div>
             {open === r.id && st && (
-              <div style={{ marginTop: 8 }}>
-                <p className="muted">
-                  {st.ready_to_activate ? "Cumple todas las condiciones." : `Pendiente: ${st.unmet.map(formatDomainLabel).join(", ") || "—"}`}
-                </p>
+              <div className="activation-conditions" id={`activation-conditions-${r.id}`}>
                 <div className="table-scroll" tabIndex={0} aria-label={`Condiciones para ${r.opportunity_title}`}><table>
-                  <thead><tr><th>Requisito</th><th>Estado</th></tr></thead>
+                  <thead><tr><th scope="col">Requisito</th><th scope="col">Estado</th></tr></thead>
                   <tbody>
                     {st.items.map((it) => (
                       <tr key={it.id}><td>{formatDomainLabel(it.kind)}</td><td><Badge>{it.status}</Badge></td></tr>

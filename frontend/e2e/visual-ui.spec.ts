@@ -178,13 +178,14 @@ for (const dashboard of roleDashboards) {
     await expect(page.locator(".sidebar-nav")).toBeHidden();
     await captureVisual(page, `dashboard-${dashboard.variant}-mobile`);
     const mobileColumns = await page.locator(".dashboard-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
-    expect(mobileColumns).toBe(2);
+    // F7: the role home is a single-column work inbox on phones (focus block, queues, summary).
+    expect(mobileColumns).toBe(1);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByLabel("Apariencia").selectOption("dark");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await expectDarkThemeSettled(page);
     if (dashboard.variant === "student") {
-      const contrast = await page.locator(".dashboard-opportunities button.btn.secondary").evaluate((element) => {
+      const contrast = await page.locator(".dashboard-activity button.btn.secondary").first().evaluate((element) => {
         const channels = (value: string) => value.match(/[\d.]+/g)!.map(Number);
         const luminance = (rgb: number[]) => rgb.map((channel) => channel / 255)
           .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)

@@ -2,6 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 const demoPassword = process.env.E2E_DEMO_PASSWORD ?? "Demo-Only-2026!";
 
+async function acceptConfirm(page: Page) {
+  // Destructive and state-changing actions ask for confirmation in an in-app alertdialog.
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await dialog.locator(".confirm-dialog-accept").click();
+  await expect(dialog).toHaveCount(0);
+}
+
 test("the local demo route signs in to each synthetic account with one click", async ({ page }) => {
   test.setTimeout(120_000);
   const accountNames = [
@@ -231,6 +239,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await page.getByLabel("Motivo", { exact: false }).fill("Política de demostración sintética para el recorrido E2E aislado.");
   await page.getByRole("button", { name: "Crear versión de elegibilidad" }).click();
   await expect(page.locator(".alert.success")).toContainText("versión de política de Elegibilidad creada");
+  // Each policy kind lives in its own tab of the Policies page.
+  await page.getByRole("tab", { name: "Activación" }).click();
   await page.getByLabel("Exigir supervisor del lugar asignado").uncheck();
   await page.getByLabel("Motivo", { exact: false }).fill("Política de activación sintética para el recorrido E2E aislado.");
   await page.getByRole("button", { name: "Crear versión de activación" }).click();
@@ -240,6 +250,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   // The host creates a draft and submits it; the explicitly configured institutional actor reviews and publishes.
   await login(page, "hm_alfa");
   await navigate(page, "Oportunidades");
+  // F8: drafts are created in a side panel opened from the page header.
+  await page.getByRole("button", { name: "Nueva oportunidad" }).click();
   await page.locator("#opp-title").fill(opportunityTitle);
   const organizationField = page.locator("#opp-org");
   if (await organizationField.getAttribute("type") === "hidden") {
@@ -323,15 +335,17 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await expect(page.getByText("Student One", { exact: true })).toBeVisible();
   const receivedRow = page.getByRole("row").filter({ hasText: "Student One" });
   await receivedRow.getByRole("button", { name: "Seleccionar" }).click();
-  const supervisorField = receivedRow.getByLabel("Supervisor laboral asignado (opcional)");
+  // F8: the selection conditions are entered in a side panel named after the candidate.
+  const selectionPanel = page.getByRole("dialog", { name: "Seleccionar a Student One" });
+  const supervisorField = selectionPanel.getByLabel("Supervisor laboral asignado (opcional)");
   await expect(supervisorField).toContainText("Workplace Sup Alfa");
   await supervisorField.selectOption({ label: "Workplace Sup Alfa" });
-  await receivedRow.locator('input[type="date"]').nth(0).fill("2026-11-02");
-  await receivedRow.locator('input[type="date"]').nth(1).fill("2027-02-26");
-  await receivedRow.locator(".field").filter({ hasText: "Ubicación" }).locator("input").fill("Sede de demostración");
-  await receivedRow.locator("textarea").fill("Actividades sintéticas de demostración.");
-  page.once("dialog", (dialog) => dialog.accept());
-  await receivedRow.getByRole("button", { name: "Confirmar" }).click();
+  await selectionPanel.locator('input[type="date"]').nth(0).fill("2026-11-02");
+  await selectionPanel.locator('input[type="date"]').nth(1).fill("2027-02-26");
+  await selectionPanel.locator(".field").filter({ hasText: "Ubicación" }).locator("input").fill("Sede de demostración");
+  await selectionPanel.locator("textarea").fill("Actividades sintéticas de demostración.");
+  await selectionPanel.getByRole("button", { name: "Confirmar selección" }).click();
+  await acceptConfirm(page);
   await expect(page.locator(".alert.success")).toContainText("pendiente de aprobación académica");
   await navigate(page, "Expedientes");
   const employerDossier = page.locator(".dossier-detail").filter({ hasText: opportunityTitle });
@@ -346,8 +360,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await navigate(page, "Revisión académica");
   const pendingRow = page.getByRole("row").filter({ hasText: opportunityTitle });
   await expect(pendingRow).toContainText("Student One");
-  page.once("dialog", (dialog) => dialog.accept());
   await pendingRow.getByRole("button", { name: "Aprobar" }).click();
+  await acceptConfirm(page);
   await expect(page.locator(".alert.success")).toContainText("Se aprobó la selección");
   await logout(page);
 
@@ -368,8 +382,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await legalCard.getByRole("button", { name: "Ver documentos" }).click();
   const legalRow = legalCard.getByRole("row").filter({ hasText: "Seguro" });
   await legalRow.getByLabel("Motivo para Seguro").fill("El archivo de prueba requiere corrección.");
-  page.once("dialog", (dialog) => dialog.accept());
   await legalRow.getByRole("button", { name: "Rechazar" }).click();
+  await acceptConfirm(page);
   await expect(page.locator(".alert.success")).toContainText("rechazado con motivo registrado");
   await logout(page);
 
@@ -392,8 +406,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await approvedCard.getByRole("button", { name: "Ver documentos" }).click();
   const submittedRow = approvedCard.getByRole("row").filter({ hasText: "Seguro" });
   await submittedRow.getByLabel("Motivo para Seguro").fill("La nueva versión es legible para esta demostración.");
-  page.once("dialog", (dialog) => dialog.accept());
   await submittedRow.getByRole("button", { name: "Aprobar" }).click();
+  await acceptConfirm(page);
   await expect(page.locator(".alert.success")).toContainText("Documento aprobado.");
   await logout(page);
 
@@ -402,8 +416,8 @@ test("student, employer, coordinator, legal reviewer and experiential coordinato
   await navigate(page, "Activación");
   const activationCard = page.locator(".activation-card").filter({ hasText: opportunityTitle });
   await expect(activationCard.getByRole("button", { name: "Activar" })).toBeEnabled();
-  page.once("dialog", (dialog) => dialog.accept());
   await activationCard.getByRole("button", { name: "Activar" }).click();
+  await acceptConfirm(page);
   await expect(page.locator(".alert.success")).toContainText("fue activada");
   await logout(page);
 

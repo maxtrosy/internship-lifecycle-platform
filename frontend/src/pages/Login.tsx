@@ -1,7 +1,7 @@
 import { useState } from "react";
 import * as api from "../api";
 import type { User } from "../api";
-import { Alert, Spinner } from "../components/ui";
+import { Alert, Icon, Spinner } from "../components/ui";
 import { isDemoLoginEnabled } from "../demoLogin";
 import { ThemeControl } from "../theme";
 
@@ -95,26 +95,22 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (u: User) => void })
   return (
     <div className="login-shell">
       <aside className="login-brand">
-        <div>
-          <span className="mark">DH-05 · Acceso seguro</span>
-          <h1>Gestión integral de prácticas y pasantías</h1>
-          <p>
-            Una sola plataforma para todo el ciclo: oportunidades, postulaciones,
-            selección, aprobación académica, documentación y activación, con
-            trazabilidad y control de acceso por rol.
-          </p>
-          <ol className="login-cycle" aria-label="Etapas de la práctica">
-            <li><span>01</span><strong>Oportunidad</strong></li>
-            <li><span>02</span><strong>Selección</strong></li>
-            <li><span>03</span><strong>Seguimiento</strong></li>
-            <li><span>04</span><strong>Evidencias y cierre</strong></li>
-          </ol>
-          <ul className="login-features">
-            <li>Estudiantes: postúlate y sigue el estado de tu práctica.</li>
-            <li>Empleadores: publica oportunidades y selecciona candidatos.</li>
-            <li>Coordinadores: aprueba, revisa documentos y activa prácticas.</li>
-          </ul>
+        <div className="login-brand-top">
+          <span className="login-brand-mark" aria-hidden="true"><Icon name="academic" /></span>
+          <span className="login-brand-name">Prácticas y Pasantías<small><span translate="no">DH-05</span> · Gestión de prácticas</small></span>
         </div>
+        <div className="login-brand-body">
+          <h1>Gestión de prácticas y pasantías</h1>
+          <p>
+            Postulaciones, aprobación académica, documentación, seguimiento y cierre
+            de cada práctica en un expediente único, con acceso según tu rol.
+          </p>
+          <dl className="login-facts">
+            <div><dt>Acceso</dt><dd>Cuenta local aprovisionada por el operador o por invitación.</dd></div>
+            <div><dt>Trazabilidad</dt><dd>Las decisiones y cambios quedan registrados en el historial del expediente.</dd></div>
+          </dl>
+        </div>
+        <p className="login-brand-foot">Entorno con datos sintéticos de demostración.</p>
       </aside>
 
       <main className="login-panel">

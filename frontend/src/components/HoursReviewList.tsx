@@ -85,7 +85,7 @@ export default function HoursReviewList({ dossier, onChanged }: Props) {
                     {Object.entries(HOURS_REASON_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                   <label className="sr-only" htmlFor={`reason-${entry.id}`}>Justificación</label>
-                  <input id={`reason-${entry.id}`} maxLength={1000} placeholder="Justificación" value={draft.reason} onChange={(event) => set({ reason: event.target.value })} />
+                  <input id={`reason-${entry.id}`} maxLength={1000} placeholder="Justificación…" value={draft.reason} onChange={(event) => set({ reason: event.target.value })} />
                   <button className="btn secondary" type="submit" disabled={busy !== null}>Registrar revisión</button>
                 </form>
               )}

@@ -92,7 +92,7 @@ export default function OperationalReports() {
         </div>
         <div className="report-tables">
           <BentoCard variant="content" title="Prácticas por estado">
-            {!data.placements_by_state.length ? <EmptyState message="No hay prácticas en el ámbito consultado." /> : <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Estado</th><th>Cantidad</th></tr></thead><tbody>{data.placements_by_state.map((row) => <tr key={row.state}><td><Badge>{formatDomainLabel(row.state)}</Badge></td><td>{row.count}</td></tr>)}</tbody></table></div>}
+            {!data.placements_by_state.length ? <EmptyState message="No hay prácticas en el ámbito consultado." /> : <div className="report-table-wrap"><table className="report-table"><thead><tr><th scope="col">Estado</th><th scope="col">Cantidad</th></tr></thead><tbody>{data.placements_by_state.map((row) => <tr key={row.state}><td><Badge>{row.state}</Badge></td><td>{row.count}</td></tr>)}</tbody></table></div>}
           </BentoCard>
           <BentoCard variant="content" title="Oportunidades y postulaciones">
             <div className="report-subsection"><h3>Oportunidades</h3>{!data.opportunities_by_state.length ? <p className="muted">Sin oportunidades.</p> : data.opportunities_by_state.map((row) => <div className="dossier-requirement" key={row.state}><span>{formatDomainLabel(row.state)}</span><strong>{row.count}</strong></div>)}</div>
@@ -100,18 +100,18 @@ export default function OperationalReports() {
           </BentoCard>
           <BentoCard variant="content" title="Distribución por programa">
             {!data.by_program.length ? <EmptyState message="No hay datos agregados." /> : <>
-              <div className="report-table-wrap report-distribution-table"><table className="report-table"><thead><tr><th>Programa</th><th>Oportunidades</th><th>Postulaciones</th><th>Prácticas</th></tr></thead><tbody>{data.by_program.map((row) => <tr key={row.program_code}><td>{row.program_name} ({row.program_code})</td><td>{row.opportunities}</td><td>{row.applications}</td><td>{row.placements}</td></tr>)}</tbody></table></div>
+              <div className="report-table-wrap report-distribution-table"><table className="report-table"><thead><tr><th scope="col">Programa</th><th scope="col">Oportunidades</th><th scope="col">Postulaciones</th><th scope="col">Prácticas</th></tr></thead><tbody>{data.by_program.map((row) => <tr key={row.program_code}><td>{row.program_name} ({row.program_code})</td><td>{row.opportunities}</td><td>{row.applications}</td><td>{row.placements}</td></tr>)}</tbody></table></div>
               <DistributionCards label="Distribución por programa" rows={data.by_program.map((row) => ({ key: row.program_code, label: `${row.program_name} (${row.program_code})`, opportunities: row.opportunities, applications: row.applications, placements: row.placements }))} />
             </>}
           </BentoCard>
           <BentoCard variant="content" title="Distribución por organización">
             {!data.by_organization.length ? <EmptyState message="No hay datos agregados." /> : <>
-              <div className="report-table-wrap report-distribution-table"><table className="report-table"><thead><tr><th>Organización</th><th>Oportunidades</th><th>Postulaciones</th><th>Prácticas</th></tr></thead><tbody>{data.by_organization.map((row) => <tr key={row.organization}><td>{row.organization}</td><td>{row.opportunities}</td><td>{row.applications}</td><td>{row.placements}</td></tr>)}</tbody></table></div>
+              <div className="report-table-wrap report-distribution-table"><table className="report-table"><thead><tr><th scope="col">Organización</th><th scope="col">Oportunidades</th><th scope="col">Postulaciones</th><th scope="col">Prácticas</th></tr></thead><tbody>{data.by_organization.map((row) => <tr key={row.organization}><td>{row.organization}</td><td>{row.opportunities}</td><td>{row.applications}</td><td>{row.placements}</td></tr>)}</tbody></table></div>
               <DistributionCards label="Distribución por organización" rows={data.by_organization.map((row) => ({ key: String(row.organization_id), label: row.organization, opportunities: row.opportunities, applications: row.applications, placements: row.placements }))} />
             </>}
           </BentoCard>
           <BentoCard variant="content" className="report-wide" title="Fechas previstas de finalización" description="Fechas de fin persistidas en la versión vigente de prácticas activas; sin umbral de proximidad inventado.">
-            {!data.expected_end_dates.length ? <EmptyState message="No hay prácticas activas con una fecha futura de finalización registrada." /> : <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Fecha prevista</th><th>Prácticas</th></tr></thead><tbody>{data.expected_end_dates.map((row) => <tr key={row.end_date}><td>{localDate(row.end_date)}</td><td>{row.placements}</td></tr>)}</tbody></table></div>}
+            {!data.expected_end_dates.length ? <EmptyState message="No hay prácticas activas con una fecha futura de finalización registrada." /> : <div className="report-table-wrap"><table className="report-table"><thead><tr><th scope="col">Fecha prevista</th><th scope="col">Prácticas</th></tr></thead><tbody>{data.expected_end_dates.map((row) => <tr key={row.end_date}><td>{localDate(row.end_date)}</td><td>{row.placements}</td></tr>)}</tbody></table></div>}
           </BentoCard>
         </div>
       </>}

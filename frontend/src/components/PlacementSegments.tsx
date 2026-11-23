@@ -1,75 +1,26 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import * as api from "../api";
 import type { PlacementDossier, PlacementSegment, SegmentOption, WorkRecognition } from "../api";
-import { Alert, Badge, BentoCard, EmptyState, Spinner, formatDomainLabel } from "./ui";
-import { formatCalendarDate, formatHistoryDate } from "../history";
+import { Alert, Badge, BentoCard, EmptyState, Spinner } from "./ui";
+import { DisabledReason, Drawer } from "./overlays";
+import { formatHistoryDate } from "../history";
 import {
   EMPTY_SEGMENT_DRAFT,
-  MODALITY_LABELS,
   RECOGNITION_LABELS,
-  SEGMENT_ORIGIN_LABELS,
-  SEGMENT_STATUS_LABELS,
   buildSegmentInput,
-  formatHours,
-  hoursOverview,
   segmentGateBlockers,
-  segmentTone,
   todayIso,
   type SegmentDraft,
 } from "../segments";
+import { SegmentFields } from "./segments/SegmentFields";
+import { SegmentHours } from "./segments/SegmentHours";
+import { SegmentItem, type SegmentPanelKind } from "./segments/SegmentItem";
+import { SegmentTransfers } from "./segments/SegmentTransfers";
 
 type Props = { dossier: PlacementDossier; onChanged: () => void };
-type Panel = { segmentId: number; kind: "terminate" | "transfer" | "cancel" } | null;
+type Panel = { segmentId: number; kind: SegmentPanelKind } | null;
 
-function localDate(value: string | null | undefined): string {
-  return formatCalendarDate(value, "—");
-}
 
-function SegmentFields({ draft, setDraft, options, idPrefix }: {
-  draft: SegmentDraft;
-  setDraft: (next: SegmentDraft) => void;
-  options: SegmentOption[];
-  idPrefix: string;
-}) {
-  const supervisors = options.find((option) => String(option.id) === draft.host_org_id)?.supervisors ?? [];
-  const field = (key: keyof SegmentDraft, label: string, input: ReactNode) => (
-    <div className="field"><label htmlFor={`${idPrefix}-${key}`}>{label}</label>{input}</div>
-  );
-  const set = (key: keyof SegmentDraft) => (event: { target: { value: string } }) =>
-    setDraft({ ...draft, [key]: event.target.value, ...(key === "host_org_id" ? { workplace_supervisor_id: "" } : {}) });
-  return (
-    <div className="segment-form-grid">
-      {field("host_org_id", "Organización", (
-        <select id={`${idPrefix}-host_org_id`} required value={draft.host_org_id} onChange={set("host_org_id")}>
-          <option value="">Selecciona…</option>
-          {options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-        </select>
-      ))}
-      {field("workplace_supervisor_id", "Supervisor laboral", (
-        <select id={`${idPrefix}-workplace_supervisor_id`} required value={draft.workplace_supervisor_id}
-          onChange={set("workplace_supervisor_id")} disabled={!draft.host_org_id}>
-          <option value="">Selecciona…</option>
-          {supervisors.map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}
-        </select>
-      ))}
-      {field("unit", "Unidad o área", <input id={`${idPrefix}-unit`} required maxLength={160} value={draft.unit} onChange={set("unit")} />)}
-      {field("modality", "Modalidad", (
-        <select id={`${idPrefix}-modality`} required value={draft.modality} onChange={set("modality")}>
-          <option value="">Selecciona…</option>
-          {Object.entries(MODALITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-      ))}
-      {field("start_date", "Inicio", <input id={`${idPrefix}-start_date`} type="date" required value={draft.start_date} onChange={set("start_date")} />)}
-      {field("end_date", "Fin", <input id={`${idPrefix}-end_date`} type="date" required value={draft.end_date} onChange={set("end_date")} />)}
-      {field("expected_hours", "Horas esperadas (opcional)", (
-        <input id={`${idPrefix}-expected_hours`} type="number" min="0.5" step="0.5" value={draft.expected_hours} onChange={set("expected_hours")} />
-      ))}
-      <div className="field segment-form-wide"><label htmlFor={`${idPrefix}-responsibilities`}>Responsabilidades</label>
-        <textarea id={`${idPrefix}-responsibilities`} required maxLength={5000} rows={3} value={draft.responsibilities} onChange={set("responsibilities")} />
-      </div>
-    </div>
-  );
-}
 
 export default function PlacementSegments({ dossier, onChanged }: Props) {
   const pid = dossier.placement.id;
@@ -85,14 +36,13 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<SegmentDraft>(EMPTY_SEGMENT_DRAFT);
   const [panel, setPanel] = useState<Panel>(null);
-  const [references, setReferences] = useState<Record<number, string>>({});
   const [endForm, setEndForm] = useState({ ended_on: todayIso(), reason_shared: "", reason_internal: "", recognition: "ACCEPTED_HOURS_RECOGNIZED" as WorkRecognition, note: "" });
   const [destination, setDestination] = useState<SegmentDraft>(EMPTY_SEGMENT_DRAFT);
   const [experience, setExperience] = useState({ decision: "APPROVED" as "APPROVED" | "CHANGES_REQUIRED", rationale: "" });
 
   if (segments.length === 0 && !caps.manage_segments) return null;
 
-  async function run(key: string, action: () => Promise<unknown>, success: string) {
+  async function run(key: string, action: () => Promise<unknown>, success: string): Promise<boolean> {
     setBusy(key);
     setError(null);
     setNotice(null);
@@ -100,9 +50,12 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
       await action();
       setNotice(success);
       setPanel(null);
+      setCreating(false);
       onChanged();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible completar la acción.");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -118,7 +71,9 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
     }
   }
 
-  function openPanel(segmentId: number, kind: "terminate" | "transfer" | "cancel") {
+  function openPanel(segmentId: number, kind: SegmentPanelKind) {
+    setCreating(false);
+    setError(null);
     setPanel({ segmentId, kind });
     setEndForm({ ended_on: todayIso(), reason_shared: "", reason_internal: "", recognition: "ACCEPTED_HOURS_RECOGNIZED", note: "" });
     setDestination({ ...EMPTY_SEGMENT_DRAFT, start_date: todayIso() });
@@ -130,7 +85,7 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
     const built = buildSegmentInput(draft);
     if ("error" in built) { setError(built.error); return; }
     void run("create", () => api.createPlacementSegment(pid, built.value), "Segmento planificado. Debe cumplir sus condiciones antes de activarse.")
-      .then(() => { setDraft(EMPTY_SEGMENT_DRAFT); setCreating(false); });
+      .then((saved) => { if (saved) setDraft(EMPTY_SEGMENT_DRAFT); });
   }
 
   function submitEnd(segment: PlacementSegment, event: FormEvent) {
@@ -161,183 +116,118 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
     }), "Transferencia registrada. El segmento destino queda planificado hasta cumplir sus condiciones.");
   }
 
-  const overview = hoursOverview(dossier.hours_summary);
   const blockers = segmentGateBlockers(dossier.segment_gate, dossier.placement.state === "ACTIVE");
+  const panelSegment = panel ? segments.find((segment) => segment.id === panel.segmentId) ?? null : null;
+  const drawerOpen = panelSegment !== null || creating;
+  const panelTitle = creating ? "Planificar nuevo segmento"
+    : panel?.kind === "transfer" ? "Transferir segmento"
+      : panel?.kind === "terminate" ? "Terminar segmento anticipadamente" : "Cancelar segmento";
+  const panelSubmit = creating ? "Guardar segmento planificado"
+    : panel?.kind === "transfer" ? "Registrar transferencia"
+      : panel?.kind === "terminate" ? "Terminar segmento" : "Cancelar segmento";
+  const formId = `segment-form-${pid}`;
+
+  function closeDrawer() {
+    setPanel(null);
+    setCreating(false);
+    setError(null);
+  }
 
   return (
     <BentoCard variant="content" className="dossier-wide segment-card" title="Segmentos y rotaciones"
       description="La práctica conserva su identidad académica; cada segmento registra organización, supervisión, fechas y registros propios.">
-      {error && <Alert kind="error">{error}</Alert>}
+      {error && !drawerOpen && <Alert kind="error">{error}</Alert>}
       {notice && <Alert kind="success">{notice}</Alert>}
 
-      {overview && (
-        <div className="segment-hours-overview" aria-label="Resumen de horas por estado">
-          <div><span>Horas reportadas</span><strong>{formatHours(overview.reported)} h</strong></div>
-          <div><span>Horas aceptadas{dossier.hours_summary?.scope === "SEGMENT" ? " (tu segmento)" : " consolidadas"}</span><strong>{formatHours(overview.accepted)} h</strong></div>
-          <div><span>Pendientes de revisión</span><strong>{formatHours(overview.pending)} h</strong></div>
+      <SegmentHours dossier={dossier} />
+
+      {dossier.segment_gate && blockers.length > 0 && isActive && (
+        <div className="segment-gate">
+          <p className="segment-gate-title">Para finalizar la práctica falta:</p>
+          <ul>{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
         </div>
       )}
-      {dossier.segment_gate && blockers.length > 0 && isActive && (
-        <p className="dossier-gate-note">Para finalizar falta: {blockers.join("; ")}.</p>
-      )}
 
-      {segments.length === 0 && <EmptyState message="La práctica todavía no tiene segmentos (se crea el primero al activarla)." />}
-      <ol className="segment-list">
-        {segments.map((segment) => {
-          const pendingConditions = segment.conditions.filter((condition) => condition.status !== "SATISFIED");
-          const endPanel = panel?.segmentId === segment.id ? panel.kind : null;
-          return (
-            <li className={`segment-item segment-${segment.status.toLowerCase()}`} key={segment.id}>
-              <div className="row segment-heading">
-                <strong>Segmento {segment.sequence_no} · {segment.host_org_name}{segment.unit ? ` · ${segment.unit}` : ""}</strong>
-                <Badge state={segmentTone(segment.status)} label={SEGMENT_STATUS_LABELS[segment.status]}>{segment.status}</Badge>
-              </div>
-              <dl className="dossier-facts segment-facts">
-                <div><dt>Periodo</dt><dd>{localDate(segment.start_date)} – {localDate(segment.end_date)}</dd></div>
-                <div><dt>Supervisor laboral</dt><dd>{segment.workplace_supervisor_name ?? "Sin asignación registrada"}</dd></div>
-                <div><dt>Modalidad</dt><dd>{segment.modality ? MODALITY_LABELS[segment.modality] : "No registrada"}</dd></div>
-                <div><dt>Horas esperadas</dt><dd>{segment.expected_hours === null ? "No definidas" : `${formatHours(segment.expected_hours)} h`}</dd></div>
-                <div><dt>Origen</dt><dd>{SEGMENT_ORIGIN_LABELS[segment.origin] ?? segment.origin}</dd></div>
-                {segment.ended_on && <div><dt>Cierre efectivo</dt><dd>{localDate(segment.ended_on)}</dd></div>}
-                {segment.work_recognition && <div><dt>Trabajo previo</dt><dd>{RECOGNITION_LABELS[segment.work_recognition]}</dd></div>}
-              </dl>
-              {segment.end_reason_shared && <p><strong>Motivo:</strong> {segment.end_reason_shared}</p>}
-              {segment.end_reason_internal && <p className="segment-internal"><strong>Motivo confidencial (solo roles autorizados):</strong> {segment.end_reason_internal}</p>}
-              {segment.recognition_note && <p className="muted">Nota de reconocimiento: {segment.recognition_note}</p>}
-              <details>
-                <summary>Responsabilidades y condiciones</summary>
-                <p className="dossier-preserve-text">{segment.responsibilities}</p>
-                {segment.conditions.length === 0 && <p className="muted">Sin condiciones de habilitación registradas.</p>}
-                {segment.conditions.map((condition) => (
-                  <div className="dossier-requirement" key={condition.id}>
-                    <span>{formatDomainLabel(condition.kind)}{condition.reference ? ` · ${condition.reference}` : ""}{condition.confirmed_by ? ` · ${condition.confirmed_by}` : ""}</span>
-                    <Badge state={segmentTone(condition.status)} label={condition.status === "SATISFIED" ? "Cumplida" : "Pendiente"}>{condition.status}</Badge>
-                    {caps.confirm_segment_conditions && isActive && segment.status === "PLANNED" && condition.status === "REQUIRED" && (
-                      <form className="row segment-inline-form" onSubmit={(event) => {
-                        event.preventDefault();
-                        const reference = (references[condition.id] ?? "").trim();
-                        if (!reference) { setError("Indica la referencia del documento verificado."); return; }
-                        void run(`cond-${condition.id}`, () => api.confirmSegmentCondition(pid, segment.id, condition.id, reference), "Condición confirmada.");
-                      }}>
-                        <label className="sr-only" htmlFor={`cond-${condition.id}`}>Referencia verificada</label>
-                        <input id={`cond-${condition.id}`} placeholder="Referencia verificada" maxLength={500}
-                          value={references[condition.id] ?? ""} onChange={(event) => setReferences({ ...references, [condition.id]: event.target.value })} />
-                        <button className="btn secondary" type="submit" disabled={busy !== null}>Confirmar condición</button>
-                      </form>
-                    )}
-                  </div>
-                ))}
-                {segment.status_history.length > 0 && (
-                  <ol className="segment-history" aria-label={`Historial del segmento ${segment.sequence_no}`}>
-                    {segment.status_history.map((entry, index) => (
-                      <li key={index}>{formatHistoryDate(entry.changed_at)} · {entry.from_status ? SEGMENT_STATUS_LABELS[entry.from_status] : "—"} → {SEGMENT_STATUS_LABELS[entry.to_status]}{entry.actor_name ? ` · ${entry.actor_name}` : ""}</li>
-                    ))}
-                  </ol>
-                )}
-              </details>
-
-              {caps.manage_segments && isActive && segment.status === "PLANNED" && (
-                <div className="row segment-actions">
-                  <button className="btn" type="button" disabled={busy !== null || pendingConditions.length > 0}
-                    title={pendingConditions.length ? "Hay condiciones pendientes" : undefined}
-                    onClick={() => void run(`activate-${segment.id}`, () => api.activatePlacementSegment(pid, segment.id), "Segmento activado.")}>
-                    {busy === `activate-${segment.id}` ? <Spinner /> : "Activar segmento"}
-                  </button>
-                  <button className="btn secondary" type="button" onClick={() => openPanel(segment.id, "cancel")}>Cancelar segmento</button>
-                  {pendingConditions.length > 0 && <span className="muted">Condiciones pendientes: {pendingConditions.map((c) => formatDomainLabel(c.kind)).join(", ")}</span>}
-                </div>
-              )}
-              {caps.manage_segments && isActive && segment.status === "ACTIVE" && (
-                <div className="row segment-actions">
-                  <button className="btn secondary" type="button" disabled={busy !== null}
-                    onClick={() => void run(`complete-${segment.id}`, () => api.completePlacementSegment(pid, segment.id), "Segmento completado. El siguiente no se activa automáticamente.")}>
-                    {busy === `complete-${segment.id}` ? <Spinner /> : "Completar segmento"}
-                  </button>
-                  <button className="btn secondary" type="button" onClick={() => openPanel(segment.id, "transfer")}>Transferir</button>
-                  <button className="btn secondary" type="button" onClick={() => openPanel(segment.id, "terminate")}>Terminar anticipadamente</button>
-                </div>
-              )}
-              {endPanel && (
-                <form className="segment-panel" onSubmit={(event) => submitEnd(segment, event)}
-                  aria-label={endPanel === "transfer" ? "Transferir segmento" : endPanel === "terminate" ? "Terminar segmento" : "Cancelar segmento"}>
-                  {endPanel !== "cancel" && (
-                    <div className="segment-form-grid">
-                      <div className="field"><label htmlFor={`end-date-${segment.id}`}>{endPanel === "transfer" ? "Fecha de efecto" : "Fecha de cierre"}</label>
-                        <input id={`end-date-${segment.id}`} type="date" required value={endForm.ended_on} onChange={(event) => setEndForm({ ...endForm, ended_on: event.target.value })} /></div>
-                      <div className="field"><label htmlFor={`recognition-${segment.id}`}>Trabajo previo</label>
-                        <select id={`recognition-${segment.id}`} value={endForm.recognition} onChange={(event) => setEndForm({ ...endForm, recognition: event.target.value as WorkRecognition })}>
-                          {Object.entries(RECOGNITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                        </select></div>
-                    </div>
-                  )}
-                  <div className="field"><label htmlFor={`reason-${segment.id}`}>Motivo visible para las personas relacionadas</label>
-                    <textarea id={`reason-${segment.id}`} required maxLength={1000} rows={2} value={endForm.reason_shared} onChange={(event) => setEndForm({ ...endForm, reason_shared: event.target.value })} /></div>
-                  {endPanel !== "cancel" && (
-                    <div className="field"><label htmlFor={`internal-${segment.id}`}>Motivo confidencial (opcional, solo roles internos autorizados)</label>
-                      <textarea id={`internal-${segment.id}`} maxLength={3000} rows={2} value={endForm.reason_internal} onChange={(event) => setEndForm({ ...endForm, reason_internal: event.target.value })} /></div>
-                  )}
-                  {endPanel === "terminate" && (
-                    <div className="field"><label htmlFor={`note-${segment.id}`}>Nota sobre el reconocimiento (opcional)</label>
-                      <input id={`note-${segment.id}`} maxLength={1000} value={endForm.note} onChange={(event) => setEndForm({ ...endForm, note: event.target.value })} /></div>
-                  )}
-                  {endPanel === "transfer" && (
-                    <fieldset className="segment-destination"><legend>Segmento destino</legend>
-                      {options === null ? <Spinner /> : <SegmentFields draft={destination} setDraft={setDestination} options={options} idPrefix={`dest-${segment.id}`} />}
-                    </fieldset>
-                  )}
-                  <div className="row">
-                    <button className="btn" type="submit" disabled={busy !== null}>{busy ? <Spinner /> : endPanel === "transfer" ? "Registrar transferencia" : endPanel === "terminate" ? "Terminar segmento" : "Cancelar segmento"}</button>
-                    <button className="btn link" type="button" onClick={() => setPanel(null)}>Volver</button>
-                  </div>
-                </form>
-              )}
-            </li>
-          );
-        })}
+      {segments.length === 0 && <EmptyState icon="segment" message="La práctica todavía no tiene segmentos (se crea el primero al activarla)." />}
+      <ol className="segment-list" aria-label="Segmentos de la práctica">
+        {segments.map((segment) => (
+          <SegmentItem key={segment.id} pid={pid} segment={segment} dossier={dossier} busy={busy} run={run}
+            onOpenPanel={openPanel} onError={setError} />
+        ))}
       </ol>
 
       {caps.manage_segments && isActive && (
-        creating ? (
-          <form className="segment-panel" onSubmit={submitCreate} aria-label="Planificar nuevo segmento">
-            <h3>Planificar nuevo segmento</h3>
-            {options === null ? <Spinner /> : <SegmentFields draft={draft} setDraft={setDraft} options={options} idPrefix="new-segment" />}
-            <div className="row">
-              <button className="btn" type="submit" disabled={busy !== null}>{busy === "create" ? <Spinner /> : "Guardar segmento planificado"}</button>
-              <button className="btn link" type="button" onClick={() => setCreating(false)}>Volver</button>
-            </div>
-          </form>
-        ) : (
-          <button className="btn secondary" type="button" onClick={() => { setCreating(true); void ensureOptions(); }}>Planificar nuevo segmento</button>
-        )
+        <div className="section-footer-actions">
+          <button className="btn secondary" type="button" onClick={() => { setPanel(null); setCreating(true); void ensureOptions(); }}>Planificar nuevo segmento</button>
+        </div>
       )}
 
-      {transfers.length > 0 && (
-        <section className="segment-transfers" aria-label="Transferencias registradas">
-          <h3>Transferencias</h3>
-          <ul>
-            {transfers.map((transfer) => (
-              <li key={transfer.id}>
-                <strong>Segmento {transfer.from_sequence_no} → segmento {transfer.to_sequence_no}</strong>
-                <span> · efecto {localDate(transfer.effective_date)} · aprobada por {transfer.approved_by} el {formatHistoryDate(transfer.approved_at)}</span>
-                <p>{transfer.reason_shared} · {RECOGNITION_LABELS[transfer.prior_work_treatment]}</p>
-                {transfer.reason_internal && <p className="segment-internal"><strong>Motivo confidencial:</strong> {transfer.reason_internal}</p>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <Drawer open={drawerOpen} title={panelTitle} onClose={closeDrawer}
+        description={panelSegment ? `Segmento ${panelSegment.sequence_no} · ${panelSegment.host_org_name}. El historial del segmento se conserva.` : "El segmento queda planificado hasta cumplir sus condiciones de habilitación."}
+        footer={<>
+          <button className="btn secondary" type="button" onClick={closeDrawer}>Volver</button>
+          <button className={`btn${panel?.kind === "terminate" || panel?.kind === "cancel" ? " danger" : ""}`} type="submit" form={formId} disabled={busy !== null}>
+            {busy ? <Spinner /> : panelSubmit}
+          </button>
+        </>}>
+        {error && <Alert kind="error">{error}</Alert>}
+        {creating && (
+          <form id={formId} onSubmit={submitCreate} aria-label="Planificar nuevo segmento">
+            {options === null ? <Spinner /> : <SegmentFields draft={draft} setDraft={setDraft} options={options} idPrefix="new-segment" />}
+          </form>
+        )}
+        {panelSegment && panel && (
+          <form id={formId} onSubmit={(event) => submitEnd(panelSegment, event)}
+            aria-label={panel.kind === "transfer" ? "Transferir segmento" : panel.kind === "terminate" ? "Terminar segmento" : "Cancelar segmento"}>
+            {panel.kind !== "cancel" && (
+              <div className="segment-form-grid">
+                <div className="field"><label htmlFor={`end-date-${panelSegment.id}`}>{panel.kind === "transfer" ? "Fecha de efecto" : "Fecha de cierre"}</label>
+                  <input id={`end-date-${panelSegment.id}`} type="date" required value={endForm.ended_on} onChange={(event) => setEndForm({ ...endForm, ended_on: event.target.value })} /></div>
+                <div className="field"><label htmlFor={`recognition-${panelSegment.id}`}>Trabajo previo</label>
+                  <select id={`recognition-${panelSegment.id}`} value={endForm.recognition} onChange={(event) => setEndForm({ ...endForm, recognition: event.target.value as WorkRecognition })}>
+                    {Object.entries(RECOGNITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select></div>
+              </div>
+            )}
+            <div className="field"><label htmlFor={`reason-${panelSegment.id}`}>Motivo visible para las personas relacionadas</label>
+              <textarea id={`reason-${panelSegment.id}`} required maxLength={1000} rows={3} value={endForm.reason_shared} onChange={(event) => setEndForm({ ...endForm, reason_shared: event.target.value })} /></div>
+            {panel.kind !== "cancel" && (
+              <div className="field"><label htmlFor={`internal-${panelSegment.id}`}>Motivo confidencial (opcional)</label>
+                <p className="field-hint" id={`internal-${panelSegment.id}-hint`}>Solo lo consultan los roles internos autorizados.</p>
+                <textarea id={`internal-${panelSegment.id}`} aria-describedby={`internal-${panelSegment.id}-hint`} maxLength={3000} rows={2} value={endForm.reason_internal} onChange={(event) => setEndForm({ ...endForm, reason_internal: event.target.value })} /></div>
+            )}
+            {panel.kind === "terminate" && (
+              <div className="field"><label htmlFor={`note-${panelSegment.id}`}>Nota sobre el reconocimiento (opcional)</label>
+                <input id={`note-${panelSegment.id}`} maxLength={1000} value={endForm.note} onChange={(event) => setEndForm({ ...endForm, note: event.target.value })} /></div>
+            )}
+            {panel.kind === "transfer" && (
+              <fieldset className="segment-destination"><legend>Segmento destino</legend>
+                {options === null ? <Spinner /> : <SegmentFields draft={destination} setDraft={setDestination} options={options} idPrefix={`dest-${panelSegment.id}`} />}
+              </fieldset>
+            )}
+          </form>
+        )}
+      </Drawer>
+
+      {transfers.length > 0 && <SegmentTransfers pid={pid} transfers={transfers} />}
 
       {(reviews.length > 0 || (caps.review_combined_experience && dossier.segment_gate?.combined_review_required)) && (
-        <section className="segment-experience" aria-label="Revisión de la experiencia combinada">
-          <h3>Revisión académica de la experiencia combinada</h3>
-          {reviews.map((review) => (
-            <p key={review.id}><Badge state={review.decision === "APPROVED" ? "APPROVED" : "REQUIRED"} label={review.decision === "APPROVED" ? "Aprobada" : "Requiere cambios"}>{review.decision}</Badge> {review.rationale} · {review.reviewer} · {formatHistoryDate(review.reviewed_at)}</p>
-          ))}
+        <section className="segment-experience" aria-labelledby={`experience-${pid}`}>
+          <h3 id={`experience-${pid}`}>Revisión académica de la experiencia combinada</h3>
+          {reviews.length > 0 && <ol className="experience-review-list">
+            {reviews.map((review) => (
+              <li key={review.id}>
+                <Badge state={review.decision === "APPROVED" ? "APPROVED" : "REQUIRED"} label={review.decision === "APPROVED" ? "Aprobada" : "Requiere cambios"}>{review.decision}</Badge>
+                <p>{review.rationale}</p>
+                <span className="muted">{review.reviewer} · {formatHistoryDate(review.reviewed_at)}</span>
+              </li>
+            ))}
+          </ol>}
           {caps.review_combined_experience && isActive && dossier.segment_gate?.combined_review_required && (
             dossier.segment_gate.open_segments > 0
-              ? <p className="muted">La revisión se habilita cuando todos los segmentos estén cerrados.</p>
+              ? <DisabledReason id={`experience-reason-${pid}`}>La revisión se habilita cuando todos los segmentos estén cerrados.</DisabledReason>
               : (
-                <form onSubmit={(event) => {
+                <form className="experience-form" onSubmit={(event) => {
                   event.preventDefault();
                   if (!experience.rationale.trim()) { setError("Escribe la justificación de la revisión."); return; }
                   void run("experience", () => api.recordExperienceReview(pid, experience.decision, experience.rationale.trim()), "Revisión académica registrada.");
@@ -349,9 +239,9 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
                         <option value="CHANGES_REQUIRED">Requiere cambios</option>
                       </select></div>
                     <div className="field segment-form-wide"><label htmlFor="experience-rationale">Justificación</label>
-                      <textarea id="experience-rationale" required maxLength={3000} rows={2} value={experience.rationale} onChange={(event) => setExperience({ ...experience, rationale: event.target.value })} /></div>
+                      <textarea id="experience-rationale" required maxLength={3000} rows={3} value={experience.rationale} onChange={(event) => setExperience({ ...experience, rationale: event.target.value })} /></div>
                   </div>
-                  <button className="btn" type="submit" disabled={busy !== null}>Registrar revisión</button>
+                  <div><button className="btn" type="submit" disabled={busy !== null}>Registrar revisión</button></div>
                 </form>
               )
           )}

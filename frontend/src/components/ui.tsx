@@ -204,7 +204,8 @@ export function MetricCard({ label, value, detail }: { label: string; value: num
 export function Badge({ children, state, label }: { children: ReactNode; state?: string; label?: ReactNode }) {
   const rawState = state ?? String(children);
   const tone = statusTone(rawState);
-  const displayLabel = label ?? (typeof children === "string" ? formatDomainLabel(children) : children);
+  // Domain codes (ACTIVE, DOC_INSURANCE…) are translated; human copy passes through untouched.
+  const displayLabel = label ?? (typeof children === "string" && /^[A-Z0-9_=]+$/.test(children) ? formatDomainLabel(children) : children);
   return (
     <span className={`badge badge--${tone}`}>
       <Icon name={TONE_ICON[tone]} className="badge-icon" />
