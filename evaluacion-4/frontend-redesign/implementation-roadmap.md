@@ -6,6 +6,39 @@
 > 3. `npx vite build`
 > 4. Si cambian flujos o selectores, también `python scripts/run_isolated_e2e.py`.
 
+## 000. Sexta sesión (2026-11-23/24): auditoría final, sin regenerar el ZIP
+
+**Hecho y probado** (evidencia: `evaluacion-4/evidence/test-results-2026-11-23.md`)
+- Excepciones temporales de CR-05: acortar o extender un segmento abierto, o mover uno planificado.
+  - Migración `0018`, ADR-014, `POST /placements/{pid}/segments/{sid}/schedule`.
+  - Historial append-only protegido por trigger, aviso `SEGMENT_CHANGED` y acción en el expediente.
+- El filtro de organización del reporte de rotaciones incluye la organización del segmento.
+- PPTX:
+  - Desbordamiento corregido en la diapositiva 16.
+  - Tipografía de las diapositivas 13–14 igualada al resto.
+  - La diapositiva 13 ya no presenta como diseñado un acceso histórico que no lo está.
+- Revisión visual de las 16 diapositivas. MD §6.9 actualizado; §1–6.8 idénticos al original.
+- Resultados:
+  - backend 126 superadas (CR-05: 15);
+  - migraciones 0001→0018, 0010→0018 y ciclo 0018→0017→0018;
+  - Vitest 52/52, `tsc -b` y build correctos;
+  - E2E 18 superadas / 5 omitidas (`@populated`), y `--populated` 5/5;
+  - demo `--smoke` con cabeza 0018.
+
+**Resueltas** (de la lista de la quinta sesión): extender o acortar segmentos, y el filtro de organización del reporte.
+
+**Siguen como limitación**
+- Organización, unidad, supervisor, modalidad y responsabilidades de un segmento no se editan: se cambian por transferencia, o cancelando y planificando.
+- El reporte se calcula en cada petición.
+- Las condiciones documentales se confirman con una referencia escrita, sin archivo adjunto por segmento.
+
+**Pendiente de decisión institucional:** OPEN-CR05-01 a 06, sin cambios.
+
+**Cómo retomar**
+1. Ejecutar las verificaciones del encabezado y `--populated`.
+2. Cuando se autorice, regenerar el paquete con `python scripts/build_eval4_package.py`. **`evaluacion-4.zip` sigue en el estado del 2026-11-22 (0017).**
+3. Sin `git add`, commits ni push.
+
 ## 00. Quinta sesión (2026-11-22/23): versión final de DH-05
 
 **Hecho y probado**

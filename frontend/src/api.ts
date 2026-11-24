@@ -132,6 +132,18 @@ export type PlacementSegment = {
   recognition_note: string | null;
   conditions: SegmentCondition[];
   status_history: { from_status: SegmentStatus | null; to_status: SegmentStatus; changed_at: string; actor_name: string | null }[];
+  // Append-only period changes (migration 0018); only the shared reason is stored.
+  schedule_changes?: SegmentScheduleChange[];
+};
+
+export type SegmentScheduleChange = {
+  from_start_date: string;
+  from_end_date: string;
+  to_start_date: string;
+  to_end_date: string;
+  reason_shared: string;
+  changed_at: string;
+  actor_name: string | null;
 };
 
 export type PlacementTransfer = {
@@ -936,6 +948,14 @@ export function cancelPlacementSegment(pid: number, sid: number, reason_shared: 
   return request<void>(`/placements/${pid}/segments/${sid}/cancel`, {
     method: "POST", body: JSON.stringify({ reason_shared }),
   });
+}
+
+export function reschedulePlacementSegment(pid: number, sid: number, body: {
+  start_date?: string;
+  end_date: string;
+  reason_shared: string;
+}): Promise<{ segment_id: number; start_date: string; end_date: string; change: "EXTENDED" | "SHORTENED" | "MOVED" }> {
+  return request(`/placements/${pid}/segments/${sid}/schedule`, { method: "POST", body: JSON.stringify(body) });
 }
 
 export function transferPlacementSegment(pid: number, sid: number, body: {

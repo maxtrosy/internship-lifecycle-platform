@@ -130,8 +130,8 @@ def main() -> int:
                               (SELECT count(*) FROM progress_entry_review)""",
                     (placement_id, placement_id),
                 ).fetchone()
-            if head != "0017":
-                raise AssertionError(f"Expected Alembic head 0017, got {head}.")
+            if head != "0018":
+                raise AssertionError(f"Expected Alembic head 0018, got {head}.")
             if len(segments) != 1 or segments[0][1:5] != (1, "MIGRATED_SINGLE", "ACTIVE", users["ws_alfa"]):
                 raise AssertionError(f"Unexpected CR-05 segment backfill: {segments!r}.")
             if segments[0][5] is not None or segments[0][6] is not None:
@@ -172,15 +172,35 @@ def main() -> int:
             expected_privileges = (True, True, False, False, True, False, False, False, False)
             if privileges != expected_privileges:
                 raise AssertionError(f"Unexpected app_user privilege set: {privileges!r}.")
+            # 0018: segment dates change only with a recorded schedule change row.
+            with psycopg.connect(database_url) as conn:
+                try:
+                    conn.execute("UPDATE placement_segment SET end_date = end_date + 7 WHERE id=%s",
+                                 (segments[0][0],))
+                except psycopg.errors.RaiseException as exc:
+                    if "schedule change" not in str(exc):
+                        raise
+                    conn.rollback()
+                else:
+                    raise AssertionError("Segment dates changed without a schedule change record.")
+                schedule_grants = conn.execute(
+                    """SELECT has_table_privilege('app_user','placement_segment_schedule_change','INSERT'),
+                              has_table_privilege('app_user','placement_segment_schedule_change','UPDATE')"""
+                ).fetchone()
+            if schedule_grants != (True, False):
+                raise AssertionError(f"Unexpected schedule change grants: {schedule_grants!r}.")
+            command.downgrade(config, "0017")
+            command.upgrade(config, "head")
 
             print(
-                "MIGRATION_CHAIN=0001->0017; initial_status_absent=true; "
+                "MIGRATION_CHAIN=0001->0018; initial_status_absent=true; "
                 "cr05_migrated_single_segment=true; legacy_records_attached_to_segment=true; "
                 "legacy_hours_left_pending_review=true; "
                 f"legacy_incident_status={migrated_status}; closed_work_plan_guard=true; "
                 "notifications_and_audience_scoped_messages=true; opportunity_state_guard=true; "
                 "manual_eligibility_review_notification=true; "
-                "faculty_assignment_history=true; app_user_minimal_grants=true"
+                "faculty_assignment_history=true; app_user_minimal_grants=true; "
+                "segment_dates_require_schedule_change=true; downgrade_0018_roundtrip=true"
             )
         finally:
             server.cleanup()
@@ -218,7 +238,7 @@ def main() -> int:
                     "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='user_notification_category_check'"
                 ).fetchone()[0]
             if (
-                head != "0017"
+                head != "0018"
                 or audit_update
                 or not user_insert
                 or "ELIGIBILITY_REVIEW" not in eligibility_constraint
@@ -227,7 +247,7 @@ def main() -> int:
                     "Upgrade from the existing 0010 schema did not install expected grants and review notification."
                 )
             print(
-                "MIGRATION_UPGRADE=0010->0011->0012->0013->0014->0015->0016->0017; opportunity_state_guard=true; "
+                "MIGRATION_UPGRADE=0010->0011->0012->0013->0014->0015->0016->0017->0018; opportunity_state_guard=true; "
                 "faculty_assignment_history=true; manual_eligibility_review_notification=true; "
                 "app_user_minimal_grants=true"
             )

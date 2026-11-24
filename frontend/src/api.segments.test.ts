@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   activatePlacementSegment, confirmSegmentCondition, createPlacementSegment, recordExperienceReview,
   getRotationReports, recordPlacementHours, reviewPlacementHours, terminatePlacementSegment,
-  transferPlacementSegment,
+  reschedulePlacementSegment, transferPlacementSegment,
 } from "./api";
 
 const destination = {
@@ -67,5 +67,20 @@ describe("CR-05 segment API", () => {
       "/reports/rotations?program_id=3&organization_id=2",
     ]);
     expect(fetchMock.mock.calls.every(([, init]) => !init.method && init.credentials === "same-origin")).toBe(true);
+  });
+
+  it("posts a segment period change with only the fields provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ change: "EXTENDED" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await reschedulePlacementSegment(7, 3, { end_date: "2027-02-15", reason_shared: "Extensión" });
+    await reschedulePlacementSegment(7, 4, { start_date: "2027-01-10", end_date: "2027-03-01", reason_shared: "Ajuste" });
+
+    const [first, second] = fetchMock.mock.calls;
+    expect(first[0]).toBe("/placements/7/segments/3/schedule");
+    expect(first[1].method).toBe("POST");
+    expect(JSON.parse(first[1].body)).toEqual({ end_date: "2027-02-15", reason_shared: "Extensión" });
+    expect(second[0]).toBe("/placements/7/segments/4/schedule");
+    expect(JSON.parse(second[1].body)).toEqual({ start_date: "2027-01-10", end_date: "2027-03-01", reason_shared: "Ajuste" });
   });
 });

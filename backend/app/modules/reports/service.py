@@ -149,9 +149,14 @@ def rotations(cur: psycopg.Cursor, subj: dict, *, program_id: int | None = None,
     ``operations``: program coordinators see their programs, the experiential
     coordinator sees every program, nobody else is allowed. Aggregates only;
     no names, reasons, evaluations or entry-level data are returned. The
-    organization filter applies to the placement's opportunity, like
-    ``operations``; a segment may run at another organization."""
-    where, params = _scope(subj, program_id, organization_id, None)
+    organization filter matches a placement whose opportunity belongs to the
+    organization or that has a segment there (rotations and transfers may run
+    at another organization than the original opportunity)."""
+    where, params = _scope(subj, program_id, None, None)
+    if organization_id is not None:
+        where += (" AND (o.host_org_id = %s OR EXISTS (SELECT 1 FROM placement_segment so"
+                  " WHERE so.placement_id = p.id AND so.host_org_id = %s AND so.status <> 'CANCELLED'))")
+        params = [*params, organization_id, organization_id]
     scoped = f"""
         WITH scoped AS (
           SELECT p.id AS placement_id, p.state AS placement_state, o.program_id

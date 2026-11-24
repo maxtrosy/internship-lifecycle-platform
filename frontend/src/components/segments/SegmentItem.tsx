@@ -13,7 +13,7 @@ import {
   segmentTone,
 } from "../../segments";
 
-export type SegmentPanelKind = "terminate" | "transfer" | "cancel";
+export type SegmentPanelKind = "terminate" | "transfer" | "cancel" | "schedule";
 
 type Props = {
   pid: number;
@@ -89,6 +89,17 @@ export function SegmentItem({ pid, segment, dossier, busy, run, onOpenPanel, onE
                 </li>
               ))}
             </ul>}
+            {(segment.schedule_changes?.length ?? 0) > 0 && <>
+              <h4>Cambios de periodo</h4>
+              <ol className="segment-history" aria-label={`Cambios de periodo del segmento ${segment.sequence_no}`}>
+                {segment.schedule_changes!.map((change, index) => (
+                  <li key={index}>
+                    <time>{formatHistoryDate(change.changed_at)}</time>
+                    <span>{localDate(change.from_start_date)} – {localDate(change.from_end_date)} → {localDate(change.to_start_date)} – {localDate(change.to_end_date)} · {change.reason_shared}{change.actor_name ? ` · ${change.actor_name}` : ""}</span>
+                  </li>
+                ))}
+              </ol>
+            </>}
             {segment.status_history.length > 0 && <>
               <h4>Historial del segmento</h4>
               <ol className="segment-history" aria-label={`Historial del segmento ${segment.sequence_no}`}>
@@ -110,6 +121,7 @@ export function SegmentItem({ pid, segment, dossier, busy, run, onOpenPanel, onE
               onClick={() => void run(`activate-${segment.id}`, () => api.activatePlacementSegment(pid, segment.id), "Segmento activado.")}>
               {busy === `activate-${segment.id}` ? <Spinner /> : "Activar segmento"}
             </button>
+            <button className="btn secondary small" type="button" onClick={() => onOpenPanel(segment.id, "schedule")}>Cambiar fechas</button>
             <button className="btn secondary small" type="button" onClick={() => onOpenPanel(segment.id, "cancel")}>Cancelar segmento</button>
             {pendingConditions.length > 0 && (
               <DisabledReason id={activateReasonId}>
@@ -124,6 +136,7 @@ export function SegmentItem({ pid, segment, dossier, busy, run, onOpenPanel, onE
               onClick={() => void run(`complete-${segment.id}`, () => api.completePlacementSegment(pid, segment.id), "Segmento completado. El siguiente no se activa automáticamente.")}>
               {busy === `complete-${segment.id}` ? <Spinner /> : "Completar segmento"}
             </button>
+            <button className="btn secondary small" type="button" onClick={() => onOpenPanel(segment.id, "schedule")}>Cambiar fecha de fin</button>
             <button className="btn secondary small" type="button" onClick={() => onOpenPanel(segment.id, "transfer")}>Transferir</button>
             <button className="btn secondary small" type="button" onClick={() => onOpenPanel(segment.id, "terminate")}>Terminar anticipadamente</button>
           </div>

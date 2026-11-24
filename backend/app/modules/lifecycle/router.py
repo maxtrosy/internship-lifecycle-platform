@@ -61,6 +61,12 @@ class SegmentCancelBody(BaseModel):
     reason_shared: str = Field(min_length=1, max_length=1000)
 
 
+class SegmentScheduleBody(BaseModel):
+    start_date: date | None = None
+    end_date: date
+    reason_shared: str = Field(min_length=1, max_length=1000)
+
+
 class TransferBody(BaseModel):
     effective_date: date
     reason_shared: str = Field(min_length=1, max_length=1000)
@@ -492,6 +498,16 @@ def cancel_segment(pid: int, sid: int, body: SegmentCancelBody,
                    subject_id: int = Depends(requires("segment:manage"))) -> None:
     with db.command(subject_id) as ctx:
         segment_service.cancel_segment(ctx, pid, sid, body.reason_shared)
+
+
+@router.post("/placements/{pid}/segments/{sid}/schedule")
+def reschedule_segment(pid: int, sid: int, body: SegmentScheduleBody,
+                       subject_id: int = Depends(requires("segment:manage"))) -> dict:
+    with db.command(subject_id) as ctx:
+        return segment_service.reschedule_segment(
+            ctx, pid, sid, start_date=body.start_date, end_date=body.end_date,
+            reason_shared=body.reason_shared,
+        )
 
 
 @router.post("/placements/{pid}/segments/{sid}/transfer", status_code=201)

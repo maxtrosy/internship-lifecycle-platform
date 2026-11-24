@@ -38,6 +38,7 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   const [panel, setPanel] = useState<Panel>(null);
   const [endForm, setEndForm] = useState({ ended_on: todayIso(), reason_shared: "", reason_internal: "", recognition: "ACCEPTED_HOURS_RECOGNIZED" as WorkRecognition, note: "" });
   const [destination, setDestination] = useState<SegmentDraft>(EMPTY_SEGMENT_DRAFT);
+  const [schedule, setSchedule] = useState({ start_date: "", end_date: "" });
   const [experience, setExperience] = useState({ decision: "APPROVED" as "APPROVED" | "CHANGES_REQUIRED", rationale: "" });
 
   if (segments.length === 0 && !caps.manage_segments) return null;
@@ -77,6 +78,8 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
     setPanel({ segmentId, kind });
     setEndForm({ ended_on: todayIso(), reason_shared: "", reason_internal: "", recognition: "ACCEPTED_HOURS_RECOGNIZED", note: "" });
     setDestination({ ...EMPTY_SEGMENT_DRAFT, start_date: todayIso() });
+    const target = segments.find((segment) => segment.id === segmentId);
+    if (target) setSchedule({ start_date: target.start_date, end_date: target.end_date });
     if (kind === "transfer") void ensureOptions();
   }
 
@@ -91,6 +94,16 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   function submitEnd(segment: PlacementSegment, event: FormEvent) {
     event.preventDefault();
     if (!endForm.reason_shared.trim()) { setError("Indica el motivo visible para las personas relacionadas."); return; }
+    if (panel?.kind === "schedule") {
+      if (!schedule.end_date) { setError("Indica la nueva fecha de fin."); return; }
+      const startChanged = segment.status === "PLANNED" && schedule.start_date !== segment.start_date;
+      void run(`schedule-${segment.id}`, () => api.reschedulePlacementSegment(pid, segment.id, {
+        ...(startChanged ? { start_date: schedule.start_date } : {}),
+        end_date: schedule.end_date,
+        reason_shared: endForm.reason_shared,
+      }), "Periodo del segmento actualizado; el cambio queda en su historial.");
+      return;
+    }
     if (panel?.kind === "cancel") {
       void run(`cancel-${segment.id}`, () => api.cancelPlacementSegment(pid, segment.id, endForm.reason_shared), "Segmento cancelado.");
       return;
@@ -121,10 +134,12 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   const drawerOpen = panelSegment !== null || creating;
   const panelTitle = creating ? "Planificar nuevo segmento"
     : panel?.kind === "transfer" ? "Transferir segmento"
-      : panel?.kind === "terminate" ? "Terminar segmento anticipadamente" : "Cancelar segmento";
+      : panel?.kind === "terminate" ? "Terminar segmento anticipadamente"
+        : panel?.kind === "schedule" ? "Cambiar periodo del segmento" : "Cancelar segmento";
   const panelSubmit = creating ? "Guardar segmento planificado"
     : panel?.kind === "transfer" ? "Registrar transferencia"
-      : panel?.kind === "terminate" ? "Terminar segmento" : "Cancelar segmento";
+      : panel?.kind === "terminate" ? "Terminar segmento"
+        : panel?.kind === "schedule" ? "Guardar nuevo periodo" : "Cancelar segmento";
   const formId = `segment-form-${pid}`;
 
   function closeDrawer() {
@@ -178,8 +193,25 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
         )}
         {panelSegment && panel && (
           <form id={formId} onSubmit={(event) => submitEnd(panelSegment, event)}
-            aria-label={panel.kind === "transfer" ? "Transferir segmento" : panel.kind === "terminate" ? "Terminar segmento" : "Cancelar segmento"}>
-            {panel.kind !== "cancel" && (
+            aria-label={panel.kind === "transfer" ? "Transferir segmento" : panel.kind === "terminate" ? "Terminar segmento"
+              : panel.kind === "schedule" ? "Cambiar periodo del segmento" : "Cancelar segmento"}>
+            {panel.kind === "schedule" && (
+              <div className="segment-form-grid">
+                <div className="field"><label htmlFor={`schedule-start-${panelSegment.id}`}>Inicio</label>
+                  {panelSegment.status === "ACTIVE" && <p className="field-hint" id={`schedule-start-${panelSegment.id}-hint`}>Un segmento activo conserva su fecha de inicio.</p>}
+                  <input id={`schedule-start-${panelSegment.id}`} type="date" required value={schedule.start_date}
+                    disabled={panelSegment.status === "ACTIVE"}
+                    aria-describedby={panelSegment.status === "ACTIVE" ? `schedule-start-${panelSegment.id}-hint` : undefined}
+                    onChange={(event) => setSchedule({ ...schedule, start_date: event.target.value })} /></div>
+                <div className="field"><label htmlFor={`schedule-end-${panelSegment.id}`}>Nueva fecha de fin</label>
+                  {panelSegment.status === "ACTIVE" && <p className="field-hint" id={`schedule-end-${panelSegment.id}-hint`}>Para cerrar antes de hoy usa la terminación anticipada.</p>}
+                  <input id={`schedule-end-${panelSegment.id}`} type="date" required value={schedule.end_date}
+                    min={panelSegment.status === "ACTIVE" ? todayIso() : schedule.start_date || undefined}
+                    aria-describedby={panelSegment.status === "ACTIVE" ? `schedule-end-${panelSegment.id}-hint` : undefined}
+                    onChange={(event) => setSchedule({ ...schedule, end_date: event.target.value })} /></div>
+              </div>
+            )}
+            {(panel.kind === "transfer" || panel.kind === "terminate") && (
               <div className="segment-form-grid">
                 <div className="field"><label htmlFor={`end-date-${panelSegment.id}`}>{panel.kind === "transfer" ? "Fecha de efecto" : "Fecha de cierre"}</label>
                   <input id={`end-date-${panelSegment.id}`} type="date" required value={endForm.ended_on} onChange={(event) => setEndForm({ ...endForm, ended_on: event.target.value })} /></div>
@@ -191,7 +223,7 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
             )}
             <div className="field"><label htmlFor={`reason-${panelSegment.id}`}>Motivo visible para las personas relacionadas</label>
               <textarea id={`reason-${panelSegment.id}`} required maxLength={1000} rows={3} value={endForm.reason_shared} onChange={(event) => setEndForm({ ...endForm, reason_shared: event.target.value })} /></div>
-            {panel.kind !== "cancel" && (
+            {(panel.kind === "transfer" || panel.kind === "terminate") && (
               <div className="field"><label htmlFor={`internal-${panelSegment.id}`}>Motivo confidencial (opcional)</label>
                 <p className="field-hint" id={`internal-${panelSegment.id}-hint`}>Solo lo consultan los roles internos autorizados.</p>
                 <textarea id={`internal-${panelSegment.id}`} aria-describedby={`internal-${panelSegment.id}-hint`} maxLength={3000} rows={2} value={endForm.reason_internal} onChange={(event) => setEndForm({ ...endForm, reason_internal: event.target.value })} /></div>

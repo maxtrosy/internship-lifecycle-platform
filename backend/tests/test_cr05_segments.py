@@ -550,6 +550,10 @@ def test_rotation_reports_aggregate_cr05_state_within_scope(world):
 
     planned = report("pc_sys")
     assert planned["multi_segment_placements"] == 1 and planned["transfers"] == 1
+    # The organization filter also matches the segment's organization (destination org 2).
+    assert report("ec1", organization_id=2)["transfers"] == 1
+    assert report("ec1", organization_id=1)["transfers"] == 1
+    assert report("ec1", organization_id=999_999)["multi_segment_placements"] == 0
     assert planned["active_rotations"] == 0 and planned["pending_consolidations"] == 0
     assert {r["status"]: r["count"] for r in planned["segments_by_status"]} == {"TRANSFERRED": 1, "PLANNED": 1}
 
@@ -628,3 +632,89 @@ def test_segment_events_notify_related_people_but_not_the_previous_supervisor(wo
         "SELECT to_jsonb(n) AS row FROM user_notification n WHERE recipient_id=%s ORDER BY id DESC LIMIT 1",
         (U["ws_beta"],)).fetchone()["row"]
     assert "reason" not in str(payload)  # a notice carries only its category and links
+
+
+def _code(excinfo) -> str:
+    return excinfo.value.code
+
+
+def test_segment_schedule_changes_follow_explicit_rules_and_keep_history(world):
+    """CR-05 §6.3 "Excepciones temporales": shorten/extend an open segment or move
+    a planned one, with explicit rules and an append-only history (0018)."""
+    env, U, pid = world
+    seg1 = segments_of(env, pid)[0]
+    sid, start, end = seg1["id"], seg1["start_date"], seg1["end_date"]
+    days = dt.timedelta
+
+    def reschedule(user, segment_id, *, end_date, start_date=None, reason="Ajuste sintético del periodo"):
+        return cmd(U[user], sg.reschedule_segment, pid, segment_id, start_date=start_date,
+                   end_date=end_date, reason_shared=reason)
+
+    # Only the configured segment authority may change dates.
+    for user in ("ws_alfa", "s1", "f1"):
+        with pytest.raises((Forbidden, NotFound)):
+            reschedule(user, sid, end_date=end + days(7))
+    # Explicit rules for an active segment.
+    with pytest.raises(BusinessError) as exc:
+        reschedule("ec1", sid, start_date=start - days(1), end_date=end)
+    assert _code(exc) == "SEGMENT_START_LOCKED"
+    with pytest.raises(BusinessError) as exc:
+        reschedule("ec1", sid, end_date=TODAY - days(1))
+    assert _code(exc) in {"SEGMENT_END_DATE_INVALID", "SEGMENT_DATES_INVALID"}
+    with pytest.raises(BusinessError) as exc:
+        reschedule("ec1", sid, end_date=end)
+    assert _code(exc) == "SEGMENT_SCHEDULE_UNCHANGED"
+    with pytest.raises(BusinessError) as exc:
+        reschedule("ec1", sid, end_date=end + days(7), reason="   ")
+    assert _code(exc) == "SEGMENT_FIELD_REQUIRED"
+
+    extended = reschedule("ec1", sid, end_date=end + days(20), reason="Extensión sintética acordada")
+    assert extended["change"] == "EXTENDED"
+    # Hours cannot be dated in the future, so an active segment that ends today or later
+    # always contains its dated hours; the conflict guard is a defensive check (service + trigger).
+    cmd(U["s1"], lc.record_hours, pid, 4, work_date=TODAY, description="Trabajo sintético")
+    shortened = reschedule("ec1", sid, end_date=end + days(16), reason="Acortamiento sintético")
+    assert shortened["change"] == "SHORTENED"
+    row = segments_of(env, pid)[0]
+    assert (row["start_date"], row["end_date"], row["status"]) == (start, end + days(16), "ACTIVE")
+
+    # History is append-only and visible with the shared reason only.
+    history = read(U["s1"], sg.list_segments, pid)[0]["schedule_changes"]
+    assert [(h["from_end_date"], h["to_end_date"]) for h in history] == [
+        (end, end + days(20)), (end + days(20), end + days(16))]
+    assert history[0]["reason_shared"] == "Extensión sintética acordada"
+    with pytest.raises(psycopg.errors.RaiseException):
+        env.admin.execute("UPDATE placement_segment_schedule_change SET reason_shared='x'")
+    with pytest.raises(psycopg.errors.RaiseException):
+        env.admin.execute("UPDATE placement_segment SET end_date=end_date + 1 WHERE id=%s", (sid,))
+    actions = [r["action"] for r in env.admin.execute(
+        "SELECT action FROM audit_event WHERE subject_id=%s AND action='segment.rescheduled'", (pid,)).fetchall()]
+    assert len(actions) == 2
+    assert env.admin.execute(
+        """SELECT count(*)::int AS n FROM user_notification WHERE recipient_id=%s AND placement_id=%s
+           AND category='SEGMENT_CHANGED'""", (U["s1"], pid)).fetchone()["n"] == 2
+
+    # A planned segment can be moved; a closed or cancelled one cannot change.
+    planned = cmd(U["ec1"], sg.create_segment, pid, seg_data(2, U["ws_beta"], start=TODAY + days(30)))
+    moved = reschedule("ec1", planned["segment_id"], start_date=TODAY + days(40), end_date=TODAY + days(90))
+    assert moved["change"] == "MOVED"
+    with pytest.raises(BusinessError) as exc:
+        reschedule("ec1", planned["segment_id"], start_date=TODAY + days(50), end_date=TODAY + days(45))
+    assert _code(exc) == "SEGMENT_DATES_INVALID"
+    cmd(U["ec1"], sg.cancel_segment, pid, planned["segment_id"], "Rotación sintética descartada")
+    with pytest.raises(BusinessError) as exc:
+        reschedule("ec1", planned["segment_id"], end_date=TODAY + days(95))
+    assert _code(exc) == "SEGMENT_NOT_OPEN"
+
+    clients = {name: _client(name) for name in ("ec1", "ws_alfa")}
+    try:
+        body = {"end_date": (end + days(30)).isoformat(), "reason_shared": "Extensión HTTP sintética"}
+        assert clients["ws_alfa"].post(f"/placements/{pid}/segments/{sid}/schedule", json=body,
+                                       headers={"Origin": ORIGIN}).status_code in (403, 404)
+        response = clients["ec1"].post(f"/placements/{pid}/segments/{sid}/schedule", json=body,
+                                       headers={"Origin": ORIGIN})
+        assert response.status_code == 200, response.text
+        assert response.json()["change"] == "EXTENDED"
+    finally:
+        for client in clients.values():
+            client.close()

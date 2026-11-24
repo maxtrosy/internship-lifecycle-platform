@@ -105,12 +105,27 @@ test("[@populated] CR-05: la transferencia conserva horas aceptadas y retira el 
     .getByRole("button", { name: "Activar segmento" }).click();
   await expect(page.getByText("Segmento activado.")).toBeVisible();
 
+  // 4a. Explicit temporary exception (CR-05 §6.3): extend the active destination segment.
+  const activeSegment = page.getByRole("list", { name: "Segmentos de la práctica" }).locator(".segment-active");
+  await activeSegment.getByRole("button", { name: "Cambiar fecha de fin" }).click();
+  const scheduleDrawer = page.getByRole("dialog", { name: "Cambiar periodo del segmento" });
+  await expect(scheduleDrawer.getByLabel("Inicio")).toBeDisabled();
+  await scheduleDrawer.getByLabel("Nueva fecha de fin").fill(isoInDays(45));
+  await scheduleDrawer.getByLabel("Motivo visible para las personas relacionadas").fill("Extensión sintética acordada.");
+  await scheduleDrawer.getByRole("button", { name: "Guardar nuevo periodo" }).click();
+  await expect(page.getByText("Periodo del segmento actualizado", { exact: false })).toBeVisible();
+  await activeSegment.locator("summary").click();
+  await expect(activeSegment.getByRole("list", { name: /Cambios de periodo/ })).toContainText("Extensión sintética acordada.");
+
   // 4. Internal roles see the confidential reason. (The experiential coordinator does not read
   // hours under the E3 rules, so the hours check runs as the reviewer and the student below.)
   const afterTransfer = (await api(page, dossierPath)).body;
   expect(afterTransfer.segments.map((s: { status: string }) => s.status)).toEqual(["TRANSFERRED", "ACTIVE"]);
   expect(afterTransfer.segments[0].work_recognition).toBe("ACCEPTED_HOURS_RECOGNIZED");
   expect(afterTransfer.transfers).toHaveLength(1);
+  expect(afterTransfer.segments[1].end_date).toBe(isoInDays(45));
+  expect(afterTransfer.segments[1].schedule_changes).toHaveLength(1);
+  expect(afterTransfer.segments[1].schedule_changes[0].from_end_date).toBe(isoInDays(30));
   expect(afterTransfer.transfers[0].reason_internal).toBe("Nota interna sintética de la transferencia.");
 
   // 5. The previous supervisor has no automatic access (BR-06); the new one sees only their segment.

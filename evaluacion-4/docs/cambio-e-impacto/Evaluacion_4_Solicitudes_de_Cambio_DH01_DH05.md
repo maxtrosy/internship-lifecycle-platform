@@ -708,9 +708,9 @@ flowchart TB
 Aclaren quién acepta las horas; cómo se resuelven disputas y superposiciones; qué evidencia se reconoce tras una interrupción; quién autoriza una transferencia; y cuándo existe acceso histórico permitido para un supervisor anterior. La solicitud exige evitar doble conteo, pero no declara que toda superposición temporal esté prohibida: esa regla debe definirse según el caso y el programa.
 
 
-## 6.9 Respuesta del equipo DH-05: estado de la versión final (2026-11-22)
+## 6.9 Respuesta del equipo DH-05: estado de la versión final (2026-11-23)
 
-> Sección añadida por el equipo DH-05 sobre la solicitud original; las secciones 6.1 a 6.8 no se modificaron. Estado según el código del repositorio con el esquema Alembic `0017`. Las categorías son las de la guía: **implementado** (existe y tiene pruebas ejecutadas), **simulado** (sustituye un servicio externo), **diseñado** (definido, no construido) y **pendiente** (requiere una decisión o trabajo que no se hizo).
+> Sección añadida por el equipo DH-05 sobre la solicitud original; las secciones 6.1 a 6.8 no se modificaron. Estado según el código del repositorio con el esquema Alembic `0018`. Las categorías son las de la guía: **implementado** (existe y tiene pruebas ejecutadas), **simulado** (sustituye un servicio externo), **diseñado** (definido, no construido) y **pendiente** (requiere una decisión o trabajo que no se hizo).
 
 ### Alcance solicitado frente a lo entregado
 
@@ -726,9 +726,9 @@ Aclaren quién acepta las horas; cómo se resuelven disputas y superposiciones; 
 | Consolidación de horas | Implementado | Solo horas aceptadas; la última revisión manda; segmentos no reconocidos no suman. | `test_s10`, `test_s11`, `test_s17b` |
 | Validación académica | Implementado | Revisión de la experiencia combinada obligatoria antes del cierre si hubo más de un segmento. | `test_s02` (escenario 14) |
 | Acceso de supervisores | Implementado; acceso histórico pendiente | El supervisor pierde el acceso al cerrar su segmento; sus evaluaciones se conservan. La consulta histórica autorizada no se concede sin decisión (OPEN-CR05-05). | `test_s02` (7, 8), `test_s16b`, `rotation.spec.ts` |
-| Excepciones temporales | Parcial | Cancelación de segmentos planificados, terminación anticipada con reconocimiento y cierre en una fecha anterior al fin previsto. **Pendiente:** extender o editar un segmento (hoy se cancela y se planifica otro) y la regla de superposición (OPEN-CR05-03: fechas solapables, un solo segmento activo). | `test_s12` |
-| Reportes | Implementado | `GET /reports/rotations` y sección «Rotaciones y transferencias» con los siete indicadores pedidos, solo agregados y con el alcance del reporte de E3 (ADR-013). | `test_rotation_reports_aggregate_cr05_state_within_scope`, `rotation.spec.ts` |
-| Avisos (no pedido explícitamente) | Implementado | Aviso `SEGMENT_CHANGED` al activar, completar, terminar o transferir; el supervisor anterior no recibe avisos. | `test_segment_events_notify_related_people_but_not_the_previous_supervisor` |
+| Excepciones temporales | Implementado; superposición pendiente | Cancelación de segmentos planificados, terminación anticipada con reconocimiento, y **acortar o extender** un segmento abierto o mover uno planificado (migración `0018`, ADR-014). Reglas explícitas: el segmento activo conserva su inicio y no termina antes de hoy, las horas registradas quedan dentro del periodo y el motivo es obligatorio. Cada cambio deja un registro append-only. **Pendiente:** la regla de superposición (OPEN-CR05-03: las fechas pueden solaparse, solo hay un segmento activo). | `test_s12`, `test_segment_schedule_changes_follow_explicit_rules_and_keep_history`, `rotation.spec.ts` |
+| Reportes | Implementado | `GET /reports/rotations` y sección «Rotaciones y transferencias» con los siete indicadores pedidos, solo agregados y con el alcance del reporte de E3 (ADR-013). El filtro de organización incluye la organización de cada segmento. | `test_rotation_reports_aggregate_cr05_state_within_scope`, `rotation.spec.ts` |
+| Avisos (no pedido explícitamente) | Implementado | Aviso `SEGMENT_CHANGED` al activar, completar, terminar, transferir o cambiar el periodo; el supervisor anterior no recibe avisos. | `test_segment_events_notify_related_people_but_not_the_previous_supervisor` |
 
 ### Escenarios de comprobación (6.7)
 
@@ -753,7 +753,7 @@ Aclaren quién acepta las horas; cómo se resuelven disputas y superposiciones; 
 | Evidencia tras una interrupción | Se exigen motivo y decisión de reconocimiento; no se exige evidencia adicional. |
 | Acceso histórico del supervisor anterior | No se concede. |
 
-**Resultados ejecutados:** backend 125 superadas (CR-05: 14); migraciones 0001→0017 y 0010→0017 correctas; Vitest 51/51; `tsc -b` y `vite build` sin errores; E2E aislado 18 superadas y 5 omitidas (`@populated`), y `--populated` 5/5, incluido `rotation.spec.ts`. Detalle, comandos y entorno en `evaluacion-4/evidence/test-results-2026-11-22.md`.
+**Resultados ejecutados:** backend 126 superadas (CR-05: 15); migraciones 0001→0018 y 0010→0018 correctas, incluido el ciclo 0018→0017→0018; Vitest 52/52; `tsc -b` y `vite build` sin errores; E2E aislado 18 superadas y 5 omitidas (`@populated`, ejecutadas aparte), y `--populated` 5/5, incluido `rotation.spec.ts` con la extensión de un segmento; demo `--smoke` con cabeza 0018. Detalle, comandos y entorno en `evaluacion-4/evidence/test-results-2026-11-23.md`.
 
 ---
 

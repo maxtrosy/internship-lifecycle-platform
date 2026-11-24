@@ -1,6 +1,6 @@
-# Modelo de datos CR-05 (migraciones 0016 y 0017)
+# Modelo de datos CR-05 (migraciones 0016, 0017 y 0018)
 
-La migración 0017 no cambia tablas: solo amplía la restricción de categorías de `user_notification` con `SEGMENT_CHANGED` (ADR-013). El resto de este documento describe 0016.
+La migración 0017 no cambia tablas: solo amplía la restricción de categorías de `user_notification` con `SEGMENT_CHANGED` (ADR-013). La migración 0018 añade `placement_segment_schedule_change` (append-only: periodo anterior y nuevo, motivo compartido, autor, hora y `txid`). También reemplaza `trg_placement_segment_guard`: las fechas de un segmento `PLANNED` o `ACTIVE` solo cambian junto con un registro de la misma transacción, y un segmento activo conserva su inicio (ADR-014). El resto de este documento describe 0016.
 
 ```mermaid
 erDiagram

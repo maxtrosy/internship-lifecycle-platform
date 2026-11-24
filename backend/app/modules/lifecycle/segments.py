@@ -351,6 +351,62 @@ def cancel_segment(ctx: CommandContext, pid: int, sid: int, reason_shared: str) 
                 {"segment_id": sid, "status": "PLANNED"}, {"segment_id": sid, "status": "CANCELLED"})
 
 
+def reschedule_segment(ctx: CommandContext, pid: int, sid: int, *, start_date: dt.date | None,
+                       end_date: dt.date, reason_shared: str) -> dict:
+    """CR-05 §6.3 "Excepciones temporales": shorten or extend an open segment,
+    or move a planned one, keeping the previous period in an append-only
+    ``placement_segment_schedule_change`` row (migration 0018).
+
+    Explicit rules: only PLANNED or ACTIVE segments; an active segment keeps
+    its start date and cannot end before today (ending earlier is an early
+    termination with a recognition decision, BR-08); dated hours already
+    recorded must stay inside the new period. Overlap between segments is not
+    decided here (OPEN-CR05-03): dates may overlap, one segment is active."""
+    _authorize_manager(ctx, pid)
+    _lock_active_placement(ctx, pid)
+    segment = _segment(ctx, pid, sid, lock=True)
+    if segment["status"] not in OPEN_STATUSES:
+        raise BusinessError("SEGMENT_NOT_OPEN", segment["status"])
+    new_start = segment["start_date"] if start_date is None else start_date
+    if segment["status"] == "ACTIVE" and new_start != segment["start_date"]:
+        raise BusinessError("SEGMENT_START_LOCKED", "Un segmento activo conserva su fecha de inicio.")
+    if not isinstance(end_date, dt.date) or end_date < new_start:
+        raise BusinessError("SEGMENT_DATES_INVALID")
+    if segment["status"] == "ACTIVE" and end_date < dt.date.today():
+        raise BusinessError("SEGMENT_END_DATE_INVALID",
+                            "Para terminar antes de hoy se usa la terminación anticipada.")
+    if (new_start, end_date) == (segment["start_date"], segment["end_date"]):
+        raise BusinessError("SEGMENT_SCHEDULE_UNCHANGED")
+    shared = _clean(reason_shared, "reason_shared", 1000)
+    outside = ctx.execute(
+        """SELECT count(*)::int AS n FROM progress_entry WHERE segment_id=%s AND work_date IS NOT NULL
+           AND (work_date < %s OR work_date > %s)""",
+        (sid, new_start, end_date),
+    ).fetchone()["n"]
+    if outside:
+        raise BusinessError("SEGMENT_SCHEDULE_CONFLICT",
+                            "Hay horas registradas fuera del nuevo periodo del segmento.")
+
+    def run():
+        change = ctx.execute(
+            """INSERT INTO placement_segment_schedule_change(placement_id, segment_id, from_start_date,
+                 from_end_date, to_start_date, to_end_date, reason_shared, changed_by)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (pid, sid, segment["start_date"], segment["end_date"], new_start, end_date, shared, ctx.actor_id),
+        ).fetchone()
+        ctx.execute("UPDATE placement_segment SET start_date=%s, end_date=%s WHERE id=%s",
+                    (new_start, end_date, sid))
+        return change
+    change = _gate(run)
+    kind = "EXTENDED" if end_date > segment["end_date"] else "SHORTENED" if end_date < segment["end_date"] else "MOVED"
+    audit.write(ctx.cur, "segment.rescheduled", "placement", pid,
+                {"segment_id": sid, "start_date": segment["start_date"].isoformat(),
+                 "end_date": segment["end_date"].isoformat()},
+                {"segment_id": sid, "start_date": new_start.isoformat(), "end_date": end_date.isoformat(),
+                 "change": kind, "schedule_change_id": change["id"]})
+    return {"segment_id": sid, "start_date": new_start, "end_date": end_date, "change": kind}
+
+
 def transfer(ctx: CommandContext, pid: int, from_sid: int, *, effective_date: dt.date,
              reason_shared: str, reason_internal: str | None, prior_work_treatment: str,
              destination: dict) -> dict:
@@ -574,6 +630,14 @@ def list_segments(cur, subj: dict, pid: int) -> list[dict]:
             """SELECT h.from_status, h.to_status, h.changed_at, u.display_name AS actor_name
                FROM placement_segment_status_history h LEFT JOIN user_account u ON u.id=h.actor_id
                WHERE h.segment_id=%s ORDER BY h.id""",
+            (row["id"],),
+        ).fetchall()
+        # Only the shared reason is stored for schedule changes (0018).
+        item["schedule_changes"] = cur.execute(
+            """SELECT c.from_start_date, c.from_end_date, c.to_start_date, c.to_end_date,
+                      c.reason_shared, c.changed_at, u.display_name AS actor_name
+               FROM placement_segment_schedule_change c LEFT JOIN user_account u ON u.id=c.changed_by
+               WHERE c.segment_id=%s ORDER BY c.id""",
             (row["id"],),
         ).fetchall()
         out.append(item)

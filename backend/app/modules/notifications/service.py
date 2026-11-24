@@ -41,6 +41,7 @@ NOTICE_ACTIONS = {
     "segment.completed": "SEGMENT_CHANGED",
     "segment.terminated_early": "SEGMENT_CHANGED",
     "segment.transferred": "SEGMENT_CHANGED",
+    "segment.rescheduled": "SEGMENT_CHANGED",
 }
 
 

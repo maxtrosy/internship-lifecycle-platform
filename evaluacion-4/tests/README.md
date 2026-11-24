@@ -4,8 +4,8 @@ Las pruebas ejecutables viven en `../src/backend/tests` y `../src/frontend`. Est
 
 | Archivo | Alcance |
 |---|---|
-| `test_cr05_segments.py` | 14 pruebas: los 18 escenarios obligatorios, concurrencia, privacidad, endpoints HTTP, reportes de CR-05 y avisos de segmento |
-| `check_isolated_migrations.py` | Migraciones 0001→0017 y 0010→0017 con backfill de segmento |
+| `test_cr05_segments.py` | 15 pruebas: los 18 escenarios obligatorios, concurrencia, privacidad, endpoints HTTP, reportes de CR-05, avisos de segmento y cambios de periodo |
+| `check_isolated_migrations.py` | Migraciones 0001→0018 y 0010→0018 con backfill de segmento |
 | `test_lifecycle.py`, `test_http_authorization.py` | Regresión E3 ajustada a BR-04/BR-06 |
 | `../src/frontend/src/segments.test.ts`, `api.segments.test.ts` | Helpers de la UI y contratos de la API CR-05 |
 | `../src/frontend/e2e/lifecycle.spec.ts` | E2E del ciclo completo, incluida la revisión de horas |

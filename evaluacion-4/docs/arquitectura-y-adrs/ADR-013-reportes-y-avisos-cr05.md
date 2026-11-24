@@ -28,11 +28,11 @@ Se elige **B**.
 - Una activación avisa al supervisor nuevo. Una transferencia o terminación no avisa al supervisor anterior, porque ya no existe un segmento activo suyo. Así el aviso no le da un enlace a un expediente que respondería `404` (BR-06).
 - El supervisor de un segmento destino `PLANNED` recibe el aviso al activarse el segmento, no al planificarlo.
 - Las consultas del reporte recorren las tablas de segmentos en cada petición. Es aceptable para el volumen de la demo y del semestre. Si creciera, se podría materializar sin cambiar el contrato.
-- El filtro de organización se aplica a la organización de la oportunidad, igual que en `/reports/operations`. Un segmento puede ocurrir en otra organización; esto queda documentado en el contrato.
+- El filtro de organización de `/reports/rotations` incluye una práctica si su oportunidad pertenece a la organización **o** si tiene un segmento no cancelado allí (corregido el 2026-11-23). Así una rotación o transferencia a otra organización aparece al filtrar por esa organización. `/reports/operations` conserva el filtro de E3 por organización de la oportunidad.
 
 ## Comprobación
 
 - `backend/tests/test_cr05_segments.py::test_rotation_reports_aggregate_cr05_state_within_scope`: indicadores tras transferir, activar, terminar sin reconocimiento y aprobar la revisión combinada. También comprueba el alcance por programa, el `403` HTTP para empleador y estudiante, y que la respuesta no incluye motivos ni nombres.
 - `backend/tests/test_cr05_segments.py::test_segment_events_notify_related_people_but_not_the_previous_supervisor`.
 - `frontend/e2e/rotation.spec.ts` (fixture `--populated`): recorrido en navegador con avisos y reporte.
-- `scripts/check_isolated_migrations.py`: cadenas 0001→0017 y 0010→0017.
+- `scripts/check_isolated_migrations.py`: cadenas 0001→0018 y 0010→0018.

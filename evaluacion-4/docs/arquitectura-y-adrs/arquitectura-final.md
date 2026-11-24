@@ -1,6 +1,6 @@
 # Arquitectura final (as-built, Evaluación 4)
 
-Los diagramas describen el código de este repositorio en la revisión de esquema **0017** (0016: segmentos; 0017: categoría de aviso `SEGMENT_CHANGED`). Reemplazan a los de E3 solo en lo que CR-05 cambia; los de E3 siguen en `evaluacion-3/docs/architecture/`.
+Los diagramas describen el código de este repositorio en la revisión de esquema **0018** (0016: segmentos; 0017: categoría de aviso `SEGMENT_CHANGED`; 0018: historial de cambios de periodo de segmento). Reemplazan a los de E3 solo en lo que CR-05 cambia; los de E3 siguen en `evaluacion-3/docs/architecture/`.
 
 ## Contexto
 
@@ -23,8 +23,8 @@ No hay sistemas externos nuevos: IdP, correo y almacenamiento externo siguen pen
 ```mermaid
 flowchart LR
   B[Navegador: React 18 + TypeScript + Vite] -->|HTTP JSON, cookie HttpOnly| A[API FastAPI: monolito modular]
-  A -->|psycopg 3, SQL explícito, rol app_user| P[(PostgreSQL: esquema 0017, triggers de seguridad)]
-  M[Alembic 0001→0017] -->|migraciones| P
+  A -->|psycopg 3, SQL explícito, rol app_user| P[(PostgreSQL: esquema 0018, triggers de seguridad)]
+  M[Alembic 0001→0018] -->|migraciones| P
 ```
 
 ## Componentes afectados por CR-05
@@ -41,7 +41,7 @@ flowchart TB
     RP[reports/service.py: rotations, agregados CR-05]
     CF[config.py: PLACEMENT_SEGMENT_MANAGER_ROLES, PLACEMENT_HOURS_REVIEWER_ROLES]
   end
-  subgraph DB[PostgreSQL 0017]
+  subgraph DB[PostgreSQL 0018]
     T1[placement_segment / _condition / _status_history]
     T2[placement_transfer]
     T3[progress_entry_review]

@@ -1538,8 +1538,223 @@ ALTER TABLE user_notification ADD CONSTRAINT user_notification_category_check
   ));
 """
 
+UPGRADE_0018_SQL = """
+-- CR-05 §6.3 "Excepciones temporales": an open segment can be shortened or
+-- extended (and a planned one moved) without rewriting history. Each change is
+-- an append-only row with the previous and new period, the shared reason, the
+-- actor and the time; the segment row keeps only the current period.
+CREATE TABLE placement_segment_schedule_change (
+  id bigserial PRIMARY KEY,
+  placement_id int NOT NULL,
+  segment_id int NOT NULL,
+  from_start_date date NOT NULL,
+  from_end_date date NOT NULL,
+  to_start_date date NOT NULL,
+  to_end_date date NOT NULL,
+  reason_shared text NOT NULL CHECK (length(trim(reason_shared)) BETWEEN 1 AND 1000),
+  changed_by int NOT NULL REFERENCES user_account(id),
+  changed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  txid bigint NOT NULL DEFAULT txid_current(),
+  FOREIGN KEY (segment_id, placement_id) REFERENCES placement_segment(id, placement_id),
+  CHECK (to_end_date >= to_start_date),
+  CHECK ((from_start_date, from_end_date) IS DISTINCT FROM (to_start_date, to_end_date))
+);
+CREATE INDEX placement_segment_schedule_change_idx ON placement_segment_schedule_change(segment_id, id);
+CREATE TRIGGER trg_segment_schedule_change_immutable BEFORE UPDATE OR DELETE ON placement_segment_schedule_change
+  FOR EACH ROW EXECUTE FUNCTION trg_placement_record_immutable();
+
+CREATE OR REPLACE FUNCTION trg_placement_segment_guard() RETURNS trigger AS $$
+DECLARE
+  v_state text;
+  v_unmet int;
+BEGIN
+  SELECT state INTO v_state FROM placement WHERE id = NEW.placement_id FOR UPDATE;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.origin IN ('ROTATION','TRANSFER') THEN
+      IF NEW.status <> 'PLANNED' THEN
+        RAISE EXCEPTION 'SEGMENT_GATE: new rotation/transfer segments start as PLANNED';
+      END IF;
+      IF v_state IS DISTINCT FROM 'ACTIVE' THEN
+        RAISE EXCEPTION 'SEGMENT_GATE: segments can only be planned for an active placement';
+      END IF;
+    ELSIF NEW.origin = 'PLACEMENT_ACTIVATION' AND v_state IS DISTINCT FROM 'ACTIVE' THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: the initial segment is created by placement activation';
+    END IF;
+    IF NEW.workplace_supervisor_id IS NOT NULL AND NEW.origin IN ('ROTATION','TRANSFER') AND NOT EXISTS (
+      SELECT 1 FROM role_assignment ra WHERE ra.user_id = NEW.workplace_supervisor_id
+        AND ra.role = 'WORKPLACE_SUPERVISOR' AND ra.host_org_id = NEW.host_org_id) THEN
+      RAISE EXCEPTION 'SEGMENT_SUPERVISOR_INVALID: supervisor does not belong to the segment organization';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF (NEW.placement_id, NEW.sequence_no, NEW.host_org_id, NEW.unit, NEW.workplace_supervisor_id,
+      NEW.modality, NEW.responsibilities, NEW.expected_hours,
+      NEW.origin, NEW.created_by, NEW.created_at)
+     IS DISTINCT FROM
+     (OLD.placement_id, OLD.sequence_no, OLD.host_org_id, OLD.unit, OLD.workplace_supervisor_id,
+      OLD.modality, OLD.responsibilities, OLD.expected_hours,
+      OLD.origin, OLD.created_by, OLD.created_at) THEN
+    RAISE EXCEPTION 'IMMUTABLE: segment content cannot change';
+  END IF;
+  -- 0018: dates of an open segment change only together with an append-only
+  -- schedule change row written in the same transaction (CR-05 §6.3).
+  IF (NEW.start_date, NEW.end_date) IS DISTINCT FROM (OLD.start_date, OLD.end_date) THEN
+    IF NEW.status IS DISTINCT FROM OLD.status OR OLD.status NOT IN ('PLANNED','ACTIVE')
+       OR (OLD.status = 'ACTIVE' AND NEW.start_date IS DISTINCT FROM OLD.start_date)
+       OR (ROW(NEW.*) IS DISTINCT FROM ROW(OLD.*) AND
+           (NEW.activated_at, NEW.activated_by, NEW.ended_on, NEW.ended_at, NEW.ended_by,
+            NEW.end_reason_shared, NEW.end_reason_internal, NEW.work_recognition, NEW.recognition_note)
+           IS DISTINCT FROM
+           (OLD.activated_at, OLD.activated_by, OLD.ended_on, OLD.ended_at, OLD.ended_by,
+            OLD.end_reason_shared, OLD.end_reason_internal, OLD.work_recognition, OLD.recognition_note))
+       OR NOT EXISTS (
+         SELECT 1 FROM placement_segment_schedule_change c
+         WHERE c.segment_id = NEW.id AND c.txid = txid_current()
+           AND c.from_start_date = OLD.start_date AND c.from_end_date = OLD.end_date
+           AND c.to_start_date = NEW.start_date AND c.to_end_date = NEW.end_date) THEN
+      RAISE EXCEPTION 'IMMUTABLE: segment dates change only through a recorded schedule change';
+    END IF;
+    IF v_state IS DISTINCT FROM 'ACTIVE' THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: dates can only change while the placement is active';
+    END IF;
+    IF EXISTS (SELECT 1 FROM progress_entry pe WHERE pe.segment_id = NEW.id AND pe.work_date IS NOT NULL
+               AND (pe.work_date < NEW.start_date OR pe.work_date > NEW.end_date)) THEN
+      RAISE EXCEPTION 'SEGMENT_SCHEDULE_CONFLICT: recorded hours fall outside the new period';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NEW.status = OLD.status THEN
+    IF ROW(NEW.*) IS DISTINCT FROM ROW(OLD.*) THEN
+      RAISE EXCEPTION 'IMMUTABLE: segment lifecycle fields change only with a status transition';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NOT ((OLD.status = 'PLANNED' AND NEW.status IN ('ACTIVE','CANCELLED')) OR
+          (OLD.status = 'ACTIVE' AND NEW.status IN ('COMPLETED','TERMINATED_EARLY','TRANSFERRED'))) THEN
+    RAISE EXCEPTION 'SEGMENT_TRANSITION: % -> % is not allowed', OLD.status, NEW.status;
+  END IF;
+  IF NEW.status = 'ACTIVE' THEN
+    IF v_state IS DISTINCT FROM 'ACTIVE' THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: placement must be ACTIVE to start a segment';
+    END IF;
+    IF NEW.workplace_supervisor_id IS NULL OR NOT EXISTS (
+      SELECT 1 FROM role_assignment ra WHERE ra.user_id = NEW.workplace_supervisor_id
+        AND ra.role = 'WORKPLACE_SUPERVISOR' AND ra.host_org_id = NEW.host_org_id) THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: segment requires a workplace supervisor of its organization';
+    END IF;
+    SELECT count(*) INTO v_unmet FROM placement_segment_condition
+      WHERE segment_id = NEW.id AND status <> 'SATISFIED';
+    IF v_unmet > 0 THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: % enablement condition(s) not satisfied', v_unmet;
+    END IF;
+    IF NEW.activated_at IS NULL THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: activation time is required';
+    END IF;
+  ELSIF NEW.status IN ('COMPLETED','TERMINATED_EARLY','TRANSFERRED') THEN
+    IF NEW.ended_on IS NULL OR NEW.ended_on < NEW.start_date OR NEW.ended_at IS NULL THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: a valid end date is required';
+    END IF;
+    IF NEW.status = 'COMPLETED' AND EXISTS (
+         SELECT 1 FROM completion_requirement cr
+         WHERE cr.placement_id = NEW.placement_id AND cr.kind = 'FINAL_EVALUATION' AND cr.mandatory)
+       AND NOT EXISTS (
+         SELECT 1 FROM placement_evaluation ev
+         WHERE ev.placement_id = NEW.placement_id AND ev.segment_id = NEW.id AND ev.kind = 'FINAL') THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: completing the segment requires its final evaluation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+GRANT SELECT, INSERT ON placement_segment_schedule_change TO app_user;
+GRANT USAGE ON SEQUENCE placement_segment_schedule_change_id_seq TO app_user;
+"""
+
+# Downgrade helper: restores the 0016 guard (dates immutable again).
+DOWNGRADE_0018_SQL = """
+DROP TABLE placement_segment_schedule_change;
+CREATE OR REPLACE FUNCTION trg_placement_segment_guard() RETURNS trigger AS $$
+DECLARE
+  v_state text;
+  v_unmet int;
+BEGIN
+  SELECT state INTO v_state FROM placement WHERE id = NEW.placement_id FOR UPDATE;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.origin IN ('ROTATION','TRANSFER') THEN
+      IF NEW.status <> 'PLANNED' THEN
+        RAISE EXCEPTION 'SEGMENT_GATE: new rotation/transfer segments start as PLANNED';
+      END IF;
+      IF v_state IS DISTINCT FROM 'ACTIVE' THEN
+        RAISE EXCEPTION 'SEGMENT_GATE: segments can only be planned for an active placement';
+      END IF;
+    ELSIF NEW.origin = 'PLACEMENT_ACTIVATION' AND v_state IS DISTINCT FROM 'ACTIVE' THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: the initial segment is created by placement activation';
+    END IF;
+    IF NEW.workplace_supervisor_id IS NOT NULL AND NEW.origin IN ('ROTATION','TRANSFER') AND NOT EXISTS (
+      SELECT 1 FROM role_assignment ra WHERE ra.user_id = NEW.workplace_supervisor_id
+        AND ra.role = 'WORKPLACE_SUPERVISOR' AND ra.host_org_id = NEW.host_org_id) THEN
+      RAISE EXCEPTION 'SEGMENT_SUPERVISOR_INVALID: supervisor does not belong to the segment organization';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF (NEW.placement_id, NEW.sequence_no, NEW.host_org_id, NEW.unit, NEW.workplace_supervisor_id,
+      NEW.start_date, NEW.end_date, NEW.modality, NEW.responsibilities, NEW.expected_hours,
+      NEW.origin, NEW.created_by, NEW.created_at)
+     IS DISTINCT FROM
+     (OLD.placement_id, OLD.sequence_no, OLD.host_org_id, OLD.unit, OLD.workplace_supervisor_id,
+      OLD.start_date, OLD.end_date, OLD.modality, OLD.responsibilities, OLD.expected_hours,
+      OLD.origin, OLD.created_by, OLD.created_at) THEN
+    RAISE EXCEPTION 'IMMUTABLE: segment content cannot change';
+  END IF;
+  IF NEW.status = OLD.status THEN
+    IF ROW(NEW.*) IS DISTINCT FROM ROW(OLD.*) THEN
+      RAISE EXCEPTION 'IMMUTABLE: segment lifecycle fields change only with a status transition';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NOT ((OLD.status = 'PLANNED' AND NEW.status IN ('ACTIVE','CANCELLED')) OR
+          (OLD.status = 'ACTIVE' AND NEW.status IN ('COMPLETED','TERMINATED_EARLY','TRANSFERRED'))) THEN
+    RAISE EXCEPTION 'SEGMENT_TRANSITION: % -> % is not allowed', OLD.status, NEW.status;
+  END IF;
+  IF NEW.status = 'ACTIVE' THEN
+    IF v_state IS DISTINCT FROM 'ACTIVE' THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: placement must be ACTIVE to start a segment';
+    END IF;
+    IF NEW.workplace_supervisor_id IS NULL OR NOT EXISTS (
+      SELECT 1 FROM role_assignment ra WHERE ra.user_id = NEW.workplace_supervisor_id
+        AND ra.role = 'WORKPLACE_SUPERVISOR' AND ra.host_org_id = NEW.host_org_id) THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: segment requires a workplace supervisor of its organization';
+    END IF;
+    SELECT count(*) INTO v_unmet FROM placement_segment_condition
+      WHERE segment_id = NEW.id AND status <> 'SATISFIED';
+    IF v_unmet > 0 THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: % enablement condition(s) not satisfied', v_unmet;
+    END IF;
+    IF NEW.activated_at IS NULL THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: activation time is required';
+    END IF;
+  ELSIF NEW.status IN ('COMPLETED','TERMINATED_EARLY','TRANSFERRED') THEN
+    IF NEW.ended_on IS NULL OR NEW.ended_on < NEW.start_date OR NEW.ended_at IS NULL THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: a valid end date is required';
+    END IF;
+    IF NEW.status = 'COMPLETED' AND EXISTS (
+         SELECT 1 FROM completion_requirement cr
+         WHERE cr.placement_id = NEW.placement_id AND cr.kind = 'FINAL_EVALUATION' AND cr.mandatory)
+       AND NOT EXISTS (
+         SELECT 1 FROM placement_evaluation ev
+         WHERE ev.placement_id = NEW.placement_id AND ev.segment_id = NEW.id AND ev.kind = 'FINAL') THEN
+      RAISE EXCEPTION 'SEGMENT_GATE: completing the segment requires its final evaluation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+"""
+
+
 CURRENT_SCHEMA = (SCHEMA + UPGRADE_0002_SQL + UPGRADE_0003_SQL + UPGRADE_0004_SQL
                   + UPGRADE_0005_SQL + UPGRADE_0006_SQL + UPGRADE_0007_SQL
                   + UPGRADE_0008_SQL + UPGRADE_0009_SQL + UPGRADE_0010_SQL + UPGRADE_0011_SQL
                   + UPGRADE_0012_SQL + UPGRADE_0013_SQL + UPGRADE_0014_SQL + UPGRADE_0015_SQL
-                  + UPGRADE_0016_SQL + UPGRADE_0017_SQL)
+                  + UPGRADE_0016_SQL + UPGRADE_0017_SQL + UPGRADE_0018_SQL)
