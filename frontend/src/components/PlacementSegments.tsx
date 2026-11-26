@@ -6,11 +6,15 @@ import { DisabledReason, Drawer } from "./overlays";
 import { formatHistoryDate } from "../history";
 import {
   EMPTY_SEGMENT_DRAFT,
+  MODALITY_LABELS,
   RECOGNITION_LABELS,
   buildSegmentInput,
+  buildSegmentUpdate,
+  segmentEditDraft,
   segmentGateBlockers,
   todayIso,
   type SegmentDraft,
+  type SegmentEditDraft,
 } from "../segments";
 import { SegmentFields } from "./segments/SegmentFields";
 import { SegmentHours } from "./segments/SegmentHours";
@@ -39,6 +43,7 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   const [endForm, setEndForm] = useState({ ended_on: todayIso(), reason_shared: "", reason_internal: "", recognition: "ACCEPTED_HOURS_RECOGNIZED" as WorkRecognition, note: "" });
   const [destination, setDestination] = useState<SegmentDraft>(EMPTY_SEGMENT_DRAFT);
   const [schedule, setSchedule] = useState({ start_date: "", end_date: "" });
+  const [edit, setEdit] = useState<SegmentEditDraft | null>(null);
   const [experience, setExperience] = useState({ decision: "APPROVED" as "APPROVED" | "CHANGES_REQUIRED", rationale: "" });
 
   if (segments.length === 0 && !caps.manage_segments) return null;
@@ -80,7 +85,8 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
     setDestination({ ...EMPTY_SEGMENT_DRAFT, start_date: todayIso() });
     const target = segments.find((segment) => segment.id === segmentId);
     if (target) setSchedule({ start_date: target.start_date, end_date: target.end_date });
-    if (kind === "transfer") void ensureOptions();
+    setEdit(target && kind === "edit" ? segmentEditDraft(target) : null);
+    if (kind === "transfer" || (kind === "edit" && target?.status === "PLANNED")) void ensureOptions();
   }
 
   function submitCreate(event: FormEvent) {
@@ -94,6 +100,13 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   function submitEnd(segment: PlacementSegment, event: FormEvent) {
     event.preventDefault();
     if (!endForm.reason_shared.trim()) { setError("Indica el motivo visible para las personas relacionadas."); return; }
+    if (panel?.kind === "edit" && edit) {
+      const built = buildSegmentUpdate(segment, { ...edit, reason_shared: endForm.reason_shared });
+      if ("error" in built) { setError(built.error); return; }
+      void run(`edit-${segment.id}`, () => api.updatePlacementSegment(pid, segment.id, built.value),
+        "Datos del segmento actualizados; el ajuste queda en su historial.");
+      return;
+    }
     if (panel?.kind === "schedule") {
       if (!schedule.end_date) { setError("Indica la nueva fecha de fin."); return; }
       const startChanged = segment.status === "PLANNED" && schedule.start_date !== segment.start_date;
@@ -135,11 +148,13 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
   const panelTitle = creating ? "Planificar nuevo segmento"
     : panel?.kind === "transfer" ? "Transferir segmento"
       : panel?.kind === "terminate" ? "Terminar segmento anticipadamente"
-        : panel?.kind === "schedule" ? "Cambiar periodo del segmento" : "Cancelar segmento";
+        : panel?.kind === "schedule" ? "Cambiar periodo del segmento"
+          : panel?.kind === "edit" ? "Ajustar datos del segmento" : "Cancelar segmento";
   const panelSubmit = creating ? "Guardar segmento planificado"
     : panel?.kind === "transfer" ? "Registrar transferencia"
       : panel?.kind === "terminate" ? "Terminar segmento"
-        : panel?.kind === "schedule" ? "Guardar nuevo periodo" : "Cancelar segmento";
+        : panel?.kind === "schedule" ? "Guardar nuevo periodo"
+          : panel?.kind === "edit" ? "Guardar ajuste" : "Cancelar segmento";
   const formId = `segment-form-${pid}`;
 
   function closeDrawer() {
@@ -194,7 +209,50 @@ export default function PlacementSegments({ dossier, onChanged }: Props) {
         {panelSegment && panel && (
           <form id={formId} onSubmit={(event) => submitEnd(panelSegment, event)}
             aria-label={panel.kind === "transfer" ? "Transferir segmento" : panel.kind === "terminate" ? "Terminar segmento"
-              : panel.kind === "schedule" ? "Cambiar periodo del segmento" : "Cancelar segmento"}>
+              : panel.kind === "schedule" ? "Cambiar periodo del segmento"
+                : panel.kind === "edit" ? "Ajustar datos del segmento" : "Cancelar segmento"}>
+            {panel.kind === "edit" && edit && (() => {
+              const planned = panelSegment.status === "PLANNED";
+              const supervisors = options?.find((option) => option.id === panelSegment.host_org_id)?.supervisors ?? [];
+              const id = (key: string) => `edit-${key}-${panelSegment.id}`;
+              return (
+                <div className="segment-form-grid">
+                  <p className="field-hint segment-form-wide" id={id("scope")}>
+                    {planned
+                      ? "La organización no se edita: para otra organización cancela este segmento y planifica uno nuevo."
+                      : "Un segmento activo conserva organización, unidad y supervisor. Para cambiarlos registra una transferencia."}
+                    {" "}Las horas, evaluaciones e incidentes ya registrados no cambian.
+                  </p>
+                  <div className="field"><span className="field-label">Organización</span><p className="field-static">{panelSegment.host_org_name}</p></div>
+                  {planned ? <>
+                    <div className="field"><label htmlFor={id("unit")}>Unidad o área</label>
+                      <input id={id("unit")} required maxLength={160} value={edit.unit} onChange={(event) => setEdit({ ...edit, unit: event.target.value })} /></div>
+                    <div className="field"><label htmlFor={id("supervisor")}>Supervisor laboral</label>
+                      {options === null ? <Spinner /> : (
+                        <select id={id("supervisor")} required value={edit.workplace_supervisor_id}
+                          onChange={(event) => setEdit({ ...edit, workplace_supervisor_id: event.target.value })}>
+                          <option value="">Selecciona…</option>
+                          {supervisors.map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}
+                        </select>
+                      )}</div>
+                  </> : <>
+                    <div className="field"><span className="field-label">Unidad o área</span><p className="field-static">{panelSegment.unit ?? "Sin unidad registrada"}</p></div>
+                    <div className="field"><span className="field-label">Supervisor laboral</span><p className="field-static">{panelSegment.workplace_supervisor_name ?? "Sin asignación registrada"}</p></div>
+                  </>}
+                  <div className="field"><label htmlFor={id("modality")}>Modalidad</label>
+                    <select id={id("modality")} value={edit.modality} onChange={(event) => setEdit({ ...edit, modality: event.target.value })}>
+                      {!panelSegment.modality && <option value="">No registrada</option>}
+                      {Object.entries(MODALITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select></div>
+                  <div className="field"><label htmlFor={id("hours")}>Horas esperadas</label>
+                    <input id={id("hours")} type="number" min="0.5" step="0.5" value={edit.expected_hours}
+                      onChange={(event) => setEdit({ ...edit, expected_hours: event.target.value })} /></div>
+                  <div className="field segment-form-wide"><label htmlFor={id("responsibilities")}>Responsabilidades</label>
+                    <textarea id={id("responsibilities")} required maxLength={5000} rows={3} value={edit.responsibilities}
+                      onChange={(event) => setEdit({ ...edit, responsibilities: event.target.value })} /></div>
+                </div>
+              );
+            })()}
             {panel.kind === "schedule" && (
               <div className="segment-form-grid">
                 <div className="field"><label htmlFor={`schedule-start-${panelSegment.id}`}>Inicio</label>

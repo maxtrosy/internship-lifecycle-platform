@@ -118,7 +118,8 @@ export default function OperationalReports() {
       </>}
       <RotationReportSection
         programId={filters.program_id ? Number(filters.program_id) : undefined}
-        organizationId={filters.organization_id ? Number(filters.organization_id) : undefined} />
+        organizationId={filters.organization_id ? Number(filters.organization_id) : undefined}
+        placementState={filters.placement_state || undefined} />
     </div>
   );
 }

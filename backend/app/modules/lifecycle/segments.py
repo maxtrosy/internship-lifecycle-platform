@@ -148,11 +148,13 @@ def _instantiate_conditions(ctx: CommandContext, pid: int, sid: int) -> None:
     for condition in policy["conditions"]:
         if condition["type"] == "REQUIRE_DOCUMENTS":
             for kind in condition["value"]:
-                ctx.execute(
+                created = ctx.execute(
                     """INSERT INTO placement_segment_condition(segment_id, kind, source_policy_version_id)
-                       VALUES (%s,%s,%s) ON CONFLICT DO NOTHING""",
+                       VALUES (%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id""",
                     (sid, kind, policy["id"]),
-                )
+                ).fetchone()
+                if created is not None:
+                    _create_evidence_item(ctx, pid, sid, created["id"], kind)
         elif condition["type"] == "SUPERVISORS_ASSIGNED" and condition["value"]:
             # The segment cannot be created without a validated supervisor of its organization.
             ctx.execute(
@@ -162,6 +164,73 @@ def _instantiate_conditions(ctx: CommandContext, pid: int, sid: int) -> None:
                      'Supervisor validado contra la organización del segmento') ON CONFLICT DO NOTHING""",
                 (sid, policy["id"], ctx.actor_id),
             )
+
+
+DOCUMENT_REFERENCE_PREFIX = "Documento aprobado:"
+
+
+def evidence_kind(sequence_no: int, condition_kind: str) -> str:
+    base = condition_kind[4:] if condition_kind.startswith("DOC_") else condition_kind
+    return f"DOC_SEG{sequence_no}_{base}"
+
+
+def _create_evidence_item(ctx: CommandContext, pid: int, sid: int, condition_id: int, kind: str) -> None:
+    """Documentary evidence for a segment condition reuses the E3 document
+    module (upload, revisions, review, private download). The item is optional
+    at placement level; the segment gate reads the condition status."""
+    sequence_no = ctx.execute("SELECT sequence_no FROM placement_segment WHERE id=%s", (sid,)).fetchone()["sequence_no"]
+    ctx.execute(
+        """INSERT INTO checklist_item(placement_id, kind, mandatory, segment_condition_id)
+           VALUES (%s,%s,false,%s) ON CONFLICT DO NOTHING""",
+        (pid, evidence_kind(sequence_no, kind), condition_id),
+    )
+
+
+def sync_condition_from_review(ctx: CommandContext, pid: int, item: dict, decision: str,
+                               reviewer_subj: dict) -> None:
+    """Called inside ``review_document``: approving the evidence of a planned
+    segment satisfies its condition; withdrawing the approval while the segment
+    is still planned returns the condition to REQUIRED. The reviewer must also
+    hold ``segment_condition:confirm`` (no privilege is widened)."""
+    if item.get("segment_condition_id") is None:
+        return
+    if not authz.can_perform(ctx.cur, reviewer_subj, "segment_condition:confirm", pid):
+        return
+    condition = ctx.execute(
+        """SELECT c.*, s.status AS segment_status, s.id AS sid FROM placement_segment_condition c
+           JOIN placement_segment s ON s.id=c.segment_id WHERE c.id=%s FOR UPDATE OF c""",
+        (item["segment_condition_id"],),
+    ).fetchone()
+    if condition is None or condition["segment_status"] != "PLANNED":
+        return
+    submission = ctx.execute(
+        "SELECT original_filename, revision FROM document_submission WHERE id=%s",
+        (item["current_submission_id"],),
+    ).fetchone()
+    if decision == "APPROVED" and condition["status"] == "REQUIRED" and submission is not None:
+        reference = (f"{DOCUMENT_REFERENCE_PREFIX} {submission['original_filename']} "
+                     f"(revisión {submission['revision']})")[:500]
+        ctx.execute(
+            """UPDATE placement_segment_condition SET status='SATISFIED', confirmed_by=%s,
+               confirmed_at=clock_timestamp(), reference=%s WHERE id=%s""",
+            (ctx.actor_id, reference, condition["id"]),
+        )
+        audit.write(ctx.cur, "segment.condition_satisfied", "placement", pid,
+                    {"segment_id": condition["sid"], "kind": condition["kind"], "status": "REQUIRED"},
+                    {"segment_id": condition["sid"], "kind": condition["kind"], "status": "SATISFIED",
+                     "source": "DOCUMENT_REVIEW", "checklist_item_id": item["id"]})
+    elif (decision == "REJECTED" and condition["status"] == "SATISFIED"
+          and (condition["reference"] or "").startswith(DOCUMENT_REFERENCE_PREFIX)):
+        # Only a condition satisfied by this evidence reopens; a manual confirmation stands.
+        ctx.execute(
+            """UPDATE placement_segment_condition SET status='REQUIRED', confirmed_by=NULL,
+               confirmed_at=NULL, reference=NULL WHERE id=%s""",
+            (condition["id"],),
+        )
+        audit.write(ctx.cur, "segment.condition_reopened", "placement", pid,
+                    {"segment_id": condition["sid"], "kind": condition["kind"], "status": "SATISFIED"},
+                    {"segment_id": condition["sid"], "kind": condition["kind"], "status": "REQUIRED",
+                     "source": "DOCUMENT_REVIEW", "checklist_item_id": item["id"]})
 
 
 def _authorize_manager(ctx: CommandContext, pid: int) -> dict:
@@ -407,6 +476,107 @@ def reschedule_segment(ctx: CommandContext, pid: int, sid: int, *, start_date: d
     return {"segment_id": sid, "start_date": new_start, "end_date": end_date, "change": kind}
 
 
+EDITABLE_FIELDS = ("unit", "workplace_supervisor_id", "modality", "responsibilities", "expected_hours")
+ACTIVE_EDITABLE_FIELDS = {"modality", "responsibilities", "expected_hours"}
+
+
+def update_segment(ctx: CommandContext, pid: int, sid: int, changes: dict, reason_shared: str) -> dict:
+    """Administrative adjustment of a segment's operational attributes (0019).
+
+    Explicit rules that separate an adjustment from a transfer:
+    - The organization never changes here: a planned segment at another
+      organization is cancelled and planned again; an active one is transferred.
+    - A planned segment may change unit, supervisor (of the same organization),
+      modality, responsibilities and expected hours.
+    - An active segment may change modality, responsibilities and expected
+      hours; a new unit or supervisor is a new stage and goes through
+      ``transfer`` (CR-05-BR-05), so the previous supervisor's relation ends.
+    - Dates change through ``reschedule_segment`` (0018).
+    Records already attached to the segment (hours, evaluations, incidents)
+    are not rewritten; the previous values stay in ``placement_segment_revision``."""
+    _authorize_manager(ctx, pid)
+    _lock_active_placement(ctx, pid)
+    segment = _segment(ctx, pid, sid, lock=True)
+    if segment["status"] not in OPEN_STATUSES:
+        raise BusinessError("SEGMENT_NOT_OPEN", segment["status"])
+    if "host_org_id" in changes and changes["host_org_id"] != segment["host_org_id"]:
+        raise BusinessError("SEGMENT_ORGANIZATION_LOCKED",
+                            "La organización no se edita: transfiere el segmento activo o cancela y planifica otro.")
+    if {"start_date", "end_date"} & set(changes):
+        raise BusinessError("SEGMENT_DATES_USE_SCHEDULE", "Las fechas se cambian con «Cambiar fechas».")
+    unknown = set(changes) - set(EDITABLE_FIELDS) - {"host_org_id"}
+    if unknown:
+        raise BusinessError("SEGMENT_FIELD_NOT_EDITABLE", ", ".join(sorted(unknown)))
+    new = {field: segment[field] for field in EDITABLE_FIELDS}
+    if "unit" in changes:
+        new["unit"] = _clean(changes["unit"], "unit", 160)
+    if "responsibilities" in changes:
+        new["responsibilities"] = _clean(changes["responsibilities"], "responsibilities", 5000)
+    if "modality" in changes:
+        if changes["modality"] not in MODALITIES:
+            raise BusinessError("SEGMENT_MODALITY_INVALID")
+        new["modality"] = changes["modality"]
+    if "expected_hours" in changes:
+        expected = changes["expected_hours"]
+        if expected is not None and (not math.isfinite(float(expected)) or float(expected) <= 0):
+            raise BusinessError("SEGMENT_EXPECTED_HOURS_INVALID")
+        new["expected_hours"] = expected
+    if "workplace_supervisor_id" in changes:
+        new["workplace_supervisor_id"] = changes["workplace_supervisor_id"]
+    changed = [field for field in EDITABLE_FIELDS if _differs(new[field], segment[field])]
+    if not changed:
+        raise BusinessError("SEGMENT_UNCHANGED")
+    if segment["status"] == "ACTIVE" and set(changed) - ACTIVE_EDITABLE_FIELDS:
+        raise BusinessError("SEGMENT_CHANGE_REQUIRES_TRANSFER",
+                            "Cambiar la unidad o el supervisor de un segmento activo es una transferencia.")
+    if "workplace_supervisor_id" in changed:
+        supervisor = ctx.execute(
+            """SELECT 1 FROM user_account u JOIN role_assignment ra ON ra.user_id=u.id
+               WHERE u.id=%s AND u.is_active AND ra.role='WORKPLACE_SUPERVISOR' AND ra.host_org_id=%s""",
+            (new["workplace_supervisor_id"], segment["host_org_id"]),
+        ).fetchone()
+        if supervisor is None:
+            raise BusinessError("SEGMENT_SUPERVISOR_INVALID",
+                                "El supervisor debe pertenecer a la organización del segmento.")
+    shared = _clean(reason_shared, "reason_shared", 1000)
+    snapshot = ("jsonb_build_object('unit', %s::text, 'workplace_supervisor_id', %s::int, 'modality', %s::text, "
+                "'responsibilities', %s::text, 'expected_hours', %s::numeric)")
+
+    def values(source: dict) -> tuple:
+        return tuple(source[field] for field in EDITABLE_FIELDS)
+
+    def run():
+        revision = ctx.execute(
+            f"""INSERT INTO placement_segment_revision(placement_id, segment_id, segment_status, changed_fields,
+                  previous_values, new_values, reason_shared, changed_by)
+                VALUES (%s,%s,%s,%s,{snapshot},{snapshot},%s,%s) RETURNING id""",
+            (pid, sid, segment["status"], changed, *values(segment), *values(new), shared, ctx.actor_id),
+        ).fetchone()
+        ctx.execute(
+            """UPDATE placement_segment SET unit=%s, workplace_supervisor_id=%s, modality=%s,
+               responsibilities=%s, expected_hours=%s WHERE id=%s""",
+            (*values(new), sid),
+        )
+        return revision
+    revision = _gate(run)
+    # Responsibilities are free text: the audit payload names the changed fields only.
+    audit.write(ctx.cur, "segment.updated", "placement", pid,
+                {"segment_id": sid, "status": segment["status"]},
+                {"segment_id": sid, "changed_fields": changed, "revision_id": revision["id"]})
+    return {"segment_id": sid, "changed_fields": changed, "revision_id": revision["id"]}
+
+
+def _differs(a, b) -> bool:
+    if a is None or b is None:
+        return (a is None) != (b is None)
+    if isinstance(a, (int, float)) or isinstance(b, (int, float)) or hasattr(b, "as_tuple"):
+        try:
+            return float(a) != float(b)
+        except (TypeError, ValueError):
+            return True
+    return a != b
+
+
 def transfer(ctx: CommandContext, pid: int, from_sid: int, *, effective_date: dt.date,
              reason_shared: str, reason_internal: str | None, prior_work_treatment: str,
              destination: dict) -> dict:
@@ -621,11 +791,26 @@ def list_segments(cur, subj: dict, pid: int) -> list[dict]:
         if not read_internal:
             item.pop("end_reason_internal")  # CR-05-BR-09
         item["conditions"] = cur.execute(
-            """SELECT c.id, c.kind, c.status, c.confirmed_at, c.reference, u.display_name AS confirmed_by
+            """SELECT c.id, c.kind, c.status, c.confirmed_at, c.reference, u.display_name AS confirmed_by,
+                      ci.id AS evidence_item_id, ci.status AS evidence_status,
+                      ci.current_review_reason AS evidence_review_reason
                FROM placement_segment_condition c LEFT JOIN user_account u ON u.id=c.confirmed_by
+               LEFT JOIN checklist_item ci ON ci.segment_condition_id=c.id
                WHERE c.segment_id=%s ORDER BY c.id""",
             (row["id"],),
         ).fetchall()
+        # Attribute revisions (0019): shared reason only; supervisor ids resolved to names.
+        revisions = cur.execute(
+            """SELECT r.id, r.segment_status, r.changed_fields, r.previous_values, r.new_values,
+                      r.reason_shared, r.changed_at, u.display_name AS actor_name,
+                      ps.display_name AS previous_supervisor_name, ns.display_name AS new_supervisor_name
+               FROM placement_segment_revision r LEFT JOIN user_account u ON u.id=r.changed_by
+               LEFT JOIN user_account ps ON ps.id=(r.previous_values->>'workplace_supervisor_id')::int
+               LEFT JOIN user_account ns ON ns.id=(r.new_values->>'workplace_supervisor_id')::int
+               WHERE r.segment_id=%s ORDER BY r.id""",
+            (row["id"],),
+        ).fetchall()
+        item["revisions"] = [_revision_view(r) for r in revisions]
         item["status_history"] = cur.execute(
             """SELECT h.from_status, h.to_status, h.changed_at, u.display_name AS actor_name
                FROM placement_segment_status_history h LEFT JOIN user_account u ON u.id=h.actor_id
@@ -642,6 +827,22 @@ def list_segments(cur, subj: dict, pid: int) -> list[dict]:
         ).fetchall()
         out.append(item)
     return out
+
+
+def _revision_view(row: dict) -> dict:
+    """Only the changed fields are exposed, with supervisor names instead of ids."""
+    def pick(values: dict, supervisor_name: str | None) -> dict:
+        out = {}
+        for field in row["changed_fields"]:
+            if field == "workplace_supervisor_id":
+                out["workplace_supervisor"] = supervisor_name
+            else:
+                out[field] = values.get(field)
+        return out
+    return {"id": row["id"], "segment_status": row["segment_status"], "changed_fields": row["changed_fields"],
+            "previous": pick(row["previous_values"], row["previous_supervisor_name"]),
+            "new": pick(row["new_values"], row["new_supervisor_name"]),
+            "reason_shared": row["reason_shared"], "changed_at": row["changed_at"], "actor_name": row["actor_name"]}
 
 
 def segment_options(cur, subj: dict, pid: int) -> list[dict]:

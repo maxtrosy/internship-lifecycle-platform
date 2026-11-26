@@ -4,6 +4,7 @@ import { useConfirm } from "../components/overlays";
 import type { ChecklistItem, DocumentSubmission } from "../api";
 import { Alert, Badge, EmptyState, Icon, PageHeader, Skeleton, Spinner, formatDomainLabel } from "../components/ui";
 import { errorMessage, useAsyncAction } from "../useAsyncAction";
+import { requirementLabel } from "../segments";
 
 type Row = { id: number; display_name: string; program_code: string; opportunity_title: string; state: string };
 
@@ -132,13 +133,14 @@ export default function DocumentReview() {
                             <tbody>
                               {list.map((item) => {
                                 const latest = (submissions[row.id]?.[item.id] ?? [])[0];
-                                const label = formatDomainLabel(item.kind);
+                                const label = requirementLabel(item, formatDomainLabel);
                                 const revoking = row.state === "ACTIVE" && item.status === "APPROVED";
                                 const reasonError = reasonErrors[item.id] || null;
                                 const deciding = busy === `decide-${item.id}`;
                                 return (
                                   <tr key={item.id}>
-                                    <td data-label="Requisito"><span className="cell-primary">{label}</span></td>
+                                    <td data-label="Requisito"><span className="cell-primary">{label}</span>
+                                      {item.segment_condition_id && item.segment_status === "PLANNED" && <span className="cell-secondary">Al aprobarlo se cumple la condición de habilitación del segmento {item.segment_sequence_no}.</span>}</td>
                                     <td data-label="Estado"><Badge>{item.status}</Badge></td>
                                     <td data-label="Archivo actual">
                                       {latest ? <>

@@ -1,13 +1,16 @@
 // CR-05 (Evaluación 4) presentation and validation helpers for rotational
 // placements. Pure functions so they can be unit-tested without rendering.
 import type {
+  ChecklistItem,
   HoursReviewReason,
   HoursSummary,
   PlacementDossier,
+  PlacementSegment,
   SegmentGate,
   SegmentInput,
   SegmentModality,
   SegmentStatus,
+  SegmentUpdate,
   WorkRecognition,
 } from "./api";
 
@@ -180,4 +183,85 @@ export function buildHoursReview(draft: HoursReviewDraft, reported: number | str
 export function todayIso(now: Date = new Date()): string {
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
+}
+
+// ------------------------------------------------- 0019: segment adjustments
+
+export type SegmentEditDraft = {
+  unit: string;
+  workplace_supervisor_id: string;
+  modality: string;
+  responsibilities: string;
+  expected_hours: string;
+  reason_shared: string;
+};
+
+export function segmentEditDraft(segment: PlacementSegment): SegmentEditDraft {
+  return {
+    unit: segment.unit ?? "",
+    workplace_supervisor_id: segment.workplace_supervisor_id ? String(segment.workplace_supervisor_id) : "",
+    modality: segment.modality ?? "",
+    responsibilities: segment.responsibilities ?? "",
+    expected_hours: segment.expected_hours === null || segment.expected_hours === undefined ? "" : String(numeric(segment.expected_hours)),
+    reason_shared: "",
+  };
+}
+
+/** Only the fields that changed are sent. An active segment never sends unit or
+ * supervisor: changing them is a transfer (CR-05-BR-05). */
+export function buildSegmentUpdate(segment: PlacementSegment, draft: SegmentEditDraft):
+  { value: SegmentUpdate } | { error: string } {
+  const value: SegmentUpdate = { reason_shared: draft.reason_shared.trim() };
+  if (!value.reason_shared) return { error: "Indica el motivo visible del ajuste." };
+  if (segment.status === "PLANNED") {
+    if (!draft.unit.trim()) return { error: "Indica la unidad o área del segmento." };
+    if (draft.unit.trim() !== (segment.unit ?? "")) value.unit = draft.unit.trim();
+    const supervisor = Number(draft.workplace_supervisor_id);
+    if (!Number.isInteger(supervisor) || supervisor <= 0) return { error: "Selecciona el supervisor laboral del segmento." };
+    if (supervisor !== segment.workplace_supervisor_id) value.workplace_supervisor_id = supervisor;
+  }
+  if (draft.modality && draft.modality !== (segment.modality ?? "")) {
+    if (!(draft.modality in MODALITY_LABELS)) return { error: "Selecciona la modalidad." };
+    value.modality = draft.modality as SegmentModality;
+  }
+  if (!draft.responsibilities.trim()) return { error: "Describe las responsabilidades del segmento." };
+  if (draft.responsibilities.trim() !== (segment.responsibilities ?? "").trim()) value.responsibilities = draft.responsibilities.trim();
+  if (draft.expected_hours.trim()) {
+    const expected = Number(draft.expected_hours);
+    if (!Number.isFinite(expected) || expected <= 0) return { error: "Las horas esperadas deben ser mayores que cero." };
+    if (segment.expected_hours === null || expected !== numeric(segment.expected_hours)) value.expected_hours = expected;
+  }
+  if (Object.keys(value).length === 1) return { error: "No hay cambios que guardar." };
+  return { value };
+}
+
+export const SEGMENT_FIELD_LABELS: Record<string, string> = {
+  unit: "Unidad",
+  workplace_supervisor: "Supervisor laboral",
+  workplace_supervisor_id: "Supervisor laboral",
+  modality: "Modalidad",
+  responsibilities: "Responsabilidades",
+  expected_hours: "Horas esperadas",
+};
+
+export function revisionValue(field: string, value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "sin dato";
+  if (field === "modality") return MODALITY_LABELS[value as SegmentModality] ?? String(value);
+  if (field === "expected_hours") return `${formatHours(value)} h`;
+  return String(value);
+}
+
+export const EVIDENCE_STATUS_LABELS: Record<string, string> = {
+  REQUIRED: "Documento por entregar",
+  SUBMITTED: "Documento en revisión",
+  APPROVED: "Documento aprobado",
+  REJECTED: "Documento con corrección",
+};
+
+/** Requirement label for a checklist item; segment evidence names its segment. */
+export function requirementLabel(item: ChecklistItem, format: (value: string) => string): string {
+  if (item.segment_sequence_no && item.condition_kind) {
+    return `${format(item.condition_kind)} · segmento ${item.segment_sequence_no}`;
+  }
+  return format(item.kind);
 }

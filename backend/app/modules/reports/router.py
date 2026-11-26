@@ -29,10 +29,12 @@ def operational_reports(
 def rotation_reports(
     program_id: int | None = Query(default=None, ge=1),
     organization_id: int | None = Query(default=None, ge=1),
+    placement_state: str | None = Query(default=None, min_length=1, max_length=80),
     subject_id: int = Depends(requires("reports:read")),
 ) -> dict:
     """CR-05 aggregates: rotations, transfers, interruptions, accepted hours,
     missing segment evaluations and pending combined reviews."""
     with db.read() as cur:
         subj = authz.subject(cur, subject_id)
-        return service.rotations(cur, subj, program_id=program_id, organization_id=organization_id)
+        return service.rotations(cur, subj, program_id=program_id, organization_id=organization_id,
+                                 placement_state=placement_state)

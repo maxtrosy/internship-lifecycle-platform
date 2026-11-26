@@ -105,6 +105,32 @@ export type SegmentCondition = {
   confirmed_at: string | null;
   reference: string | null;
   confirmed_by: string | null;
+  // Documentary evidence through the document module (migration 0019).
+  evidence_item_id?: number | null;
+  evidence_status?: "REQUIRED" | "SUBMITTED" | "APPROVED" | "REJECTED" | null;
+  evidence_review_reason?: string | null;
+};
+
+export type SegmentEditableField = "unit" | "workplace_supervisor_id" | "modality" | "responsibilities" | "expected_hours";
+
+export type SegmentRevision = {
+  id: number;
+  segment_status: "PLANNED" | "ACTIVE";
+  changed_fields: SegmentEditableField[];
+  previous: Record<string, string | number | null>;
+  new: Record<string, string | number | null>;
+  reason_shared: string;
+  changed_at: string;
+  actor_name: string | null;
+};
+
+export type SegmentUpdate = {
+  unit?: string;
+  workplace_supervisor_id?: number;
+  modality?: SegmentModality;
+  responsibilities?: string;
+  expected_hours?: number | null;
+  reason_shared: string;
 };
 
 export type PlacementSegment = {
@@ -134,6 +160,8 @@ export type PlacementSegment = {
   status_history: { from_status: SegmentStatus | null; to_status: SegmentStatus; changed_at: string; actor_name: string | null }[];
   // Append-only period changes (migration 0018); only the shared reason is stored.
   schedule_changes?: SegmentScheduleChange[];
+  // Append-only attribute revisions (migration 0019); only changed fields are listed.
+  revisions?: SegmentRevision[];
 };
 
 export type SegmentScheduleChange = {
@@ -760,7 +788,7 @@ export function sendPlacementMessage(pid: number, audience: "JOINT" | "ACADEMIC"
   });
 }
 
-export function getRotationReports(filters: { program_id?: number; organization_id?: number } = {}): Promise<RotationReport> {
+export function getRotationReports(filters: { program_id?: number; organization_id?: number; placement_state?: string } = {}): Promise<RotationReport> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined) params.set(key, String(value));
@@ -795,7 +823,20 @@ export function rejectAcademic(pid: number, reason: string): Promise<void> {
   });
 }
 
-export type ChecklistItem = { id: number; kind: string; mandatory: boolean; status: string };
+export type ChecklistItem = {
+  id: number;
+  kind: string;
+  mandatory: boolean;
+  status: string;
+  current_review_reason?: string | null;
+  // Evidence for a segment enablement condition (migration 0019).
+  segment_condition_id?: number | null;
+  condition_kind?: string | null;
+  condition_status?: "REQUIRED" | "SATISFIED" | null;
+  segment_id?: number | null;
+  segment_sequence_no?: number | null;
+  segment_status?: SegmentStatus | null;
+};
 
 export type DocumentSubmission = {
   id: number;
@@ -956,6 +997,12 @@ export function reschedulePlacementSegment(pid: number, sid: number, body: {
   reason_shared: string;
 }): Promise<{ segment_id: number; start_date: string; end_date: string; change: "EXTENDED" | "SHORTENED" | "MOVED" }> {
   return request(`/placements/${pid}/segments/${sid}/schedule`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updatePlacementSegment(pid: number, sid: number, body: SegmentUpdate): Promise<{
+  segment_id: number; changed_fields: SegmentEditableField[]; revision_id: number;
+}> {
+  return request(`/placements/${pid}/segments/${sid}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 export function transferPlacementSegment(pid: number, sid: number, body: {

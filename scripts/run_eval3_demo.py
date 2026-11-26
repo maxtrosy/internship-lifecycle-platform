@@ -184,8 +184,8 @@ def main() -> int:
                     table: conn.execute(f"SELECT count(*) AS n FROM {table}").fetchone()["n"]
                     for table in ("user_account", "host_org", "opportunity", "application", "placement")
                 }
-            if revision != "0018":  # CR-05 schema head (Evaluación 4)
-                raise RuntimeError("The temporary database did not reach migration revision 0018.")
+            if revision != "0019":  # CR-05 schema head (Evaluación 4)
+                raise RuntimeError("The temporary database did not reach migration revision 0019.")
 
             python_path = [str(backend)]
             if child_env.get("PYTHONPATH"):

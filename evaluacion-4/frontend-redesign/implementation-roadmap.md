@@ -6,6 +6,35 @@
 > 3. `npx vite build`
 > 4. Si cambian flujos o selectores, también `python scripts/run_isolated_e2e.py`.
 
+## 0000. Séptima sesión (2026-11-24): producto final, sin generar el ZIP
+
+**Hecho y probado** (evidencia: `evaluacion-4/evidence/test-results-2026-11-24.md`)
+- **Ajustes de datos de segmento** (migración `0019`, ADR-015).
+  - Revisiones append-only con reglas por estado: la organización nunca se edita, y la unidad o el supervisor de un segmento activo solo cambian por transferencia.
+  - El trigger exige la revisión en la misma transacción.
+  - En el expediente: acción «Ajustar datos» e historial «Ajustes de datos».
+- **Evidencia documental de condiciones** reutilizando el módulo documental (ítem opcional enlazado a la condición).
+  - Aprobarla cumple la condición; revocarla la reabre.
+  - Etiquetas «Seguro · segmento N» en «Mis documentos» y «Revisión documental».
+- **Reporte de rotaciones:** filtro por estado de práctica y prueba de regresión de filtros y alcance por rol.
+- **Fixture poblada** con fechas relativas al día de generación.
+- **Secretos JWT publicados** rechazados fuera de `development` y `demo`.
+- **Verificaciones externas:** guiones y listas de control en `docs/operacion/verificaciones-externas-pendientes.md`.
+
+**Resueltas** (de la lista de la sexta sesión): editar datos de segmentos y adjuntar archivos a las condiciones de segmento.
+
+**Siguen como limitación**
+- El reporte se calcula en cada petición.
+- No hubo revisión con lector de pantalla real ni pruebas con usuarios.
+- No se auditaron dependencias contra bases externas.
+
+**Pendiente de decisión institucional:** OPEN-CR05-01 a 06, sin cambios.
+
+**Cómo retomar**
+1. Ejecutar las verificaciones del encabezado y `--populated`.
+2. Solo con autorización expresa, generar el paquete. **`evaluacion-4.zip` no se tocó en esta sesión y sigue en el estado del 2026-11-22 (0017).**
+3. Sin `git add`, commits ni push.
+
 ## 000. Sexta sesión (2026-11-23/24): auditoría final, sin regenerar el ZIP
 
 **Hecho y probado** (evidencia: `evaluacion-4/evidence/test-results-2026-11-23.md`)

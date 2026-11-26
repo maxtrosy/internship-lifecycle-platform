@@ -17,17 +17,17 @@ Este documento separa lo **implementado** de lo **diseñado sin implementar**, y
 ## Limitaciones técnicas
 
 - No hay carga de archivos por segmento: las condiciones documentales se confirman con una referencia textual verificada por `LEGAL_REVIEWER`.
-- Las fechas de un segmento abierto pueden cambiar con historial (0018, ADR-014). Organización, unidad, supervisor, modalidad, responsabilidades y horas esperadas siguen siendo inmutables: cambiarlos exige una transferencia, o cancelar y planificar.
+- Las fechas de un segmento abierto pueden cambiar con historial (0018, ADR-014). Desde 0019 (ADR-015) la unidad y el supervisor de un segmento planificado, y la modalidad, las responsabilidades y las horas esperadas de uno planificado o activo, se ajustan con historial. La organización nunca se edita. La unidad o el supervisor de un segmento activo solo cambian con una transferencia.
 - Los avisos de segmento (`SEGMENT_CHANGED`, ADR-013) cubren activación, cierre, terminación, transferencia y cambio de periodo. No hay aviso al planificar un segmento, ni al supervisor anterior tras una transferencia (no tiene acceso, BR-06). Tampoco hay envío por correo: los avisos viven en la bandeja de la aplicación, como en E3.
 - Los reportes de CR-05 (`GET /reports/rotations`) son agregados por alcance y se calculan en cada petición, lo que es suficiente para el volumen de un semestre (ADR-013). El filtro de organización incluye la organización de cada segmento. No listan prácticas individuales ni permiten exportar. Un listado nominal para actuar sobre consolidaciones pendientes requeriría decidir qué datos personales puede ver cada rol en un reporte.
 - Las horas de E3 migradas quedan pendientes de revisión. En una instalación real, una autoridad debería revisarlas antes del cierre.
 - La migración 0016 es irreversible (`downgrade` lanza error), porque revertirla destruiría historia. El procedimiento exige respaldo previo.
 - Sin RLS en PostgreSQL: el aislamiento depende de la capa `authz` y de los filtros por segmento, verificados con pruebas.
 - El E2E de Playwright recorre los flujos de E3 con la configuración de CR-05. `frontend/e2e/rotation.spec.ts` (modo `--populated`) recorre en el navegador una transferencia completa: revisión de horas, transferencia, condición jurídica, activación, acceso del supervisor anterior y del nuevo, privacidad del motivo, avisos y reporte. La planificación de una rotación sin transferencia y la terminación anticipada se prueban a nivel de servicio y HTTP, no en el navegador.
-- El escenario del navegador usa las fechas de la fixture (1 sep 2026 – 15 ene 2027). Si se ejecuta después del 15 ene 2027, la fecha de efecto de la transferencia queda fuera del segmento y el spec falla por la regla `TRANSFER_EFFECTIVE_DATE_INVALID`, no por un defecto.
+- La fixture poblada calcula sus periodos a partir del día en que se genera (pasado, actual y futuro), así que el escenario del navegador no caduca (corregido el 2026-11-24).
 
 ## Real frente a simulado
 
-- **Real (ejecutado):** pruebas backend contra PostgreSQL temporal (pgserver), migraciones 0001→0018 y 0010→0018 en PostgreSQL temporal, pruebas unitarias del frontend (vitest), build de producción del frontend y E2E aislado con Chromium.
+- **Real (ejecutado):** pruebas backend contra PostgreSQL temporal (pgserver), migraciones 0001→0019 y 0010→0019 en PostgreSQL temporal, pruebas unitarias del frontend (vitest), build de producción del frontend y E2E aislado con Chromium.
 - **Simulado/sintético:** todas las personas, organizaciones, políticas, horas y referencias documentales de pruebas y demo.
 - **No ejecutado:** ningún despliegue en Neon, Render o Docker. Neon y Docker no se modificaron.

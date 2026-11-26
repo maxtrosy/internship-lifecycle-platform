@@ -88,8 +88,38 @@ test("[@populated] CR-05: la transferencia conserva horas aceptadas y retira el 
   const hasConditions = await activate.isDisabled();
   if (hasConditions) {
     await expect(planned.locator(".disabled-reason")).toContainText("Para activar falta confirmar");
-    // 3. Legal review confirms the destination's documentary condition.
+    // 3. Documentary evidence (0019): the student uploads a real file for the destination's
+    // condition through the document module and legal review approves it.
+    await login(page, process.env.E2E_ROTATION_USER!);
+    await page.locator(".sidebar-nav").getByRole("link", { name: "Mis documentos", exact: true }).click();
+    const placementDocs = page.locator(".document-placement").filter({ hasText: scenarioTitle });
+    const evidenceRow = placementDocs.locator("tr").filter({ hasText: "segmento 2" }).first();
+    await expect(evidenceRow).toContainText("Habilita el segmento 2");
+    await evidenceRow.locator('input[type="file"]').setInputFiles({
+      name: "poliza-segmento-2.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7 evidencia sintética E2E"),
+    });
+    await evidenceRow.getByRole("button", { name: "Enviar" }).click();
+    await expect(page.getByText("Documento enviado como versión 1.")).toBeVisible();
+
     await login(page, "legal1");
+    await page.locator(".sidebar-nav").getByRole("link", { name: "Revisión documental", exact: true }).click();
+    const card = page.locator(".document-review-card").filter({ hasText: scenarioTitle }).first();
+    await card.getByRole("button", { name: "Ver documentos" }).click();
+    const reviewRow = card.locator("tr").filter({ hasText: "segmento 2" }).first();
+    await expect(reviewRow).toContainText("Al aprobarlo se cumple la condición de habilitación del segmento 2");
+    await reviewRow.getByRole("textbox").fill("Póliza sintética vigente para el segmento 2.");
+    await reviewRow.getByRole("button", { name: "Aprobar" }).click();
+    await page.getByRole("button", { name: "Aprobar documento" }).click();
+    // On an active placement an approved document stays listed so it can be revoked (E3 rule).
+    await expect(reviewRow.getByRole("button", { name: "Revocar aprobación" })).toBeVisible();
+    const afterEvidence = (await api(page, dossierPath)).body;
+    const destinationConditions = afterEvidence.segments[1].conditions as { kind: string; status: string; reference: string | null; evidence_status: string | null }[];
+    const documentCondition = destinationConditions.find((c) => c.evidence_status !== null && c.evidence_status !== undefined)!;
+    expect(documentCondition.status).toBe("SATISFIED");
+    expect(documentCondition.evidence_status).toBe("APPROVED");
+    expect(documentCondition.reference).toContain("poliza-segmento-2.pdf");
+
+    // Any remaining non-documentary condition is still confirmed by reference.
     const legalDetail = await openScenarioDossier(page);
     const legalPlanned = legalDetail.getByRole("list", { name: "Segmentos de la práctica" }).locator(".segment-planned");
     await legalPlanned.locator("summary").click();
@@ -117,6 +147,19 @@ test("[@populated] CR-05: la transferencia conserva horas aceptadas y retira el 
   await activeSegment.locator("summary").click();
   await expect(activeSegment.getByRole("list", { name: /Cambios de periodo/ })).toContainText("Extensión sintética acordada.");
 
+  // 4b. Administrative adjustment (0019): an active segment keeps its organization, unit and
+  // supervisor (those need a transfer) but its modality and expected hours can change with history.
+  await activeSegment.getByRole("button", { name: "Ajustar datos" }).click();
+  const editDrawer = page.getByRole("dialog", { name: "Ajustar datos del segmento" });
+  await expect(editDrawer).toContainText("Para cambiarlos registra una transferencia.");
+  await expect(editDrawer.getByLabel("Unidad o área")).toHaveCount(0);
+  await editDrawer.getByLabel("Modalidad").selectOption("REMOTE");
+  await editDrawer.getByLabel("Horas esperadas").fill("120");
+  await editDrawer.getByLabel("Motivo visible para las personas relacionadas").fill("Modalidad remota acordada (sintético).");
+  await editDrawer.getByRole("button", { name: "Guardar ajuste" }).click();
+  await expect(page.getByText("Datos del segmento actualizados", { exact: false })).toBeVisible();
+  await expect(activeSegment.getByRole("list", { name: /Ajustes de datos/ })).toContainText("Modalidad remota acordada (sintético).");
+
   // 4. Internal roles see the confidential reason. (The experiential coordinator does not read
   // hours under the E3 rules, so the hours check runs as the reviewer and the student below.)
   const afterTransfer = (await api(page, dossierPath)).body;
@@ -127,6 +170,9 @@ test("[@populated] CR-05: la transferencia conserva horas aceptadas y retira el 
   expect(afterTransfer.segments[1].schedule_changes).toHaveLength(1);
   expect(afterTransfer.segments[1].schedule_changes[0].from_end_date).toBe(isoInDays(30));
   expect(afterTransfer.transfers[0].reason_internal).toBe("Nota interna sintética de la transferencia.");
+  expect(afterTransfer.segments[1].modality).toBe("REMOTE");
+  expect(afterTransfer.segments[1].revisions).toHaveLength(1);
+  expect(afterTransfer.segments[1].revisions[0].changed_fields).toEqual(["modality", "expected_hours"]);
 
   // 5. The previous supervisor has no automatic access (BR-06); the new one sees only their segment.
   await login(page, process.env.E2E_ROTATION_ORIGIN_SUPERVISOR!);

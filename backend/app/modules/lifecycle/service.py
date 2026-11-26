@@ -646,6 +646,14 @@ def submit_document(ctx: CommandContext, pid: int, item_id: int, filename: str,
         raise BusinessError("DOCUMENT_NOT_UPLOADABLE", it["kind"])
     if it["status"] not in ("REQUIRED", "REJECTED"):
         raise BusinessError("INVALID_TRANSITION", it["status"])
+    if it.get("segment_condition_id") is not None:
+        # Evidence for a segment condition is accepted only while that segment is planned.
+        segment_status = ctx.execute(
+            """SELECT s.status FROM placement_segment_condition c JOIN placement_segment s ON s.id=c.segment_id
+               WHERE c.id=%s""", (it["segment_condition_id"],),
+        ).fetchone()["status"]
+        if segment_status != "PLANNED":
+            raise BusinessError("SEGMENT_EVIDENCE_CLOSED", segment_status)
     safe_name, normalized_type = _safe_upload(filename, content_type, content)
     revision = ctx.execute(
         "SELECT coalesce(max(revision),0)+1 AS revision FROM document_submission WHERE checklist_item_id=%s",
@@ -673,10 +681,24 @@ def submit_document(ctx: CommandContext, pid: int, item_id: int, filename: str,
 
 def list_checklist(cur, subj: dict, pid: int) -> list[dict]:
     authz.authorize(cur, subj, "placement:read", pid)
-    return cur.execute(
-        "SELECT id, kind, mandatory, status FROM checklist_item WHERE placement_id=%s ORDER BY id",
+    return _checklist_rows(cur, subj, pid)
+
+
+def _checklist_rows(cur, subj: dict, pid: int) -> list[dict]:
+    # Segment evidence items (0019) name their segment and condition so the UI can
+    # label them; segments the viewer cannot see (CR-05-BR-07) are left out.
+    rows = cur.execute(
+        """SELECT ci.id, ci.kind, ci.mandatory, ci.status, ci.current_review_reason,
+                  c.id AS segment_condition_id, c.kind AS condition_kind, c.status AS condition_status,
+                  s.id AS segment_id, s.sequence_no AS segment_sequence_no, s.status AS segment_status
+           FROM checklist_item ci
+           LEFT JOIN placement_segment_condition c ON c.id=ci.segment_condition_id
+           LEFT JOIN placement_segment s ON s.id=c.segment_id
+           WHERE ci.placement_id=%s ORDER BY ci.id""",
         (pid,),
     ).fetchall()
+    visible = segments.visible_segment_ids(cur, subj, pid)
+    return [row for row in rows if row["segment_id"] is None or visible is None or row["segment_id"] in visible]
 
 
 def list_submissions(cur, subj: dict, pid: int, item_id: int) -> list[dict]:
@@ -970,10 +992,7 @@ def list_incidents(cur, subj: dict, pid: int) -> list[dict]:
 def activation_status(cur, subj: dict, pid: int) -> dict:
     authz.authorize(cur, subj, "placement:read", pid)
     p = cur.execute("SELECT * FROM placement WHERE id=%s", (pid,)).fetchone()
-    items = cur.execute(
-        "SELECT id, kind, mandatory, status FROM checklist_item WHERE placement_id=%s ORDER BY id",
-        (pid,),
-    ).fetchall()
+    items = _checklist_rows(cur, subj, pid)
     unmet = [f"{r['kind']}={r['status']}" for r in items if r["mandatory"] and r["status"] != "APPROVED"]
     row = cur.execute(
         "SELECT activation_noncompliant FROM v_placement_activation_compliance WHERE placement_id=%s",
@@ -994,7 +1013,9 @@ def list_documents_pending(cur, subj: dict) -> list[dict]:
     if not any(r["role"] == "LEGAL_REVIEWER" for r in subj["roles"]):
         raise Forbidden("only legal reviewers may list pending documents")
     return cur.execute(
-        """SELECT DISTINCT pl.id, pl.state, u.display_name, p.code AS program_code, o.title AS opportunity_title
+        """SELECT pl.id, pl.state, u.display_name, p.code AS program_code, o.title AS opportunity_title,
+                  count(*) FILTER (WHERE ci.segment_condition_id IS NOT NULL AND ci.status = 'SUBMITTED')
+                    AS segment_evidence_submitted
            FROM checklist_item ci JOIN placement pl ON pl.id = ci.placement_id
            JOIN application a ON a.id = pl.application_id
            JOIN user_account u ON u.id = a.student_id
@@ -1003,6 +1024,7 @@ def list_documents_pending(cur, subj: dict) -> list[dict]:
            JOIN opportunity o ON o.id = a.opportunity_id
            WHERE left(ci.kind,4) = 'DOC_' AND
              (ci.status = 'SUBMITTED' OR (pl.state = 'ACTIVE' AND ci.status = 'APPROVED'))
+           GROUP BY pl.id, pl.state, u.display_name, p.code, o.title
            ORDER BY pl.id""",
     ).fetchall()
 
@@ -1062,6 +1084,8 @@ def review_document(ctx: CommandContext, pid: int, item_id: int, decision: str, 
     audit.write(ctx.cur, action, "checklist_item", item_id,
                  {"status": status}, {"status": decision, "placement_state": p["state"],
                   "reason": clean_reason, "submission_id": it["current_submission_id"]})
+    if it.get("segment_condition_id") is not None:
+        segments.sync_condition_from_review(ctx, pid, it, decision, subj)
 
 
 def activate(ctx: CommandContext, pid: int, naive: bool = False, pause: float = 0.0) -> None:

@@ -718,3 +718,284 @@ def test_segment_schedule_changes_follow_explicit_rules_and_keep_history(world):
     finally:
         for client in clients.values():
             client.close()
+
+
+# ------------------------------------------------ 0019: attribute revisions
+
+def test_segment_attribute_changes_are_adjustments_not_transfers(world):
+    """CR-05 §3.1: an administrative adjustment keeps the segment and its records,
+    leaves an append-only revision, and never replaces a transfer."""
+    env, U, pid = world
+    seg1 = segments_of(env, pid)[0]
+    sid = seg1["id"]
+    cmd(U["s1"], lc.record_hours, pid, 8, work_date=TODAY, description="Trabajo sintético")
+    entries_before = entry_ids(env, pid, sid)
+
+    def update(user, segment_id, reason="Ajuste administrativo sintético", **changes):
+        return cmd(U[user], sg.update_segment, pid, segment_id, changes, reason)
+
+    for user in ("ws_alfa", "s1", "f1", "legal1"):
+        with pytest.raises((Forbidden, NotFound)):
+            update(user, sid, modality="REMOTE")
+    # Explicit rules for an active segment: organization, unit and supervisor need a transfer.
+    for changes, code in (({"unit": "Otra unidad"}, "SEGMENT_CHANGE_REQUIRES_TRANSFER"),
+                          ({"workplace_supervisor_id": U["ws_alfa2"]}, "SEGMENT_CHANGE_REQUIRES_TRANSFER"),
+                          ({"host_org_id": 2}, "SEGMENT_ORGANIZATION_LOCKED"),
+                          ({"end_date": TODAY + dt.timedelta(days=90)}, "SEGMENT_DATES_USE_SCHEDULE"),
+                          ({"responsibilities": seg1["responsibilities"]}, "SEGMENT_UNCHANGED"),
+                          ({"modality": "PRESENCIAL"}, "SEGMENT_MODALITY_INVALID"),
+                          ({"expected_hours": -5}, "SEGMENT_EXPECTED_HOURS_INVALID")):
+        with pytest.raises(BusinessError) as exc:
+            update("ec1", sid, **changes)
+        assert _code(exc) == code, changes
+    with pytest.raises(BusinessError) as exc:
+        update("ec1", sid, reason="  ", modality="REMOTE")
+    assert _code(exc) == "SEGMENT_FIELD_REQUIRED"
+
+    new_modality = "REMOTE" if seg1["modality"] != "REMOTE" else "ONSITE"
+    result = update("ec1", sid, modality=new_modality, expected_hours=180,
+                    responsibilities="Responsabilidades ajustadas (sintético)",
+                    reason="Cambio acordado con la organización (sintético)")
+    assert set(result["changed_fields"]) == {"modality", "expected_hours", "responsibilities"}
+    row = segments_of(env, pid)[0]
+    assert (row["id"], row["status"], row["host_org_id"], row["workplace_supervisor_id"]) == (
+        sid, "ACTIVE", 1, U["ws_alfa"])
+    assert row["modality"] == new_modality and float(row["expected_hours"]) == 180.0
+    # Hours already recorded stay attached to the same segment, untouched.
+    assert entry_ids(env, pid, sid) == entries_before
+
+    # A planned segment may change unit and supervisor, but only within its organization.
+    planned = cmd(U["ec1"], sg.create_segment, pid,
+                  seg_data(1, U["ws_alfa2"], start=TODAY + dt.timedelta(days=70)))["segment_id"]
+    with pytest.raises(BusinessError) as exc:
+        update("ec1", planned, workplace_supervisor_id=U["ws_beta"])
+    assert _code(exc) == "SEGMENT_SUPERVISOR_INVALID"
+    changed = update("ec1", planned, unit="Unidad de destino ajustada", workplace_supervisor_id=U["ws_alfa"],
+                     reason="Cambio de tutor antes del inicio (sintético)")
+    assert set(changed["changed_fields"]) == {"unit", "workplace_supervisor_id"}
+
+    # History: append-only, shared reason only, supervisor names instead of ids.
+    listed = {s["id"]: s for s in read(U["s1"], sg.list_segments, pid)}
+    revision = listed[planned]["revisions"][0]
+    assert revision["previous"] == {"unit": "Unidad sintética", "workplace_supervisor": "Workplace Sup Alfa 2"}
+    assert revision["new"] == {"unit": "Unidad de destino ajustada", "workplace_supervisor": "Workplace Sup Alfa"}
+    assert revision["reason_shared"] == "Cambio de tutor antes del inicio (sintético)"
+    assert listed[sid]["revisions"][0]["segment_status"] == "ACTIVE"
+    with pytest.raises(psycopg.errors.RaiseException):
+        env.admin.execute("UPDATE placement_segment_revision SET reason_shared='x'")
+    with pytest.raises(psycopg.errors.RaiseException, match="recorded revision"):
+        env.admin.execute("UPDATE placement_segment SET responsibilities='x' WHERE id=%s", (sid,))
+    with pytest.raises(psycopg.errors.RaiseException, match="IMMUTABLE"):
+        env.admin.execute("UPDATE placement_segment SET host_org_id=2 WHERE id=%s", (planned,))
+
+    # Audit names the fields, never the free text; the student receives a notice.
+    payloads = [r["after"] for r in env.admin.execute(
+        "SELECT after_state AS after FROM audit_event WHERE subject_id=%s AND action='segment.updated' ORDER BY id",
+        (pid,)).fetchall()]
+    assert len(payloads) == 2 and "ajustadas" not in str(payloads)
+    assert env.admin.execute(
+        """SELECT count(*)::int AS n FROM user_notification WHERE recipient_id=%s AND placement_id=%s
+           AND category='SEGMENT_CHANGED'""", (U["s1"], pid)).fetchone()["n"] >= 1
+
+    clients = {name: _client(name) for name in ("ec1", "ws_alfa")}
+    try:
+        path = f"/placements/{pid}/segments/{planned}"
+        body = {"responsibilities": "Responsabilidades HTTP (sintético)", "reason_shared": "Ajuste HTTP"}
+        assert clients["ws_alfa"].patch(path, json=body, headers={"Origin": ORIGIN}).status_code in (403, 404)
+        unknown = clients["ec1"].patch(path, json={**body, "status": "ACTIVE"}, headers={"Origin": ORIGIN})
+        assert unknown.status_code == 422
+        ok = clients["ec1"].patch(path, json=body, headers={"Origin": ORIGIN})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["changed_fields"] == ["responsibilities"]
+        locked = clients["ec1"].patch(f"/placements/{pid}/segments/{sid}",
+                                      json={"unit": "Otra", "reason_shared": "x"}, headers={"Origin": ORIGIN})
+        assert locked.status_code == 409 and locked.json()["error"] == "SEGMENT_CHANGE_REQUIRES_TRANSFER"
+    finally:
+        for client in clients.values():
+            client.close()
+
+
+# ------------------------------------------------ 0019: documentary evidence
+
+PDF = b"%PDF-1.7 synthetic segment evidence"
+
+
+def _evidence_item(env, sid):
+    return env.admin.execute(
+        """SELECT ci.* FROM checklist_item ci JOIN placement_segment_condition c ON c.id=ci.segment_condition_id
+           WHERE c.segment_id=%s""", (sid,)).fetchone()
+
+
+def _condition(env, sid):
+    return env.admin.execute(
+        "SELECT * FROM placement_segment_condition WHERE segment_id=%s AND kind='DOC_INSURANCE'", (sid,)).fetchone()
+
+
+def test_segment_condition_evidence_reuses_the_document_module(world):
+    """CR-05 §3.2: real documents satisfy a segment condition through upload,
+    revision and review of the existing document module; ownership and scope
+    are enforced and placement-level E3 gates are unaffected."""
+    env, U, pid = world
+    seg1 = segments_of(env, pid)[0]["id"]
+    seg2 = cmd(U["ec1"], sg.create_segment, pid, seg_data(2, U["ws_beta"]))["segment_id"]
+    item = _evidence_item(env, seg2)
+    assert (item["kind"], item["mandatory"], item["status"]) == ("DOC_SEG2_INSURANCE", False, "REQUIRED")
+    assert item["segment_condition_id"] == _condition(env, seg2)["id"]
+    # The checklist names the segment; the previous supervisor does not see the other segment's item.
+    listed = {r["id"]: r for r in read(U["s1"], lc.list_checklist, pid)}
+    assert listed[item["id"]]["segment_sequence_no"] == 2
+    assert listed[item["id"]]["condition_kind"] == "DOC_INSURANCE"
+    assert item["id"] not in {r["id"] for r in read(U["ws_alfa"], lc.list_checklist, pid)}
+
+    # Ownership: another student, or an item from another placement, is refused.
+    other_pid = make_active(env, U, "s2", make_opportunity(env, 1, U["P"]["ING-SIS"], "Otra oportunidad"))
+    with pytest.raises((Forbidden, NotFound)):
+        cmd(U["s2"], lc.submit_document, pid, item["id"], "poliza.pdf", "application/pdf", PDF)
+    with pytest.raises(NotFound):
+        cmd(U["s2"], lc.submit_document, other_pid, item["id"], "poliza.pdf", "application/pdf", PDF)
+    with pytest.raises((Forbidden, NotFound)):
+        cmd(U["ec1"], lc.submit_document, pid, item["id"], "poliza.pdf", "application/pdf", PDF)
+
+    cmd(U["s1"], lc.submit_document, pid, item["id"], "poliza-v1.pdf", "application/pdf", PDF)
+    assert _condition(env, seg2)["status"] == "REQUIRED"  # submission alone satisfies nothing
+    with pytest.raises((Forbidden, NotFound)):
+        cmd(U["ec1"], lc.review_document, pid, item["id"], "APPROVED", "No es revisor")
+    cmd(U["legal1"], lc.review_document, pid, item["id"], "REJECTED", "Falta la vigencia de la póliza")
+    assert _condition(env, seg2)["status"] == "REQUIRED"
+    assert read(U["s1"], sg.list_segments, pid)[1]["conditions"][0]["evidence_status"] in {"REJECTED", None}
+
+    cmd(U["s1"], lc.submit_document, pid, item["id"], "poliza-v2.pdf", "application/pdf", PDF + b" v2")
+    cmd(U["legal1"], lc.review_document, pid, item["id"], "APPROVED", "Póliza vigente")
+    cond = _condition(env, seg2)
+    assert cond["status"] == "SATISFIED" and cond["confirmed_by"] == U["legal1"]
+    assert cond["reference"] == "Documento aprobado: poliza-v2.pdf (revisión 2)"
+    with db.read() as cur:
+        assert sg.segment_unmet_conditions(cur, seg2) == []
+    seg_view = next(s for s in read(U["s1"], sg.list_segments, pid) if s["id"] == seg2)
+    doc_cond = next(c for c in seg_view["conditions"] if c["kind"] == "DOC_INSURANCE")
+    assert (doc_cond["evidence_item_id"], doc_cond["evidence_status"]) == (item["id"], "APPROVED")
+
+    # Withdrawing the approval while the segment is planned reopens the condition.
+    cmd(U["legal1"], lc.review_document, pid, item["id"], "REJECTED", "La póliza fue anulada")
+    assert _condition(env, seg2)["status"] == "REQUIRED"
+    actions = [r["action"] for r in env.admin.execute(
+        "SELECT action FROM audit_event WHERE subject_id=%s AND action LIKE 'segment.condition_%%' ORDER BY id",
+        (pid,)).fetchall()]
+    assert actions == ["segment.condition_satisfied", "segment.condition_reopened"]
+    with pytest.raises(BusinessError) as exc:
+        cmd(U["ec1"], sg.activate_segment, pid, seg2)
+    assert _code(exc) in {"SEGMENT_CONDITIONS_UNMET", "SEGMENT_ALREADY_ACTIVE"}
+    cmd(U["s1"], lc.submit_document, pid, item["id"], "poliza-v3.pdf", "application/pdf", PDF + b" v3")
+    cmd(U["legal1"], lc.review_document, pid, item["id"], "APPROVED", "Póliza nueva vigente")
+    assert _condition(env, seg2)["status"] == "SATISFIED"
+
+    # A condition cannot be reopened by hand, only by rejecting its evidence.
+    with pytest.raises(psycopg.errors.RaiseException, match="IMMUTABLE"):
+        env.admin.execute(
+            """UPDATE placement_segment_condition SET status='REQUIRED', confirmed_by=NULL, confirmed_at=NULL,
+               reference=NULL WHERE id=%s""", (cond["id"],))
+
+    # Placement-level gates ignore the optional evidence item.
+    assert env.admin.execute("SELECT mandatory FROM checklist_item WHERE id=%s", (item["id"],)).fetchone()[
+        "mandatory"] is False
+    with pytest.raises(psycopg.errors.CheckViolation):
+        env.admin.execute("UPDATE checklist_item SET mandatory=true WHERE id=%s", (item["id"],))
+
+    # Once the segment is active the evidence is closed, and later reviews do not touch the condition.
+    cmd(U["ws_alfa"], lc.create_evaluation, pid, "FINAL", "Cierre de la rotación 1 (sintético).")
+    cmd(U["ec1"], sg.complete_segment, pid, seg1)
+    cmd(U["ec1"], sg.activate_segment, pid, seg2)
+    cmd(U["legal1"], lc.review_document, pid, item["id"], "REJECTED", "Revisión posterior (sintético)")
+    assert _condition(env, seg2)["status"] == "SATISFIED"
+    with pytest.raises(BusinessError) as exc:
+        cmd(U["s1"], lc.submit_document, pid, item["id"], "poliza-v4.pdf", "application/pdf", PDF)
+    assert _code(exc) == "SEGMENT_EVIDENCE_CLOSED"
+
+    # Downloads stay private and authenticated.
+    submission = env.admin.execute(
+        "SELECT id FROM document_submission WHERE checklist_item_id=%s ORDER BY revision LIMIT 1",
+        (item["id"],)).fetchone()["id"]
+    path = f"/placements/{pid}/items/{item['id']}/submissions/{submission}/download"
+    anonymous = TestClient(app, base_url=ORIGIN)
+    clients = {name: _client(name) for name in ("s1", "s2", "hm_beta", "legal1")}
+    try:
+        assert anonymous.get(path).status_code == 401
+        assert clients["s2"].get(path).status_code in (403, 404)
+        assert clients["hm_beta"].get(path).status_code in (403, 404)
+        assert clients["legal1"].get(path).status_code == 200
+        own = clients["s1"].get(path)
+        assert own.status_code == 200 and own.content == PDF
+        pending = clients["legal1"].get("/placements/documents-pending")
+        assert pending.status_code == 200
+    finally:
+        anonymous.close()
+        for client in clients.values():
+            client.close()
+
+
+def test_rotation_report_filters_and_scope_regression(world):
+    """Every filter of /reports/rotations (program, organization including the
+    segment organization, placement state, combinations) and every role's scope."""
+    from tests.conftest import make_doc_pending
+    env, U, pid = world
+    seg1 = segments_of(env, pid)[0]["id"]
+    cmd(U["s1"], lc.record_hours, pid, 20)
+    accept_all(env, U, pid)
+    cmd(U["ec1"], sg.transfer, pid, seg1, effective_date=TODAY, reason_shared="Rotación sintética",
+        reason_internal="Nota interna sintética", prior_work_treatment="ACCEPTED_HOURS_RECOGNIZED",
+        destination=seg_data(2, U["ws_beta"]))
+    adm_pid = make_active(env, U, "s3", make_opportunity(env, 1, U["P"]["ADM"], "Oportunidad ADM"))
+    cmd(U["s3"], lc.record_hours, adm_pid, 5)
+    make_doc_pending(env, U, "s2", make_opportunity(env, 2, U["P"]["ING-SIS"], "Oportunidad Beta"))
+
+    def report(user, **filters):
+        return read(U[user], lambda cur, subj: reports.rotations(cur, subj, **filters))
+
+    def shape(r):
+        return (r["multi_segment_placements"], r["single_segment_placements"], r["transfers"],
+                float(r["hours"]["reported"]), float(r["hours"]["accepted"]), r["hours"]["pending_entries"])
+
+    everything = (1, 1, 1, 25.0, 20.0, 1)
+    assert shape(report("ec1")) == everything
+    assert shape(report("ec1", program_id=U["P"]["ING-SIS"])) == (1, 0, 1, 20.0, 20.0, 0)
+    assert shape(report("ec1", program_id=U["P"]["ADM"])) == (0, 1, 0, 5.0, 0.0, 1)
+    assert shape(report("ec1", organization_id=1)) == everything
+    assert shape(report("ec1", organization_id=2)) == (1, 0, 1, 20.0, 20.0, 0)  # via the segment
+    assert shape(report("ec1", placement_state="ACTIVE")) == everything
+    assert shape(report("ec1", placement_state="DOCUMENTATION_PENDING")) == (0, 0, 0, 0.0, 0.0, 0)
+    assert shape(report("ec1", organization_id=2, program_id=U["P"]["ADM"])) == (0, 0, 0, 0.0, 0.0, 0)
+    assert shape(report("ec1", organization_id=1, placement_state="ACTIVE",
+                        program_id=U["P"]["ADM"])) == (0, 1, 0, 5.0, 0.0, 1)
+    with pytest.raises(BusinessError) as exc:
+        report("ec1", placement_state="ACTIVE' OR '1'='1")
+    assert _code(exc) == "REPORT_FILTER_INVALID"
+
+    # Coordinator scope: own programs only, and an explicit foreign program is refused.
+    assert shape(report("pc_sys")) == (1, 0, 1, 20.0, 20.0, 0)
+    assert shape(report("dual1")) == (1, 0, 1, 20.0, 20.0, 0)
+    assert shape(report("pc_adm")) == (0, 1, 0, 5.0, 0.0, 1)
+    assert shape(report("pc_adm", organization_id=2)) == (0, 0, 0, 0.0, 0.0, 0)
+    for user, program in (("pc_sys", "ADM"), ("pc_adm", "ING-SIS")):
+        with pytest.raises(Forbidden):
+            report(user, program_id=U["P"][program])
+    for user in ("s1", "f1", "legal1", "ws_alfa", "hm_alfa"):
+        with pytest.raises((Forbidden, NotFound)):
+            report(user)
+
+    names = ("ec1", "pc_adm", "s1", "f1", "legal1", "ws_beta", "hm_beta")
+    clients = {name: _client(name) for name in names}
+    try:
+        ok = clients["ec1"].get("/reports/rotations", params={"organization_id": 2, "placement_state": "ACTIVE"})
+        assert ok.status_code == 200 and ok.json()["transfers"] == 1
+        for leak in ("Student", "Nota interna", "Rotación sintética", "Oportunidad", "Sup "):
+            assert leak not in ok.text
+        bad = clients["ec1"].get("/reports/rotations", params={"placement_state": "NOPE"})
+        assert bad.status_code in (400, 409, 422)
+        assert clients["ec1"].get("/reports/rotations", params={"organization_id": 0}).status_code == 422
+        assert clients["pc_adm"].get("/reports/rotations",
+                                     params={"program_id": U["P"]["ING-SIS"]}).status_code == 403
+        for name in ("s1", "f1", "legal1", "ws_beta", "hm_beta"):
+            assert clients[name].get("/reports/rotations").status_code == 403, name
+    finally:
+        for client in clients.values():
+            client.close()

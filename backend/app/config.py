@@ -29,6 +29,12 @@ class Settings:
     hours_reviewer_roles: tuple[str, ...] = ()
 
 
+PUBLISHED_DEV_SECRETS = frozenset({
+    "local-only-dh05-secret-change-for-any-shared-environment-2026",
+    "dh05-demo-only-secret-never-use-for-shared-environments-2026",
+})
+
+
 def get_settings() -> Settings:
     app_env = os.environ.get("APP_ENV", "development").strip().lower()
     dev_secret = "local-only-dh05-secret-change-for-any-shared-environment-2026"
@@ -37,6 +43,10 @@ def get_settings() -> Settings:
         raise RuntimeError("JWT_SECRET must be at least 32 bytes")
     if app_env == "production" and ("JWT_SECRET" not in os.environ or jwt_secret == dev_secret):
         raise RuntimeError("Production requires a JWT_SECRET supplied by the deployment environment")
+    # Secrets published in this repository (local default and the demo compose file)
+    # are refused in any other environment (staging, test servers, production).
+    if app_env not in {"development", "demo"} and jwt_secret in PUBLISHED_DEV_SECRETS:
+        raise RuntimeError("JWT_SECRET is a published development value; supply a private secret")
 
     origins_raw = os.environ.get(
         "APP_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"

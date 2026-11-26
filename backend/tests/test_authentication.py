@@ -179,3 +179,20 @@ def test_login_failure_limiter_caps_retries():
     limiter.failed("login", "alice", "127.0.0.1")
     with pytest.raises(TooManyRequests):
         limiter.check("login", "alice", "127.0.0.1")
+
+
+@pytest.mark.parametrize("app_env", ["staging", "test", "production"])
+@pytest.mark.parametrize("secret", [
+    "local-only-dh05-secret-change-for-any-shared-environment-2026",
+    "dh05-demo-only-secret-never-use-for-shared-environments-2026",
+])
+def test_published_development_secrets_are_refused_outside_development(monkeypatch, app_env, secret):
+    """Test/demo configuration must never become a shared environment's configuration."""
+    monkeypatch.setenv("APP_ENV", app_env)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("APP_ALLOWED_ORIGINS", ORIGIN)
+    monkeypatch.setenv("PASSWORD_RESET_DELIVERY", "disabled")
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        get_settings()
+    monkeypatch.setenv("JWT_SECRET", "a-private-secret-supplied-by-deployment-0123456789")
+    assert get_settings().app_env == app_env

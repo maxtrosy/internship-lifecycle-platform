@@ -4,14 +4,14 @@ import type { RotationReport } from "../api";
 import { RECOGNITION_LABELS, SEGMENT_STATUS_LABELS } from "../segments";
 import { Alert, Badge, BentoCard, EmptyState, Spinner } from "./ui";
 
-type Props = { programId?: number; organizationId?: number };
+type Props = { programId?: number; organizationId?: number; placementState?: string };
 
 const hoursFormat = new Intl.NumberFormat("es", { maximumFractionDigits: 1 });
 
 /** CR-05 aggregates (rotations, transfers, interruptions, accepted hours,
  * missing evaluations, pending consolidations). Same scope as the
  * operational report; it never shows names, reasons or individual entries. */
-export default function RotationReportSection({ programId, organizationId }: Props) {
+export default function RotationReportSection({ programId, organizationId, placementState }: Props) {
   const [data, setData] = useState<RotationReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -22,20 +22,21 @@ export default function RotationReportSection({ programId, organizationId }: Pro
     api.getRotationReports({
       ...(programId ? { program_id: programId } : {}),
       ...(organizationId ? { organization_id: organizationId } : {}),
+      ...(placementState ? { placement_state: placementState } : {}),
     })
       .then((result) => { if (current) setData(result); })
       .catch((cause: unknown) => {
         if (current) setError(cause instanceof Error ? cause.message : "No fue posible cargar el reporte de rotaciones.");
       });
     return () => { current = false; };
-  }, [programId, organizationId, attempt]);
+  }, [programId, organizationId, placementState, attempt]);
 
   return (
     <section className="rotation-report" aria-labelledby="rotation-report-title">
       <div className="section-heading">
         <div>
           <h2 id="rotation-report-title">Rotaciones y transferencias</h2>
-          <p className="muted">Segmentos, transferencias, interrupciones y horas aceptadas (CR-05). Usa los filtros de programa y organización de arriba.</p>
+          <p className="muted">Segmentos, transferencias, interrupciones y horas aceptadas (CR-05). Usa los filtros de programa, organización (incluye la de cada segmento) y estado de práctica de arriba.</p>
         </div>
       </div>
       {error && <Alert kind="error">{error} <button className="btn link" type="button" onClick={() => setAttempt((value) => value + 1)}>Reintentar</button></Alert>}

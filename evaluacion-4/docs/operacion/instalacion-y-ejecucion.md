@@ -34,7 +34,7 @@ $env:DATABASE_URL = ''
 python -m pytest -q tests
 # Solo CR-05
 python -m pytest -q tests/test_cr05_segments.py
-# Migraciones 0001→0018 y 0010→0018 (desde src/)
+# Migraciones 0001→0019 y 0010→0019 (desde src/)
 python scripts/check_isolated_migrations.py
 # Frontend (desde src/frontend)
 npx vitest run --exclude "e2e/**"
@@ -47,8 +47,8 @@ python scripts/run_isolated_e2e.py --populated
 python scripts/run_eval3_demo.py --open-browser
 ```
 
-`run_eval3_demo.py` conserva su nombre de E3, pero ejecuta el código vigente (esquema 0018) y configura `PLACEMENT_SEGMENT_MANAGER_ROLES=EXPERIENTIAL_COORDINATOR` y `PLACEMENT_HOURS_REVIEWER_ROLES=FACULTY_SUPERVISOR,PROGRAM_COORDINATOR` solo para la base temporal.
+`run_eval3_demo.py` conserva su nombre de E3, pero ejecuta el código vigente (esquema 0019) y configura `PLACEMENT_SEGMENT_MANAGER_ROLES=EXPERIENTIAL_COORDINATOR` y `PLACEMENT_HOURS_REVIEWER_ROLES=FACULTY_SUPERVISOR,PROGRAM_COORDINATOR` solo para la base temporal.
 
 ## 5. Verificar
 
-Compara tus salidas con `evidence/test-results-2026-11-23.md`. Para el recorrido manual de CR-05, usa `docs/operacion/guion-de-demostracion.md`.
+Compara tus salidas con `evidence/test-results-2026-11-24.md`. Para el recorrido manual de CR-05, usa `docs/operacion/guion-de-demostracion.md`.

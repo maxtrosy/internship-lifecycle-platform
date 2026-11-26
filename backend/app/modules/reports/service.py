@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import psycopg
 
-from app.errors import Forbidden
+from app.errors import BusinessError, Forbidden
+
+PLACEMENT_STATES = ("PENDING_ACADEMIC_APPROVAL", "REJECTED", "DOCUMENTATION_PENDING",
+                    "ACTIVE", "COMPLETED", "CLOSED", "CANCELLED")
 
 
 def _scope(subj: dict, program_id: int | None, organization_id: int | None,
@@ -143,7 +146,7 @@ def operations(cur: psycopg.Cursor, subj: dict, *, program_id: int | None = None
 
 
 def rotations(cur: psycopg.Cursor, subj: dict, *, program_id: int | None = None,
-              organization_id: int | None = None) -> dict:
+              organization_id: int | None = None, placement_state: str | None = None) -> dict:
     """CR-05 aggregates (rotations, transfers, interruptions, accepted hours,
     missing evaluations, pending consolidations) with the same scope rules as
     ``operations``: program coordinators see their programs, the experiential
@@ -157,6 +160,11 @@ def rotations(cur: psycopg.Cursor, subj: dict, *, program_id: int | None = None,
         where += (" AND (o.host_org_id = %s OR EXISTS (SELECT 1 FROM placement_segment so"
                   " WHERE so.placement_id = p.id AND so.host_org_id = %s AND so.status <> 'CANCELLED'))")
         params = [*params, organization_id, organization_id]
+    if placement_state is not None:
+        if placement_state not in PLACEMENT_STATES:
+            raise BusinessError("REPORT_FILTER_INVALID", "placement_state")
+        where += " AND p.state = %s"
+        params = [*params, placement_state]
     scoped = f"""
         WITH scoped AS (
           SELECT p.id AS placement_id, p.state AS placement_state, o.program_id

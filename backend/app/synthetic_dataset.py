@@ -281,12 +281,16 @@ def _ensure_selection(cur, app_id: int, *, creator_id: int, supervisor_id: int,
     app = _one(cur, "SELECT state FROM application WHERE id=%s", (app_id,))
     if app is None or app["state"] != "SUBMITTED":
         raise RuntimeError("A selected synthetic placement must originate from an eligible submitted application.")
+    # Periods are relative to the day the fixture is generated, so a past, a
+    # current and a future period keep their meaning on any execution date
+    # (a fixed calendar made the browser checks expire).
+    today = dt.date.today()
     if scenario_index < 2:
-        start, end = dt.date(2026, 1, 12), dt.date(2026, 5, 29)
+        start, end = today - dt.timedelta(days=320), today - dt.timedelta(days=180)
     elif scenario_index >= 9:
-        start, end = dt.date(2027, 2, 1), dt.date(2027, 6, 25)
+        start, end = today + dt.timedelta(days=70), today + dt.timedelta(days=214)
     else:
-        start, end = dt.date(2026, 9, 1), dt.date(2027, 1, 15)
+        start, end = today - dt.timedelta(days=84), today + dt.timedelta(days=52)
     details = {
         "workplace_supervisor_id": supervisor_id,
         "start_date": start,

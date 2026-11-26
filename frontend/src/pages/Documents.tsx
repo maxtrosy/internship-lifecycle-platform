@@ -5,7 +5,7 @@ import { Alert, Badge, EmptyState, Icon, PageHeader, Skeleton, Spinner, formatDo
 import { Field } from "../components/Field";
 import PlacementHistory from "../components/PlacementHistory";
 import { hoursFromHistory, totalHours, type HoursEntry } from "../progress";
-import { HOURS_REVIEW_LABELS } from "../segments";
+import { HOURS_REVIEW_LABELS, requirementLabel } from "../segments";
 import { formatHistoryDate } from "../history";
 import { errorMessage, useAsyncAction } from "../useAsyncAction";
 
@@ -222,14 +222,21 @@ export default function Documents() {
                     <tbody>
                       {status.items.map((item) => {
                         const latest = (submissions[`${pid}:${item.id}`] ?? [])[0];
-                        const label = formatDomainLabel(item.kind);
-                        const canUpload = item.kind.startsWith("DOC_") && (item.status === "REQUIRED" || item.status === "REJECTED");
+                        const label = requirementLabel(item, formatDomainLabel);
+                        const segmentEvidence = Boolean(item.segment_condition_id);
+                        // Segment evidence is accepted only while its segment is planned (0019).
+                        const canUpload = item.kind.startsWith("DOC_") && (item.status === "REQUIRED" || item.status === "REJECTED")
+                          && (!segmentEvidence || item.segment_status === "PLANNED");
                         const chosen = files[item.id];
                         return (
                           <tr key={item.id} className={item.status === "REJECTED" ? "needs-attention" : undefined}>
                             <td data-label="Requisito">
                               <span className="cell-primary">{label}</span>
-                              <span className="cell-secondary">{item.mandatory ? "Obligatorio" : "Opcional"}</span>
+                              <span className="cell-secondary">{!segmentEvidence
+                                ? item.mandatory ? "Obligatorio" : "Opcional"
+                                : item.segment_status === "PLANNED"
+                                  ? `Habilita el segmento ${item.segment_sequence_no}${item.condition_status === "SATISFIED" ? " · condición cumplida" : ""}`
+                                  : `Segmento ${item.segment_sequence_no} ya no está planificado: no se reciben entregas`}</span>
                             </td>
                             <td data-label="Estado"><Badge>{item.status}</Badge></td>
                             <td data-label="Entrega actual">

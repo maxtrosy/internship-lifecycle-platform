@@ -6,7 +6,7 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app import db
 from app.deps import requires
@@ -64,6 +64,22 @@ class SegmentCancelBody(BaseModel):
 class SegmentScheduleBody(BaseModel):
     start_date: date | None = None
     end_date: date
+    reason_shared: str = Field(min_length=1, max_length=1000)
+
+
+class SegmentUpdateBody(BaseModel):
+    """Administrative adjustment (0019). ``host_org_id`` and dates are accepted
+    only to answer with an explicit error: they change through a transfer,
+    cancel-and-plan or ``/schedule``."""
+    model_config = ConfigDict(extra="forbid")
+    unit: str | None = Field(default=None, max_length=160)
+    workplace_supervisor_id: int | None = None
+    modality: Literal["ONSITE", "REMOTE", "HYBRID"] | None = None
+    responsibilities: str | None = Field(default=None, max_length=5000)
+    expected_hours: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    host_org_id: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     reason_shared: str = Field(min_length=1, max_length=1000)
 
 
@@ -508,6 +524,15 @@ def reschedule_segment(pid: int, sid: int, body: SegmentScheduleBody,
             ctx, pid, sid, start_date=body.start_date, end_date=body.end_date,
             reason_shared=body.reason_shared,
         )
+
+
+@router.patch("/placements/{pid}/segments/{sid}")
+def update_segment(pid: int, sid: int, body: SegmentUpdateBody,
+                   subject_id: int = Depends(requires("segment:manage"))) -> dict:
+    changes = body.model_dump(exclude_unset=True)
+    reason = changes.pop("reason_shared")
+    with db.command(subject_id) as ctx:
+        return segment_service.update_segment(ctx, pid, sid, changes, reason)
 
 
 @router.post("/placements/{pid}/segments/{sid}/transfer", status_code=201)
